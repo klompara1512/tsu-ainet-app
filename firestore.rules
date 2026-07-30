@@ -1,0 +1,35 @@
+rules_version = '2';
+service cloud.firestore { match /databases/{database}/documents {
+ function signedIn(){return request.auth!=null;}
+ function profile(){return get(/databases/$(database)/documents/users/$(request.auth.uid));}
+ function hasProfile(){return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid));}
+ function role(){return hasProfile()?profile().data.role:'pending';}
+ function active(){return hasProfile() && profile().data.active!=false && (profile().data.approved==true || role()!='pending');}
+ function admin(){return active() && role()=='admin';}
+ function section(){return active() && role()=='section';}
+ function trainer(){return active() && role()=='trainer';}
+ function board(){return active() && role()=='board';}
+ function leaders(){return admin()||section();}
+ function football(){return leaders()||trainer();}
+ function editors(){return leaders()||board();}
+ match /users/{uid}{
+  allow create: if signedIn() && request.auth.uid==uid && request.resource.data.role=='pending' && request.resource.data.approved==false;
+  allow read: if signedIn() && (request.auth.uid==uid || leaders());
+  allow update,delete: if leaders();
+ }
+ match /invites/{id}{allow read,write:if leaders();}
+ match /tasks/{id}{allow read:if active();allow write:if football()||board();}
+ match /services/{id}{allow read:if active();allow write:if football()||board();}
+ match /kfvMatches/{d=**}{allow read:if true;allow write:if football();}
+ match /kfvStandings/{d=**}{allow read:if true;allow write:if football();}
+ match /kfvSquad/{d=**}{allow read:if true;allow write:if football();}
+ match /teams/{d=**}{allow read:if active();allow write:if football();}
+ match /players/{d=**}{allow read:if active();allow write:if football();}
+ match /events/{d=**}{allow read:if active();allow write:if football()||board();}
+ match /news/{d=**}{allow read:if active();allow write:if editors();}
+ match /documents/{d=**}{allow read:if active();allow write:if editors();}
+ match /sponsors/{d=**}{allow read:if active();allow write:if editors();}
+ match /settings/{d=**}{allow read:if active();allow write:if leaders();}
+ match /kfvClubs/{d=**}{allow read:if true;allow write:if football();}
+ match /syncStatus/{d=**}{allow read:if true;allow write:if football();}
+}}

@@ -1,0 +1,218 @@
+#root {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100%;
+  margin: 0;
+  padding: 0;
+
+  color-scheme: dark;
+  background: #050b16;
+
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  width: 100%;
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+
+  overflow-x: hidden;
+
+  color: #ffffff;
+  font-family:
+    Inter,
+    system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
+
+  background: #050b16;
+
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+button {
+  margin: 0;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+input,
+select,
+textarea {
+  max-width: 100%;
+}
+
+textarea {
+  resize: vertical;
+}
+
+img,
+svg,
+video,
+canvas {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+}
+
+::selection {
+  color: #ffffff;
+  background: rgba(79, 143, 247, 0.45);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+.app-loading{min-height:100vh;display:grid;place-content:center;justify-items:center;gap:18px;background:radial-gradient(circle at top,#172d63,#070b17 62%);color:#fff;font-weight:700;letter-spacing:.02em}.app-loading img{width:100px;max-height:128px;object-fit:contain;filter:drop-shadow(0 18px 30px rgba(0,0,0,.35));animation:clubPulse 1.5s ease-in-out infinite}.app-loading span{opacity:.82}@keyframes clubPulse{50%{transform:translateY(-5px) scale(1.03);filter:drop-shadow(0 24px 38px rgba(25,93,210,.35))}}
+.pending-shell{min-height:100vh;display:grid;place-items:center;padding:24px;background:radial-gradient(circle at top,#173765,#07101f 42%,#050b14);color:#fff}.pending-card{width:min(100%,480px);padding:38px;text-align:center;border:1px solid rgba(255,255,255,.1);border-radius:28px;background:rgba(255,255,255,.055);box-shadow:0 30px 80px rgba(0,0,0,.35)}.pending-card img{width:90px}.pending-card span{display:block;margin-top:15px;color:#83b1ff;font-size:11px;font-weight:900;letter-spacing:.14em;text-transform:uppercase}.pending-card h1{margin:8px 0 12px}.pending-card p{color:rgba(255,255,255,.62);line-height:1.6}.pending-card button{margin-top:12px;padding:12px 20px;border:1px solid rgba(255,255,255,.12);border-radius:13px;background:rgba(255,255,255,.07);color:#fff;font:inherit;font-weight:750}
+
+/* Version 7.4 – durchgehend hoher Kontrast */
+:where(.dashboard-shell,.public-games-shell,.auth-shell,.pending-shell) {
+  color: #f7f9ff;
+}
+
+:where(.dashboard-shell,.public-games-shell,.auth-shell,.pending-shell)
+  :where(h1,h2,h3,h4,h5,h6,strong,b,label) {
+  color: #ffffff;
+}
+
+:where(.dashboard-shell,.public-games-shell,.auth-shell,.pending-shell)
+  :where(p,small,time,span,em) {
+  text-shadow: 0 1px 1px rgba(0,0,0,.18);
+}
+
+/* Sekundärtexte nicht mehr zu dunkel oder transparent */
+:where(.dashboard-shell,.public-games-shell,.auth-shell,.pending-shell)
+  :where(.muted,.subtitle,.description,.meta,.hint,.note) {
+  color: #c8d3e7 !important;
+}
+
+/* Formulare und Platzhalter */
+input, select, textarea {
+  color: #ffffff !important;
+  background-color: rgba(10,23,43,.92);
+  border-color: rgba(168,195,255,.28) !important;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #aebbd2 !important;
+  opacity: 1;
+}
+
+select option {
+  color: #111827 !important;
+  background: #ffffff !important;
+}
+
+/* Allgemeine Kartenlesbarkeit */
+:where(.v5-match-center,.v5-agenda,.v5-stats button,.v5-actions button,.v5-training-strip,
+.club-hub-card,.club-hub-tabs button,.kfv-match-card,.kfv-table-card,.kfv-empty,
+.public-games-notice,.pending-card,.auth-card) {
+  border-color: rgba(168,195,255,.18) !important;
+}
+
+/* Bislang sehr schwache Texte gezielt aufhellen */
+.v5-hero p,
+.v5-hero-copy > span:last-child,
+.v5-countdown small,
+.v5-kickoff span,
+.v5-venue,
+.v5-stats span,
+.v5-agenda time span,
+.v5-agenda small,
+.v5-agenda div span,
+.v5-actions span,
+.v5-training-strip small,
+.v5-loading,
+.v5-empty,
+.public-games-brand small,
+.public-games-notice p,
+.auth-sub,
+.auth-note,
+.pending-card p,
+.kfv-toolbar label span {
+  color: #c5d0e4 !important;
+  opacity: 1 !important;
+}
+
+.club-hub-tabs button,
+.club-hub-card p,
+.club-hub-meta,
+.club-hub-empty,
+.kfv-tabs button,
+.kfv-source-switch button,
+.official-team-tabs button,
+.official-kfv-head p,
+.official-setup-info p,
+.official-config-card label > span,
+.official-config-title span,
+.switch-label {
+  color: #c9d4e8 !important;
+}
+
+/* Navigation deutlich lesbarer */
+.bottom-nav button {
+  color: #bfcbe0 !important;
+  font-weight: 750;
+}
+.bottom-nav button.active,
+.bottom-nav button:hover {
+  color: #ffffff !important;
+}
+
+/* Tastaturfokus sichtbar */
+:where(button,a,input,select,textarea):focus-visible {
+  outline: 3px solid rgba(255,216,90,.95);
+  outline-offset: 3px;
+}

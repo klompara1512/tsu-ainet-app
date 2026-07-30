@@ -1,0 +1,50 @@
+name: ÖFB-Daten automatisch synchronisieren
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsu-ainet-oefb-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Spiele und Tabellen nach Firestore übertragen
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "Fehler: Das GitHub-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+
+      - name: Nur Sync-Abhängigkeiten installieren
+        run: npm install --no-save --no-audit --no-fund firebase-admin@13.10.0 cheerio@1.2.0 puppeteer@24.43.1
+
+      - name: Parser prüfen
+        run: node --check scripts/kfv-sync.cjs
+
+      - name: ÖFB-Daten synchronisieren
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          NODE_ENV: production
+        run: node scripts/kfv-sync.cjs

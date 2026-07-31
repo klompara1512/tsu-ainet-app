@@ -32,4 +32,6 @@ service cloud.firestore { match /databases/{database}/documents {
  match /settings/{d=**}{allow read:if active();allow write:if leaders();}
  match /kfvClubs/{d=**}{allow read:if true;allow write:if football();}
  match /syncStatus/{d=**}{allow read:if true;allow write:if football();}
+ match /fcmTokens/{id}{allow read:if leaders();allow create,update,delete:if active() && request.resource.data.uid==request.auth.uid;}
+ match /notificationQueue/{id}{allow read,write:if leaders();}
 }}

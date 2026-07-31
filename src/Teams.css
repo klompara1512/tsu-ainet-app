@@ -670,4 +670,4 @@
   .team-player-status {
     display: none;
   }
-}
+}.team-list-icon svg,.team-detail-icon svg{width:30px;height:30px;filter:drop-shadow(0 8px 16px rgba(80,120,255,.35))}.team-list-icon,.team-detail-icon{background:linear-gradient(145deg,rgba(37,99,235,.24),rgba(124,58,237,.18))!important;border:1px solid rgba(110,140,255,.28)!important;color:#9db7ff!important}.team-card:hover .team-list-icon{transform:translateY(-2px) scale(1.04)}

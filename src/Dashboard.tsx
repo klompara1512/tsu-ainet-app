@@ -17,6 +17,10 @@ import StandingsAdmin from "./StandingsAdmin";
 import KfvSyncAdmin from "./KfvSyncAdmin";
 import ClubAdmin from "./ClubAdmin";
 import ClubHub from "./ClubHub";
+import FanFeatures from "./FanFeatures";
+import NotificationsAdmin from "./NotificationsAdmin";
+import { Icon } from "./Icons";
+import BoardOverview from "./BoardOverview";
 
 type Page =
   | "start"
@@ -32,7 +36,9 @@ type Page =
   | "standings-admin"
   | "kfv-sync-admin"
   | "club-admin"
-  | "club-hub";
+  | "club-hub"
+  | "fan-features"
+  | "notifications-admin";
 
 type DashboardProps = { user: User; profile: UserProfile };
 
@@ -88,6 +94,12 @@ function Dashboard({ user, profile }: DashboardProps) {
           <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
             <span className="quick-icon">V</span><span className="quick-content"><strong>Vereinsbereich</strong><small>Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
           </button>
+
+          <button type="button" className="quick-card" onClick={() => setActivePage("fan-features")}>
+            <span className="quick-icon">★</span><span className="quick-content"><strong>Fanbereich</strong><small>Statistik, Favoriten, Live, Medien, Kalender und Spieltag</small></span><span className="quick-arrow">›</span>
+          </button>
+
+          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong><small>Nachrichten an Fans und Mannschaften</small></span><span className="quick-arrow">›</span></button>}
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}>
             <span className="quick-icon">V</span><span className="quick-content"><strong>Vereinsverwaltung</strong><small>Benutzer, Einladungen, Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
@@ -202,6 +214,10 @@ function Dashboard({ user, profile }: DashboardProps) {
       return <ClubHub />;
     }
 
+    if (activePage === "fan-features") {
+      return <FanFeatures />;
+    }
+
     if (activePage === "mehr") {
       return renderMorePage();
     }
@@ -213,13 +229,15 @@ function Dashboard({ user, profile }: DashboardProps) {
       (activePage === "match-admin" && canManageMatches) ||
       (activePage === "standings-admin" && canManageStandings) ||
       (activePage === "kfv-sync-admin" && canManageSync) ||
-      (activePage === "club-admin" && canManageClub);
+      (activePage === "club-admin" && canManageClub) ||
+      (activePage === "notifications-admin" && canManageClub);
 
-    if (["admin", "events-admin", "news-admin", "match-admin", "standings-admin", "kfv-sync-admin", "club-admin"].includes(activePage) && !pageAllowed) {
+    if (["admin", "events-admin", "news-admin", "match-admin", "standings-admin", "kfv-sync-admin", "club-admin", "notifications-admin"].includes(activePage) && !pageAllowed) {
       return renderMorePage();
     }
 
     if (activePage === "club-admin") return <ClubAdmin onBack={() => setActivePage("mehr")} />;
+    if (activePage === "notifications-admin") return <NotificationsAdmin onBack={() => setActivePage("mehr")} />;
 
     if (activePage === "admin") {
       return (
@@ -252,24 +270,33 @@ function Dashboard({ user, profile }: DashboardProps) {
     }
 
     return (
-      <LiveDashboard
-        displayName={profile.name}
-        onOpenCalendar={() =>
-          setActivePage("kalender")
-        }
-        onOpenTeams={() =>
-          setActivePage("teams")
-        }
-        onOpenNews={() =>
-          setActivePage("news")
-        }
-        onOpenMore={() =>
-          setActivePage("mehr")
-        }
-        onOpenKfvLive={() =>
-          setActivePage("kfv-live")
-        }
-      />
+      <>
+        {hasPermission(role, "manageTasks") && (
+          <BoardOverview
+            onOpenTasks={() => setActivePage("club-admin")}
+            onOpenClubAdmin={() => setActivePage("club-admin")}
+          />
+        )}
+
+        <LiveDashboard
+          displayName={profile.name}
+          onOpenCalendar={() =>
+            setActivePage("kalender")
+          }
+          onOpenTeams={() =>
+            setActivePage("teams")
+          }
+          onOpenNews={() =>
+            setActivePage("news")
+          }
+          onOpenMore={() =>
+            setActivePage("mehr")
+          }
+          onOpenKfvLive={() =>
+            setActivePage("kfv-live")
+          }
+        />
+      </>
     );
   }
 
@@ -294,7 +321,9 @@ function Dashboard({ user, profile }: DashboardProps) {
     activePage === "standings-admin" ||
     activePage === "kfv-sync-admin" ||
     activePage === "club-admin" ||
-    activePage === "club-hub"
+    activePage === "club-hub" ||
+    activePage === "fan-features" ||
+    activePage === "notifications-admin"
       ? "mehr"
       : activePage;
 

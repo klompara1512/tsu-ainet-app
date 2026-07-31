@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type ChangeEvent, type FormEvent } from "react";
 import {
   addDoc,
   collection,
@@ -98,6 +98,46 @@ function splitName(fullName: string) {
     firstName: parts.slice(0, -1).join(" "),
     lastName: parts[parts.length - 1],
   };
+}
+
+
+async function compressMemberPhoto(file: File): Promise<string> {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Bitte wähle eine Bilddatei aus.");
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    throw new Error("Das Originalbild darf maximal 12 MB groß sein.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Das Bild konnte nicht gelesen werden."));
+      element.src = sourceUrl;
+    });
+
+    const size = 480;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Das Bild konnte nicht verarbeitet werden.");
+
+    const cropSize = Math.min(image.naturalWidth, image.naturalHeight);
+    const sourceX = (image.naturalWidth - cropSize) / 2;
+    const sourceY = (image.naturalHeight - cropSize) / 2;
+    context.drawImage(image, sourceX, sourceY, cropSize, cropSize, 0, 0, size, size);
+
+    const result = canvas.toDataURL("image/jpeg", 0.76);
+    if (result.length > 750_000) {
+      throw new Error("Das komprimierte Bild ist noch zu groß. Bitte verwende ein kleineres Foto.");
+    }
+    return result;
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
 }
 
 function Admin({ onBack }: AdminProps) {
@@ -270,6 +310,21 @@ function Admin({ onBack }: AdminProps) {
     clearMessages();
   }
 
+  async function selectMemberPhoto(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    clearMessages();
+    try {
+      const imageUrl = await compressMemberPhoto(file);
+      setFormData((current) => ({ ...current, imageUrl }));
+      setSuccessMessage("Das Foto wurde vorbereitet. Speichere jetzt die Änderungen.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Das Foto konnte nicht verarbeitet werden.");
+    }
+  }
+
   function startEditing(member: Member) {
     setEditingMemberId(member.id);
     setFormData({
@@ -362,6 +417,7 @@ function Admin({ onBack }: AdminProps) {
           shirtNumber: null,
           order: parsedOrder,
           active: formData.active,
+          imageUrl: formData.imageUrl.trim(),
           updatedAt: serverTimestamp(),
         };
         if (editingMemberId) {
@@ -508,9 +564,21 @@ function Admin({ onBack }: AdminProps) {
                 <option value="">Position auswählen</option><option value="Tor">Torwart</option><option value="Abwehr">Abwehr</option><option value="Mittelfeld">Mittelfeld</option><option value="Sturm">Sturm</option><option value="Spieler">Spieler</option>
               </select></label>
               <label className="admin-field"><span>Rückennummer</span><input type="number" min="0" max="99" value={formData.shirtNumber} placeholder="Zum Beispiel 1" onChange={(event) => setFormData((current) => ({ ...current, shirtNumber: event.target.value }))} /></label>
-              <label className="admin-field admin-field-wide"><span>Bild-URL</span><input type="url" value={formData.imageUrl} placeholder="https://…/spielerfoto.jpg" onChange={(event) => setFormData((current) => ({ ...current, imageUrl: event.target.value }))} /></label>
               <label className="admin-field admin-field-wide"><span>ÖFB-Profil-URL</span><input type="url" value={formData.profileUrl} placeholder="https://vereine.oefb.at/…" onChange={(event) => setFormData((current) => ({ ...current, profileUrl: event.target.value }))} /></label>
             </>}
+
+            <div className="admin-field admin-field-wide admin-photo-field">
+              <span>{memberType === "players" ? "Spielerfoto" : "Trainerfoto"}</span>
+              <div className="admin-photo-actions">
+                <label className="admin-photo-upload">
+                  Foto auswählen
+                  <input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectMemberPhoto} />
+                </label>
+                {formData.imageUrl && <button type="button" className="admin-photo-remove" onClick={() => setFormData((current) => ({ ...current, imageUrl: "" }))}>Foto entfernen</button>}
+              </div>
+              <small>Das Foto wird automatisch quadratisch zugeschnitten und komprimiert. Es wird kostenlos direkt beim {memberType === "players" ? "Spieler" : "Trainer"} in Firestore gespeichert.</small>
+              <input type="text" value={formData.imageUrl.startsWith("data:image/") ? "Eigenes Foto ausgewählt" : formData.imageUrl} placeholder="Optional: externe Bild-URL" onChange={(event) => setFormData((current) => ({ ...current, imageUrl: event.target.value === "Eigenes Foto ausgewählt" ? current.imageUrl : event.target.value }))} readOnly={formData.imageUrl.startsWith("data:image/")} />
+            </div>
 
             {memberType === "trainers" && <label className="admin-field admin-field-wide"><span>Funktion</span><select value={formData.role} onChange={(event) => setFormData((current) => ({ ...current, role: event.target.value }))}>
               <option value="">Funktion auswählen</option><option value="Trainer">Trainer</option><option value="Co-Trainer">Co-Trainer</option><option value="Torwarttrainer">Torwarttrainer</option><option value="Betreuer">Betreuer</option><option value="Teammanager">Teammanager</option>
@@ -520,7 +588,7 @@ function Admin({ onBack }: AdminProps) {
             <label className="admin-switch-field"><input type="checkbox" checked={formData.active} onChange={(event) => setFormData((current) => ({ ...current, active: event.target.checked }))} /><span className="admin-switch" /><span className="admin-switch-copy"><strong>Aktiv</strong><small>In der Mannschaft anzeigen</small></span></label>
           </div>
 
-          {memberType === "players" && formData.imageUrl && <div style={{ marginBottom: "1rem" }}><img src={formData.imageUrl} alt="Vorschau Spielerfoto" style={{ width: 88, height: 88, objectFit: "cover", borderRadius: 18 }} onError={(event) => { event.currentTarget.style.display = "none"; }} /></div>}
+          {formData.imageUrl && <div className="admin-photo-preview"><img src={formData.imageUrl} alt={memberType === "players" ? "Vorschau Spielerfoto" : "Vorschau Trainerfoto"} onError={(event) => { event.currentTarget.style.display = "none"; }} /><div><strong>Fotovorschau</strong><span>Das Foto wird erst mit „Änderungen speichern“ dauerhaft übernommen.</span></div></div>}
 
           <button type="submit" className="admin-save-button" disabled={isSaving || !selectedTeamId}>
             {isSaving ? "Wird gespeichert …" : editingMemberId ? "Änderungen speichern" : memberType === "players" ? "Spieler hinzufügen" : "Trainer hinzufügen"}

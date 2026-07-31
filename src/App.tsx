@@ -10,6 +10,7 @@ import {
   type AppRole,
   type UserProfile,
 } from "./permissions";
+import InstallApp from "./InstallApp";
 import "./App.css";
 
 export type { AppRole, UserProfile } from "./permissions";
@@ -25,7 +26,7 @@ function fallbackProfile(user: User | null, role: AppRole = "fan"): UserProfile 
   };
 }
 
-function App() {
+function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile>(() => fallbackProfile(null));
   const [authReady, setAuthReady] = useState(false);
@@ -110,6 +111,15 @@ function App() {
   }
 
   return <Dashboard user={user} profile={profile} />;
+}
+
+function App() {
+  return (
+    <>
+      <AppContent />
+      <InstallApp />
+    </>
+  );
 }
 
 export default App;

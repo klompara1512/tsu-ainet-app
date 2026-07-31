@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import "./Teams.css";
+import { Icon, type IconName } from "./Icons";
 
 type Team = {
   id: string;
@@ -37,7 +38,10 @@ type Trainer = {
   role: string;
   order: number;
   active: boolean;
+  imageUrl?: string;
 };
+
+function teamIcon(name: string): IconName { const n=name.toLowerCase(); if(n.includes("kampf" )||n==="km") return "ball"; if(n.includes("challenge")||n.includes("reserve")) return "shield"; if(n.includes("u17")) return "users"; if(n.includes("u12")) return "target"; if(n.includes("u10")) return "rocket"; return "sparkles"; }
 
 function Teams() {
   const [teams, setTeams] = useState<Team[]>([]);
@@ -85,6 +89,10 @@ function Teams() {
                 typeof data.active === "boolean"
                   ? data.active
                   : true,
+              imageUrl:
+                typeof data.imageUrl === "string"
+                  ? data.imageUrl
+                  : "",
             };
           })
           .filter((team) => team.active);
@@ -208,14 +216,17 @@ function Teams() {
               .toLocaleLowerCase("de-AT")
               .replace(/[^a-z0-9]+/g, "");
             const aliases: Record<string, string[]> = {
-              kampfmannschaft: ["kampfmannschaft", "km"],
-              challenge: ["challenge", "reserve", "kmres", "res"],
-              u17: ["u17"],
-              u12: ["u12"],
-              u10: ["u10"],
-              u8: ["u8", "u08"],
+              kampfmannschaft: ["kampfmannschaft", "km", "1mannschaft", "erste"],
+              km: ["kampfmannschaft", "km", "1mannschaft", "erste"],
+              challenge: ["challenge", "reserve", "kmres", "res", "1b"],
+              reserve: ["challenge", "reserve", "kmres", "res", "1b"],
+              u17: ["u17", "unter17"],
+              u12: ["u12", "unter12"],
+              u10: ["u10", "unter10"],
+              u8: ["u8", "u08", "unter8"],
             };
-            const selectedAliases = aliases[normalizedSelectedTeam] || [normalizedSelectedTeam];
+            const selectedKey = Object.keys(aliases).find((key) => normalizedSelectedTeam.includes(key)) || normalizedSelectedTeam;
+            const selectedAliases = aliases[selectedKey] || [normalizedSelectedTeam];
             return selectedAliases.some((alias) => normalizedOfficialTeam.includes(alias));
           })
           .sort((a, b) => {
@@ -275,6 +286,10 @@ function Teams() {
                 typeof data.active === "boolean"
                   ? data.active
                   : true,
+              imageUrl:
+                typeof data.imageUrl === "string"
+                  ? data.imageUrl
+                  : "",
             };
           })
           .filter((trainer) => trainer.active)
@@ -374,7 +389,7 @@ function Teams() {
         <div className="team-detail-hero">
           <div className="team-detail-hero-content">
             <span className="team-detail-icon" aria-hidden="true">
-              {selectedTeam.icon}
+              <Icon name={teamIcon(selectedTeam.name)} />
             </span>
 
             <div className="team-detail-heading">
@@ -488,10 +503,20 @@ function Teams() {
                       className="team-person"
                       key={trainer.id}
                     >
-                      <span className="team-person-avatar">
-                        {getInitials(
-                          trainer.firstName,
-                          trainer.lastName,
+                      <span className="team-person-avatar" style={trainer.imageUrl ? { padding: 0, overflow: "hidden" } : undefined}>
+                        {trainer.imageUrl ? (
+                          <img
+                            src={trainer.imageUrl}
+                            alt={`${trainer.firstName} ${trainer.lastName}`}
+                            loading="lazy"
+                            style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            onError={(event) => { event.currentTarget.style.display = "none"; }}
+                          />
+                        ) : (
+                          getInitials(
+                            trainer.firstName,
+                            trainer.lastName,
+                          )
                         )}
                       </span>
 
@@ -674,7 +699,7 @@ function Teams() {
                 onClick={() => openTeam(team.id)}
               >
                 <span className="team-icon" aria-hidden="true">
-                  {team.icon}
+                  <Icon name={teamIcon(team.name)} />
                 </span>
 
                 <span className="team-info">

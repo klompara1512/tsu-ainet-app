@@ -369,6 +369,11 @@ function Dashboard({ user, profile }: DashboardProps) {
 
       <main className="dashboard-content">
         {renderPage()}
+        <footer className="dashboard-version" aria-label="App-Version">
+          <img src="/tsu-ainet-logo.png" alt="" />
+          <span>TSU Ainet App</span>
+          <strong>Version 9.1.0</strong>
+        </footer>
       </main>
 
       <BottomNav

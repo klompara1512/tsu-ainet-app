@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { isTsuAinet, subscribeKfvMatches } from "./kfvFirestore";
-import type { KfvMatch, KfvMatchStatus } from "./kfvTypes";
+import {
+  getKfvClubLogo,
+  isTsuAinet,
+  subscribeKfvClubs,
+  subscribeKfvMatches,
+} from "./kfvFirestore";
+import type { KfvClub, KfvMatch, KfvMatchStatus } from "./kfvTypes";
 import "./Kalender.css";
 
 type CalendarView = "month" | "list";
@@ -13,7 +18,17 @@ type CalendarDay = {
 };
 
 const DAY_NAMES = ["Mo", "Di", "Mi", "Do", "Fr", "Sa", "So"];
-const FALLBACK_LOGO = "/tsu-ainet-logo.png";
+const TSU_AINET_LOGO = "/tsu-ainet-logo.png";
+
+const CLUB_FALLBACK_LOGO =
+  "data:image/svg+xml;charset=UTF-8," +
+  encodeURIComponent(`
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 140">
+      <path d="M60 5 L108 22 V70 C108 101 89 124 60 136 C31 124 12 101 12 70 V22 Z" fill="#18243a" stroke="#7f8ca5" stroke-width="6"/>
+      <circle cx="60" cy="61" r="25" fill="#eef2f8"/>
+      <path d="M60 39 72 48 68 63 52 63 48 48Z M52 63 42 76 52 88 68 88 78 76 68 63Z" fill="#18243a"/>
+    </svg>
+  `);
 
 function startOfDay(date: Date) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -60,8 +75,16 @@ function getTeamLabel(match: KfvMatch) {
 }
 
 function getCompetitionLabel(match: KfvMatch) {
-  if (getTeamKey(match) === "km") return "1. Klasse West";
-  return match.competitionName || getTeamLabel(match);
+  const key = getTeamKey(match);
+
+  if (key === "km") return "1. Klasse West";
+  if (key === "challenge") return "Challenge 1. Klasse West";
+  if (key === "u17") return "U17";
+  if (key === "u12") return "U12";
+  if (key === "u10") return "U10";
+  if (key === "u8") return "U8";
+
+  return match.competitionName || match.teamName || "TSU Ainet";
 }
 
 function getTeamColorClass(match: KfvMatch) {
@@ -114,26 +137,82 @@ function getHomeAwayLabel(match: KfvMatch) {
   return isTsuAinet(match.homeTeam) ? "Heimspiel" : "Auswärtsspiel";
 }
 
-function logoFor(teamName: string, logoUrl: string) {
-  if (logoUrl) return logoUrl;
-  return isTsuAinet(teamName) ? FALLBACK_LOGO : FALLBACK_LOGO;
+function localClubLogo(teamName: string) {
+  const normalized = normalizeTeamName(teamName)
+    .replace(/\b(tsu|spg|fc|sv|usc|union|sektion)\b/g, " ")
+    .replace(/ö/g, "oe")
+    .replace(/ä/g, "ae")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  const localLogos: Record<string, string> = {
+    doelsach: "/logos/clubs/doelsach.png",
+  };
+
+  return localLogos[normalized] || "";
 }
 
-function TeamLogo({ name, src }: { name: string; src: string }) {
-  const [failed, setFailed] = useState(false);
+function buildLogoCandidates(
+  clubs: KfvClub[],
+  teamName: string,
+  matchLogoUrl?: string,
+) {
+  if (isTsuAinet(teamName)) return [TSU_AINET_LOGO];
+
+  const candidates = [
+    localClubLogo(teamName),
+    getKfvClubLogo(clubs, teamName, ""),
+    typeof matchLogoUrl === "string" ? matchLogoUrl.trim() : "",
+    CLUB_FALLBACK_LOGO,
+  ];
+
+  return candidates.filter(
+    (value, index, values) => Boolean(value) && values.indexOf(value) === index,
+  );
+}
+
+function TeamLogo({
+  clubs,
+  name,
+  src,
+  className = "calendar-club-logo",
+}: {
+  clubs: KfvClub[];
+  name: string;
+  src?: string;
+  className?: string;
+}) {
+  const candidates = useMemo(
+    () => buildLogoCandidates(clubs, name, src),
+    [clubs, name, src],
+  );
+  const [candidateIndex, setCandidateIndex] = useState(0);
+
+  useEffect(() => {
+    setCandidateIndex(0);
+  }, [candidates]);
+
   return (
     <img
-      className="calendar-club-logo"
-      src={failed ? FALLBACK_LOGO : src}
+      className={className}
+      src={candidates[candidateIndex] || CLUB_FALLBACK_LOGO}
       alt={`${name} Logo`}
       loading="lazy"
-      onError={() => setFailed(true)}
+      referrerPolicy="no-referrer"
+      onError={() => {
+        setCandidateIndex((current) =>
+          Math.min(current + 1, Math.max(candidates.length - 1, 0)),
+        );
+      }}
     />
   );
 }
 
 function Kalender() {
   const [matches, setMatches] = useState<KfvMatch[]>([]);
+  const [clubs, setClubs] = useState<KfvClub[]>([]);
   const [selectedTeam, setSelectedTeam] = useState("all");
   const [view, setView] = useState<CalendarView>("month");
   const [visibleMonth, setVisibleMonth] = useState(() => {
@@ -145,18 +224,26 @@ function Kalender() {
   const [isLoading, setIsLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
 
-  useEffect(() =>
-    subscribeKfvMatches(
-      (loadedMatches) => {
-        setMatches(loadedMatches);
-        setIsLoading(false);
-        setErrorMessage("");
-      },
-      (message) => {
-        setErrorMessage(message);
-        setIsLoading(false);
-      },
-    ), []);
+  useEffect(
+    () =>
+      subscribeKfvMatches(
+        (loadedMatches) => {
+          setMatches(loadedMatches);
+          setIsLoading(false);
+          setErrorMessage("");
+        },
+        (message) => {
+          setErrorMessage(message);
+          setIsLoading(false);
+        },
+      ),
+    [],
+  );
+
+  useEffect(
+    () => subscribeKfvClubs(setClubs),
+    [],
+  );
 
   const availableTeams = useMemo(() => {
     const values = new Map<string, string>();
@@ -227,9 +314,9 @@ function Kalender() {
         onClick={() => setSelectedMatch(match)}
       >
         <div className="calendar-card-logos">
-          <TeamLogo name={match.homeTeam} src={logoFor(match.homeTeam, match.homeLogoUrl)} />
+          <TeamLogo clubs={clubs} name={match.homeTeam} src={match.homeLogoUrl} />
           <span>{score || "VS"}</span>
-          <TeamLogo name={match.awayTeam} src={logoFor(match.awayTeam, match.awayLogoUrl)} />
+          <TeamLogo clubs={clubs} name={match.awayTeam} src={match.awayLogoUrl} />
         </div>
         <div className="calendar-agenda-content">
           <div className="calendar-agenda-topline">
@@ -315,12 +402,21 @@ function Kalender() {
                 >
                   <span className="calendar-day-number">{day.date.getDate()}</span>
                   <div className="calendar-day-events">
-                    {day.matches.slice(0, 2).map((match) => (
-                      <span key={match.id} className={`calendar-day-event calendar-day-match ${getTeamColorClass(match)}`}>
-                        <img src={logoFor(getOpponent(match), isTsuAinet(match.homeTeam) ? match.awayLogoUrl : match.homeLogoUrl)} alt="" />
-                        <b>{formatTime(match.kickoffAt)}</b> {getOpponent(match)}
-                      </span>
-                    ))}
+                    {day.matches.slice(0, 2).map((match) => {
+                      const opponent = getOpponent(match);
+                      const opponentLogo = isTsuAinet(match.homeTeam) ? match.awayLogoUrl : match.homeLogoUrl;
+                      return (
+                        <span key={match.id} className={`calendar-day-event calendar-day-match ${getTeamColorClass(match)}`}>
+                          <TeamLogo
+                            clubs={clubs}
+                            name={opponent}
+                            src={opponentLogo}
+                            className="calendar-day-club-logo"
+                          />
+                          <b>{formatTime(match.kickoffAt)}</b> {opponent}
+                        </span>
+                      );
+                    })}
                     {day.matches.length > 2 && <small>+ {day.matches.length - 2} weitere</small>}
                   </div>
                 </button>
@@ -359,9 +455,9 @@ function Kalender() {
             <span className="calendar-modal-league">{getCompetitionLabel(selectedMatch)}</span>
             <span className={`calendar-home-away ${isTsuAinet(selectedMatch.homeTeam) ? "home" : "away"}`}>{getHomeAwayLabel(selectedMatch)}</span>
             <div className="calendar-modal-teams">
-              <div><TeamLogo name={selectedMatch.homeTeam} src={logoFor(selectedMatch.homeTeam, selectedMatch.homeLogoUrl)} /><strong>{selectedMatch.homeTeam}</strong></div>
+              <div><TeamLogo clubs={clubs} name={selectedMatch.homeTeam} src={selectedMatch.homeLogoUrl} /><strong>{selectedMatch.homeTeam}</strong></div>
               <div className="calendar-modal-score">{getScore(selectedMatch) || "VS"}</div>
-              <div><TeamLogo name={selectedMatch.awayTeam} src={logoFor(selectedMatch.awayTeam, selectedMatch.awayLogoUrl)} /><strong>{selectedMatch.awayTeam}</strong></div>
+              <div><TeamLogo clubs={clubs} name={selectedMatch.awayTeam} src={selectedMatch.awayLogoUrl} /><strong>{selectedMatch.awayTeam}</strong></div>
             </div>
             <div className="calendar-modal-details">
               <span>📅 {formatLongDate(selectedMatch.kickoffAt)}</span>

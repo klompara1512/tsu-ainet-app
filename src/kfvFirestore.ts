@@ -7,6 +7,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type {
+  KfvClub,
   KfvMatch,
   KfvMatchStatus,
   KfvStandingRow,
@@ -193,4 +194,103 @@ export function subscribeKfvSquad(
       onError("Der Kader konnte nicht geladen werden.");
     },
   );
+}
+
+
+export function normalizeClubName(name: string) {
+  return name
+    .toLocaleLowerCase("de-AT")
+    .replace(/\b(tsu|spg|fc|sv|usc|union|sektion)\b/g, " ")
+    .replace(/ö/g, "oe")
+    .replace(/ä/g, "ae")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+export function subscribeKfvClubs(
+  onData: (clubs: KfvClub[]) => void,
+  onError?: (message: string) => void,
+) {
+  const clubsQuery = query(
+    collection(db, "kfvClubs"),
+    orderBy("name", "asc"),
+  );
+
+  return onSnapshot(
+    clubsQuery,
+    (snapshot) => {
+      const clubs = snapshot.docs
+        .map((clubDocument) => {
+          const data = clubDocument.data();
+          const name = typeof data.name === "string" ? data.name.trim() : "";
+
+          return {
+            id: clubDocument.id,
+            name,
+            normalizedName:
+              typeof data.normalizedName === "string" && data.normalizedName.trim()
+                ? data.normalizedName.trim()
+                : normalizeClubName(name),
+            logoUrl: typeof data.logoUrl === "string" ? data.logoUrl.trim() : "",
+            primaryColor:
+              typeof data.primaryColor === "string" ? data.primaryColor : "",
+            secondaryColor:
+              typeof data.secondaryColor === "string" ? data.secondaryColor : "",
+            stadium: typeof data.stadium === "string" ? data.stadium : "",
+            website: typeof data.website === "string" ? data.website : "",
+            active: typeof data.active === "boolean" ? data.active : true,
+          } satisfies KfvClub;
+        })
+        .filter((club) => club.active && club.name);
+
+      onData(clubs);
+    },
+    (error) => {
+      console.error("Fehler beim Laden der KFV-Vereine:", error);
+      onData([]);
+      onError?.("Die Vereinslogos konnten nicht geladen werden.");
+    },
+  );
+}
+
+export function findKfvClub(clubs: KfvClub[], teamName: string) {
+  const wantedName = normalizeClubName(teamName);
+  if (!wantedName) return null;
+
+  const exactClub = clubs.find((club) => {
+    const clubName = club.normalizedName || normalizeClubName(club.name);
+    return clubName === wantedName;
+  });
+
+  if (exactClub) return exactClub;
+
+  const wantedWords = wantedName.split(" ").filter(Boolean);
+
+  return (
+    clubs.find((club) => {
+      const clubName = club.normalizedName || normalizeClubName(club.name);
+      if (!clubName) return false;
+
+      const clubWords = clubName.split(" ").filter(Boolean);
+      return (
+        wantedName.includes(clubName) ||
+        clubName.includes(wantedName) ||
+        clubWords.some((word) => word.length >= 4 && wantedWords.includes(word))
+      );
+    }) || null
+  );
+}
+
+export function getKfvClubLogo(
+  clubs: KfvClub[],
+  teamName: string,
+  matchLogoUrl = "",
+) {
+  const club = findKfvClub(clubs, teamName);
+  if (club?.logoUrl) return club.logoUrl;
+  if (matchLogoUrl.trim()) return matchLogoUrl.trim();
+  return "";
 }

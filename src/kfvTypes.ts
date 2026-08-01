@@ -50,3 +50,16 @@ export type KfvSquadPlayer = {
   profileUrl: string;
   active: boolean;
 };
+
+
+export type KfvClub = {
+  id: string;
+  name: string;
+  normalizedName: string;
+  logoUrl: string;
+  primaryColor: string;
+  secondaryColor: string;
+  stadium: string;
+  website: string;
+  active: boolean;
+};

@@ -33,6 +33,7 @@ type Member = {
   active: boolean;
   imageUrl: string;
   profileUrl: string;
+  birthday: string;
   source: string;
 };
 
@@ -46,6 +47,7 @@ type MemberForm = {
   active: boolean;
   imageUrl: string;
   profileUrl: string;
+  birthday: string;
 };
 
 type AdminProps = { onBack: () => void };
@@ -60,6 +62,7 @@ const emptyForm: MemberForm = {
   active: true,
   imageUrl: "",
   profileUrl: "",
+  birthday: "",
 };
 
 function normalizeTeam(value: string) {
@@ -237,6 +240,7 @@ function Admin({ onBack }: AdminProps) {
                 active: typeof data.active === "boolean" ? data.active : true,
                 imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
                 profileUrl: typeof data.profileUrl === "string" ? data.profileUrl : "",
+                birthday: typeof data.birthday === "string" ? data.birthday : "",
                 source: typeof data.source === "string" ? data.source : "manual",
               };
             })
@@ -273,6 +277,7 @@ function Admin({ onBack }: AdminProps) {
               active: typeof data.active === "boolean" ? data.active : true,
               imageUrl: "",
               profileUrl: "",
+              birthday: "",
               source: "manual",
             };
           }),
@@ -337,6 +342,7 @@ function Admin({ onBack }: AdminProps) {
       active: member.active,
       imageUrl: member.imageUrl,
       profileUrl: member.profileUrl,
+      birthday: member.birthday,
     });
     clearMessages();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -390,6 +396,7 @@ function Admin({ onBack }: AdminProps) {
           active: formData.active,
           imageUrl: formData.imageUrl.trim(),
           profileUrl: formData.profileUrl.trim(),
+          birthday: formData.birthday || "",
           teamId: normalizeTeam(selectedTeam.name),
           teamKey: officialTeamKey(selectedTeam.name),
           teamName: selectedTeam.name,
@@ -564,6 +571,7 @@ function Admin({ onBack }: AdminProps) {
                 <option value="">Position auswählen</option><option value="Tor">Torwart</option><option value="Abwehr">Abwehr</option><option value="Mittelfeld">Mittelfeld</option><option value="Sturm">Sturm</option><option value="Spieler">Spieler</option>
               </select></label>
               <label className="admin-field"><span>Rückennummer</span><input type="number" min="0" max="99" value={formData.shirtNumber} placeholder="Zum Beispiel 1" onChange={(event) => setFormData((current) => ({ ...current, shirtNumber: event.target.value }))} /></label>
+              <label className="admin-field"><span>Geburtstag</span><input type="date" value={formData.birthday} onChange={(event) => setFormData((current) => ({ ...current, birthday: event.target.value }))} /></label>
               <label className="admin-field admin-field-wide"><span>ÖFB-Profil-URL</span><input type="url" value={formData.profileUrl} placeholder="https://vereine.oefb.at/…" onChange={(event) => setFormData((current) => ({ ...current, profileUrl: event.target.value }))} /></label>
             </>}
 

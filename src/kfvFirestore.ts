@@ -183,6 +183,7 @@ export function subscribeKfvSquad(
             position: typeof data.position === "string" ? data.position : "Spieler",
             imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
             profileUrl: typeof data.profileUrl === "string" ? data.profileUrl : "",
+            birthday: readNullableDate(data.birthday) || (typeof data.birthday === "string" && data.birthday ? new Date(`${data.birthday}T12:00:00`) : null),
             active: typeof data.active === "boolean" ? data.active : true,
           } satisfies KfvSquadPlayer;
         })

@@ -80,7 +80,7 @@ function Dashboard({ user, profile }: DashboardProps) {
             className="quick-card"
             onClick={() => setActivePage("kfv-live")}
           >
-            <span className="quick-icon">K</span>
+            <span className="quick-icon"><Icon name="live" /></span>
 
             <span className="quick-content">
               <strong>KFV Live</strong>
@@ -92,30 +92,30 @@ function Dashboard({ user, profile }: DashboardProps) {
 
 
           <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
-            <span className="quick-icon">V</span><span className="quick-content"><strong>Vereinsbereich</strong><small>Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong><small>Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
           </button>
 
           <button type="button" className="quick-card" onClick={() => setActivePage("fan-features")}>
-            <span className="quick-icon">★</span><span className="quick-content"><strong>Fanbereich</strong><small>Statistik, Favoriten, Live, Medien, Kalender und Spieltag</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Fanbereich</strong><small>Statistik, Favoriten, Live, Medien, Kalender und Spieltag</small></span><span className="quick-arrow">›</span>
           </button>
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong><small>Nachrichten an Fans und Mannschaften</small></span><span className="quick-arrow">›</span></button>}
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}>
-            <span className="quick-icon">V</span><span className="quick-content"><strong>Vereinsverwaltung</strong><small>Benutzer, Einladungen, Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="settings" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong><small>Benutzer, Einladungen, Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManageAnything && (<>
           {canManageMatches && <button type="button" className="quick-card" onClick={() => setActivePage("match-admin")}>
-            <span className="quick-icon">⚽</span><span className="quick-content"><strong>Spiele verwalten</strong><small>Spielplan, Ergebnisse und Status in Firestore</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong><small>Spielplan, Ergebnisse und Status in Firestore</small></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManageSync && <button type="button" className="quick-card" onClick={() => setActivePage("kfv-sync-admin")}>
-            <span className="quick-icon">↻</span><span className="quick-content"><strong>KFV-Synchronisierung</strong><small>Öffentliche Daten automatisch alle 30 Minuten</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="sync" /></span><span className="quick-content"><strong>KFV-Synchronisierung</strong><small>Öffentliche Daten automatisch alle 30 Minuten</small></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManageStandings && <button type="button" className="quick-card" onClick={() => setActivePage("standings-admin")}>
-            <span className="quick-icon">#</span><span className="quick-content"><strong>Tabellen verwalten</strong><small>Tabellenzeilen und Punkte in Firestore</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="table" /></span><span className="quick-content"><strong>Tabellen verwalten</strong><small>Tabellenzeilen und Punkte in Firestore</small></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManagePeople && <button
@@ -123,7 +123,7 @@ function Dashboard({ user, profile }: DashboardProps) {
             className="quick-card"
             onClick={() => setActivePage("admin")}
           >
-            <span className="quick-icon">P</span>
+            <span className="quick-icon"><Icon name="users" /></span>
 
             <span className="quick-content">
               <strong>Personenverwaltung</strong>
@@ -142,7 +142,7 @@ function Dashboard({ user, profile }: DashboardProps) {
               setActivePage("events-admin")
             }
           >
-            <span className="quick-icon">K</span>
+            <span className="quick-icon"><Icon name="calendar" /></span>
 
             <span className="quick-content">
               <strong>Terminverwaltung</strong>
@@ -161,7 +161,7 @@ function Dashboard({ user, profile }: DashboardProps) {
               setActivePage("news-admin")
             }
           >
-            <span className="quick-icon">N</span>
+            <span className="quick-icon"><Icon name="news" /></span>
 
             <span className="quick-content">
               <strong>Newsverwaltung</strong>
@@ -179,7 +179,7 @@ function Dashboard({ user, profile }: DashboardProps) {
             type="button"
             className="quick-card"
           >
-            <span className="quick-icon">D</span>
+            <span className="quick-icon"><Icon name="document" /></span>
 
             <span className="quick-content">
               <strong>Dokumente</strong>
@@ -372,7 +372,7 @@ function Dashboard({ user, profile }: DashboardProps) {
         <footer className="dashboard-version" aria-label="App-Version">
           <img src="/tsu-ainet-logo.png" alt="" />
           <span>TSU Ainet App</span>
-          <strong>Version 9.1.0</strong>
+          <strong>Version 10.3.3</strong>
         </footer>
       </main>
 

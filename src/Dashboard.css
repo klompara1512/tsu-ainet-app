@@ -651,3 +651,94 @@
 }
 .dashboard-version img { width: 20px; height: 20px; object-fit: contain; opacity: .72; }
 .dashboard-version strong { color: rgba(255,255,255,.62); font-weight: 800; }
+
+
+/* =========================================================
+   VERSION 10.0 – AUFGERÄUMTES SPORT-APP-DESIGN
+   ========================================================= */
+.dashboard {
+  --dashboard-background: var(--tsu-navy-950);
+  --dashboard-surface: var(--tsu-card);
+  --dashboard-surface-hover: rgba(28, 46, 74, 0.96);
+  --dashboard-border: var(--tsu-line);
+  --dashboard-border-active: rgba(105, 165, 255, 0.48);
+  --dashboard-primary: var(--tsu-blue-light);
+  --dashboard-text: var(--tsu-text);
+  --dashboard-text-muted: var(--tsu-muted);
+  background:
+    radial-gradient(circle at 12% -5%, rgba(40, 120, 255, 0.24), transparent 31%),
+    radial-gradient(circle at 90% 10%, rgba(255, 212, 59, 0.08), transparent 24%),
+    linear-gradient(180deg, #0b1424 0%, #070d18 48%, #050914 100%);
+}
+
+.dashboard-header {
+  min-height: 72px;
+  padding-bottom: 11px;
+  background: rgba(7, 13, 24, 0.86);
+  border-bottom-color: rgba(105, 165, 255, 0.12);
+}
+
+.dashboard-brand-mark {
+  width: 46px;
+  height: 46px;
+  background: linear-gradient(145deg, rgba(40,120,255,.95), rgba(10,41,93,.98));
+  border-radius: 16px;
+  box-shadow: 0 12px 28px rgba(0,0,0,.28), 0 0 0 1px rgba(105,165,255,.18);
+}
+
+.dashboard-brand strong { font-size: 15px; }
+.dashboard-brand small { color: rgba(255,255,255,.52); }
+
+.dashboard-content { padding-top: clamp(16px, 3vw, 28px); }
+
+.dashboard-page {
+  background:
+    linear-gradient(145deg, rgba(27, 43, 69, 0.92), rgba(13, 23, 40, 0.94));
+  border-color: rgba(126, 163, 224, 0.15);
+  border-radius: var(--tsu-radius-lg);
+  box-shadow: var(--tsu-shadow);
+}
+
+.home-eyebrow { color: var(--tsu-yellow); }
+
+.quick-grid { gap: 14px; }
+.quick-card {
+  min-height: 94px;
+  padding: 16px;
+  background: linear-gradient(145deg, rgba(26, 43, 70, .94), rgba(14, 25, 43, .96));
+  border-color: rgba(139, 170, 222, .14);
+  border-radius: 21px;
+  box-shadow: var(--tsu-shadow-soft);
+}
+.quick-card:hover {
+  background: linear-gradient(145deg, rgba(33, 55, 89, .98), rgba(17, 31, 53, .98));
+  border-color: rgba(105, 165, 255, .42);
+}
+.quick-icon {
+  color: var(--tsu-yellow) !important;
+  background: linear-gradient(145deg, rgba(40, 120, 255, .20), rgba(40, 120, 255, .07)) !important;
+  border: 1px solid rgba(105, 165, 255, .18) !important;
+}
+.quick-icon svg { width: 23px; height: 23px; }
+.quick-content strong { font-size: 14px; }
+.quick-content small { color: #92a1b9; }
+.quick-arrow { color: var(--tsu-blue-light); font-size: 24px; }
+
+.profile-menu {
+  background: rgba(13, 23, 40, .98) !important;
+  border-color: rgba(105, 165, 255, .2) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 22px 60px rgba(0,0,0,.46) !important;
+}
+
+.dashboard-version {
+  color: rgba(215, 225, 243, .56) !important;
+  border-color: rgba(132, 161, 211, .12) !important;
+}
+.dashboard-version strong { color: var(--tsu-yellow) !important; }
+
+@media (max-width: 620px) {
+  .quick-grid { grid-template-columns: 1fr; }
+  .quick-card { min-height: 80px; }
+  .dashboard-page { padding: 20px 16px; border-radius: 23px; }
+}

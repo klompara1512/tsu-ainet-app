@@ -1296,6 +1296,7 @@ async function writeCollection(name, items, runId) {
           position: typeof existing.position === "string" ? existing.position : item.position,
           imageUrl: typeof existing.imageUrl === "string" ? existing.imageUrl : item.imageUrl,
           profileUrl: typeof existing.profileUrl === "string" ? existing.profileUrl : item.profileUrl,
+          birthday: typeof existing.birthday === "string" ? existing.birthday : (existing.birthday || ""),
           active: typeof existing.active === "boolean" ? existing.active : item.active,
           order: typeof existing.order === "number" ? existing.order : (typeof item.order === "number" ? item.order : 999),
           manualOverride: true,

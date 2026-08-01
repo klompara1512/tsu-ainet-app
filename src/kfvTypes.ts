@@ -48,6 +48,7 @@ export type KfvSquadPlayer = {
   position: string;
   imageUrl: string;
   profileUrl: string;
+  birthday: Date | null;
   active: boolean;
 };
 

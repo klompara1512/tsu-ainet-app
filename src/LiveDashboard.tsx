@@ -15,6 +15,7 @@ import {
 } from "./kfvFirestore";
 import type { KfvMatch, KfvStandingRow } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
+import { Icon } from "./Icons";
 import "./LiveDashboard.css";
 
 type ClubEvent = {
@@ -81,8 +82,7 @@ function LiveDashboard({
               const data = document.data();
               return {
                 id: document.id,
-                title:
-                  typeof data.title === "string" ? data.title : "Termin",
+                title: typeof data.title === "string" ? data.title : "Termin",
                 type:
                   data.type === "training" ||
                   data.type === "match" ||
@@ -207,16 +207,6 @@ function LiveDashboard({
     [firstTeamStandings],
   );
 
-  const nextTraining = useMemo(
-    () =>
-      events.find(
-        (event) =>
-          event.type === "training" &&
-          event.startAt.getTime() >= clock.getTime(),
-      ) ?? null,
-    [events, clock],
-  );
-
   const upcomingEvents = useMemo(
     () =>
       events
@@ -259,38 +249,39 @@ function LiveDashboard({
   const days = Math.floor(countdown / 86_400_000);
   const hours = Math.floor((countdown % 86_400_000) / 3_600_000);
 
+  const firstName = displayName.trim().split(/\s+/)[0] || "TSU-Fan";
+
   return (
-    <section className="v91-home">
-      <section className="v91-welcome">
+    <section className="v101-home">
+      <header className="v101-intro">
         <div>
-          <span className="v91-kicker">TSU AINET · SAISON 2026/27</span>
+          <span className="v101-overline">TSU Ainet · Saison 2026/27</span>
+          <h1>Servus, {firstName}</h1>
           <p>{dateText}</p>
-          <h1>Willkommen, {displayName.split(" ")[0]}.</h1>
-          <small>Alles Wichtige rund um deinen Verein auf einen Blick.</small>
         </div>
         <img src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
-      </section>
+      </header>
 
-      <section className="v91-next-match">
-        <div className="v91-section-title">
+      <section className="v101-match-hero">
+        <div className="v101-match-head">
           <div>
-            <span>NÄCHSTES SPIEL</span>
+            <span className="v101-overline">Nächstes Spiel</span>
             <h2>{nextMatch?.teamName || "TSU Ainet"}</h2>
           </div>
           {nextMatch && (
-            <div className="v91-countdown" aria-label="Countdown zum Spiel">
-              <strong>{days}</strong><small>Tage</small>
-              <strong>{hours}</strong><small>Std.</small>
+            <div className="v101-countdown" aria-label="Countdown zum Spiel">
+              <span><strong>{days}</strong><small>Tage</small></span>
+              <span><strong>{hours}</strong><small>Std.</small></span>
             </div>
           )}
         </div>
 
         {loadingKfv ? (
-          <div className="v91-empty">ÖFB-Daten werden geladen …</div>
+          <div className="v101-empty">ÖFB-Daten werden geladen …</div>
         ) : nextMatch ? (
           <>
-            <div className="v91-fixture">
-              <div>
+            <div className="v101-fixture">
+              <div className="v101-team">
                 <TeamLogo
                   url={nextMatch.homeLogoUrl}
                   name={nextMatch.homeTeam}
@@ -298,12 +289,14 @@ function LiveDashboard({
                 />
                 <strong>{nextMatch.homeTeam}</strong>
               </div>
-              <div className="v91-kickoff">
+
+              <div className="v101-kickoff">
+                <small>{formatDate(nextMatch.kickoffAt)}</small>
                 <b>{formatTime(nextMatch.kickoffAt)}</b>
-                <span>{formatDate(nextMatch.kickoffAt)}</span>
-                <em>VS</em>
+                <span>VS</span>
               </div>
-              <div>
+
+              <div className="v101-team">
                 <TeamLogo
                   url={nextMatch.awayLogoUrl}
                   name={nextMatch.awayTeam}
@@ -312,62 +305,81 @@ function LiveDashboard({
                 <strong>{nextMatch.awayTeam}</strong>
               </div>
             </div>
-            <div className="v91-venue">
-              <span>📍 {nextMatch.venue || "Spielort noch offen"}</span>
-              <span>{isTsuAinet(nextMatch.homeTeam) ? "🏠 Heimspiel" : "🚌 Auswärtsspiel"}</span>
+
+            <div className="v101-match-meta">
+              <span><Icon name="map" />{nextMatch.venue || "Spielort noch offen"}</span>
+              <span><Icon name="ball" />{isTsuAinet(nextMatch.homeTeam) ? "Heimspiel" : "Auswärtsspiel"}</span>
             </div>
-            <button className="v91-primary" onClick={onOpenKfvLive}>
-              Zum Spielcenter <span>›</span>
+
+            <button type="button" className="v101-primary" onClick={onOpenKfvLive}>
+              Spiel öffnen <span>›</span>
             </button>
           </>
         ) : (
-          <div className="v91-empty">
-            <strong>Derzeit kein kommendes Spiel</strong>
+          <div className="v101-empty">
+            <strong>Kein kommendes Spiel</strong>
             <span>Neue Spiele erscheinen nach der Synchronisierung automatisch.</span>
           </div>
         )}
       </section>
 
-      <section className="v91-shortcuts" aria-label="Schnellzugriffe">
-        <button onClick={onOpenCalendar}><i>📅</i><strong>Spielplan</strong><span>Alle Spiele</span></button>
-        <button onClick={onOpenKfvLive}><i>📊</i><strong>Tabelle</strong><span>1. Klasse West</span></button>
-        <button onClick={onOpenTeams}><i>👥</i><strong>Teams</strong><span>Kader & Trainer</span></button>
-        <button onClick={onOpenNews}><i>📰</i><strong>News</strong><span>Aktuelles</span></button>
-        <button onClick={onOpenMore}><i>📷</i><strong>Galerie</strong><span>Medienbereich</span></button>
-        <button onClick={onOpenMore}><i>🏆</i><strong>Verein</strong><span>TSU Ainet</span></button>
-        <button onClick={onOpenMore} className="v91-shortcut-wide"><i>⚙️</i><strong>Vereinszentrale</strong><span>Organisation & Verwaltung</span></button>
-      </section>
+      <nav className="v101-shortcuts" aria-label="Schnellzugriffe">
+        <button type="button" onClick={onOpenCalendar}>
+          <span><Icon name="calendar" /></span>
+          <strong>Spiele</strong>
+          <small>Spielplan & Termine</small>
+        </button>
+        <button type="button" onClick={onOpenKfvLive}>
+          <span><Icon name="table" /></span>
+          <strong>Tabelle</strong>
+          <small>1. Klasse West</small>
+        </button>
+        <button type="button" onClick={onOpenTeams}>
+          <span><Icon name="users" /></span>
+          <strong>Teams</strong>
+          <small>Kader & Trainer</small>
+        </button>
+        <button type="button" onClick={onOpenNews}>
+          <span><Icon name="news" /></span>
+          <strong>News</strong>
+          <small>Aktuelles vom Verein</small>
+        </button>
+      </nav>
 
-      <div className="v91-two-column">
-        <section className="v91-panel">
-          <div className="v91-panel-heading">
-            <div><span>FORM</span><h2>Letzte Ergebnisse</h2></div>
-            <button onClick={onOpenKfvLive}>Alle Spiele</button>
+      <div className="v101-grid">
+        <section className="v101-card">
+          <div className="v101-card-head">
+            <div><span className="v101-overline">Form</span><h2>Letzte Ergebnisse</h2></div>
+            <button type="button" onClick={onOpenKfvLive}>Alle</button>
           </div>
-          <div className="v91-results">
+
+          <div className="v101-results">
             {recentMatches.length ? recentMatches.map((match) => {
               const result = getResultForTsuAinet(match);
+              const resultLabel = result === "W" ? "Sieg" : result === "D" ? "Remis" : "Niederlage";
               return (
-                <button key={match.id} onClick={onOpenKfvLive}>
+                <button type="button" key={match.id} onClick={onOpenKfvLive}>
                   <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} size="small" />
                   <div><small>{formatDate(match.kickoffAt)}</small><strong>{match.homeTeam}</strong></div>
-                  <b className={`v91-result-${result || "N"}`}>{match.homeScore}:{match.awayScore}</b>
-                  <div className="v91-away-team"><small>{result === "W" ? "Sieg" : result === "D" ? "Remis" : "Niederlage"}</small><strong>{match.awayTeam}</strong></div>
+                  <b className={`v101-score v101-score-${result || "N"}`}>{match.homeScore}:{match.awayScore}</b>
+                  <div className="v101-away"><small>{resultLabel}</small><strong>{match.awayTeam}</strong></div>
                   <TeamLogo url={match.awayLogoUrl} name={match.awayTeam} size="small" />
                 </button>
               );
-            }) : <div className="v91-empty">Noch keine Ergebnisse verfügbar.</div>}
+            }) : <div className="v101-empty">Noch keine Ergebnisse verfügbar.</div>}
           </div>
         </section>
 
-        <section className="v91-panel">
-          <div className="v91-panel-heading">
-            <div><span>1. KLASSE WEST</span><h2>Tabellenvorschau</h2></div>
-            <button onClick={onOpenKfvLive}>Gesamte Tabelle</button>
+        <section className="v101-card">
+          <div className="v101-card-head">
+            <div><span className="v101-overline">1. Klasse West</span><h2>Tabelle</h2></div>
+            <button type="button" onClick={onOpenKfvLive}>Komplett</button>
           </div>
-          <div className="v91-table-preview">
+
+          <div className="v101-table">
             {topFive.length ? topFive.map((row) => (
               <button
+                type="button"
                 key={row.id}
                 className={isTsuAinet(row.clubName) ? "is-ainet" : ""}
                 onClick={onOpenKfvLive}
@@ -378,56 +390,69 @@ function LiveDashboard({
                 <small>{row.played} Sp.</small>
                 <b>{row.points}</b>
               </button>
-            )) : <div className="v91-empty">Noch keine Tabelle verfügbar.</div>}
+            )) : <div className="v101-empty">Noch keine Tabelle verfügbar.</div>}
           </div>
+
           {standing && (
-            <div className="v91-standing-summary">
-              TSU Ainet aktuell auf Platz <strong>{standing.position}</strong> mit <strong>{standing.points} Punkten</strong>.
+            <div className="v101-standing">
+              TSU Ainet: Platz <strong>{standing.position}</strong> · <strong>{standing.points} Punkte</strong>
             </div>
           )}
         </section>
       </div>
 
-      <section className="v91-panel">
-        <div className="v91-panel-heading">
-          <div><span>VEREINSLEBEN</span><h2>Nächste Termine</h2></div>
-          <button onClick={onOpenCalendar}>Alle Termine</button>
+      <section className="v101-card">
+        <div className="v101-card-head">
+          <div><span className="v101-overline">Vereinsleben</span><h2>Nächste Termine</h2></div>
+          <button type="button" onClick={onOpenCalendar}>Alle</button>
         </div>
-        <div className="v91-agenda">
+
+        <div className="v101-agenda">
           {loadingEvents ? (
-            <div className="v91-empty">Termine werden geladen …</div>
+            <div className="v101-empty">Termine werden geladen …</div>
           ) : upcomingEvents.length ? (
             upcomingEvents.map((event) => (
-              <button key={event.id} onClick={onOpenCalendar}>
-                <time><strong>{event.startAt.getDate().toString().padStart(2, "0")}</strong><span>{event.startAt.toLocaleDateString("de-AT", { month: "short" })}</span></time>
-                <div><small>{event.teamName}</small><strong>{event.title}</strong><span>{formatTime(event.startAt)} Uhr{event.location ? ` · ${event.location}` : ""}</span></div>
+              <button type="button" key={event.id} onClick={onOpenCalendar}>
+                <time>
+                  <strong>{event.startAt.getDate().toString().padStart(2, "0")}</strong>
+                  <span>{event.startAt.toLocaleDateString("de-AT", { month: "short" })}</span>
+                </time>
+                <div>
+                  <small>{event.teamName}</small>
+                  <strong>{event.title}</strong>
+                  <span>{formatTime(event.startAt)} Uhr{event.location ? ` · ${event.location}` : ""}</span>
+                </div>
                 <b>›</b>
               </button>
             ))
           ) : (
-            <div className="v91-empty">Keine Termine eingetragen.</div>
+            <div className="v101-empty">Keine Termine eingetragen.</div>
           )}
         </div>
       </section>
 
-      <section className="v91-club-info" onClick={onOpenCalendar} role="button" tabIndex={0}>
-        <div><span>VEREINSINFO</span><h2>{clubNotice?.title || "60 Jahre Sportunion Ainet"}</h2><p>{clubNotice ? `${formatDate(clubNotice.startAt)} · ${formatTime(clubNotice.startAt)} Uhr${clubNotice.location ? ` · ${clubNotice.location}` : ""}` : "Tradition, Gemeinschaft und Sport seit 1966."}</p></div>
+      <button type="button" className="v101-notice" onClick={onOpenCalendar}>
+        <span><Icon name="shield" /></span>
+        <div>
+          <small>Vereinsinfo</small>
+          <strong>{clubNotice?.title || "60 Jahre Sportunion Ainet"}</strong>
+          <p>{clubNotice ? `${formatDate(clubNotice.startAt)} · ${formatTime(clubNotice.startAt)} Uhr${clubNotice.location ? ` · ${clubNotice.location}` : ""}` : "Tradition, Gemeinschaft und Sport seit 1966."}</p>
+        </div>
         <b>›</b>
-      </section>
+      </button>
 
-      {nextTraining && (
-        <button className="v91-focus" onClick={onOpenCalendar}>
-          <span>HEUTE IM FOKUS</span>
-          <strong>{nextTraining.title}</strong>
-          <small>{nextTraining.teamName} · {formatDate(nextTraining.startAt)} · {formatTime(nextTraining.startAt)} Uhr</small>
-          <b>›</b>
-        </button>
-      )}
+      <button type="button" className="v101-more" onClick={onOpenMore}>
+        <span><Icon name="settings" /></span>
+        <div><strong>Mehr & Vereinszentrale</strong><small>Dokumente, Organisation und Verwaltung</small></div>
+        <b>›</b>
+      </button>
 
       {sponsors.length > 0 && (
-        <section className="v91-sponsors">
-          <div className="v91-panel-heading"><div><span>PARTNER</span><h2>Unsere Sponsoren</h2></div></div>
-          <div className="v91-sponsor-track">
+        <section className="v101-sponsors">
+          <div className="v101-card-head">
+            <div><span className="v101-overline">Partner</span><h2>Unsere Sponsoren</h2></div>
+          </div>
+          <div className="v101-sponsor-track">
             {[...sponsors, ...sponsors].map((sponsor, index) => (
               <button
                 type="button"

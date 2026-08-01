@@ -124,6 +124,25 @@ function formatTime(date: Date) {
   return new Intl.DateTimeFormat("de-AT", { hour: "2-digit", minute: "2-digit" }).format(date);
 }
 
+
+function formatKickoffDistance(date: Date) {
+  const difference = date.getTime() - Date.now();
+  if (difference <= 0) return "Spieltag";
+
+  const totalMinutes = Math.floor(difference / 60000);
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+
+  if (days > 1) return `In ${days} Tagen`;
+  if (days === 1) return `Morgen · ${hours} Std.`;
+  if (hours > 0) return `In ${hours} Std.`;
+  return `In ${Math.max(totalMinutes, 1)} Min.`;
+}
+
+function mapsUrl(venue: string) {
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(venue)}`;
+}
+
 function getScore(match: KfvMatch) {
   if (match.homeScore === null || match.awayScore === null) return null;
   return `${match.homeScore}:${match.awayScore}`;
@@ -450,24 +469,74 @@ function Kalender() {
 
       {selectedMatch && (
         <div className="calendar-modal-backdrop" onClick={() => setSelectedMatch(null)}>
-          <article className="calendar-match-modal" onClick={(event) => event.stopPropagation()}>
+          <article className="match-center" onClick={(event) => event.stopPropagation()}>
             <button type="button" className="calendar-modal-close" onClick={() => setSelectedMatch(null)} aria-label="Schließen">×</button>
-            <span className="calendar-modal-league">{getCompetitionLabel(selectedMatch)}</span>
-            <span className={`calendar-home-away ${isTsuAinet(selectedMatch.homeTeam) ? "home" : "away"}`}>{getHomeAwayLabel(selectedMatch)}</span>
-            <div className="calendar-modal-teams">
-              <div><TeamLogo clubs={clubs} name={selectedMatch.homeTeam} src={selectedMatch.homeLogoUrl} /><strong>{selectedMatch.homeTeam}</strong></div>
-              <div className="calendar-modal-score">{getScore(selectedMatch) || "VS"}</div>
-              <div><TeamLogo clubs={clubs} name={selectedMatch.awayTeam} src={selectedMatch.awayLogoUrl} /><strong>{selectedMatch.awayTeam}</strong></div>
+
+            <header className="match-center-header">
+              <div>
+                <span className="calendar-modal-league">{getCompetitionLabel(selectedMatch)}</span>
+                <h2>Spielcenter</h2>
+              </div>
+              <span className={`calendar-home-away ${isTsuAinet(selectedMatch.homeTeam) ? "home" : "away"}`}>
+                {getHomeAwayLabel(selectedMatch)}
+              </span>
+            </header>
+
+            <section className="match-center-scoreboard">
+              <div className="match-center-club">
+                <TeamLogo clubs={clubs} name={selectedMatch.homeTeam} src={selectedMatch.homeLogoUrl} className="match-center-logo" />
+                <strong>{selectedMatch.homeTeam}</strong>
+                <small>Heim</small>
+              </div>
+
+              <div className="match-center-result">
+                <span className={`match-center-status status-${selectedMatch.status}`}>{getStatusLabel(selectedMatch.status)}</span>
+                <b>{getScore(selectedMatch) || "VS"}</b>
+                <small>{selectedMatch.status === "scheduled" ? formatKickoffDistance(selectedMatch.kickoffAt) : "Endstand"}</small>
+              </div>
+
+              <div className="match-center-club">
+                <TeamLogo clubs={clubs} name={selectedMatch.awayTeam} src={selectedMatch.awayLogoUrl} className="match-center-logo" />
+                <strong>{selectedMatch.awayTeam}</strong>
+                <small>Auswärts</small>
+              </div>
+            </section>
+
+            <section className="match-center-facts">
+              <div><span className="fact-icon">▦</span><small>Datum</small><strong>{formatLongDate(selectedMatch.kickoffAt)}</strong></div>
+              <div><span className="fact-icon">◷</span><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></div>
+              <div><span className="fact-icon">⌖</span><small>Spielort</small><strong>{selectedMatch.venue || "Noch nicht bekannt"}</strong></div>
+              <div><span className="fact-icon">◎</span><small>Mannschaft</small><strong>{getTeamLabel(selectedMatch)}</strong></div>
+            </section>
+
+            <section className="match-center-section">
+              <div className="match-center-section-title">
+                <div><span>Aktuelle Information</span><h3>Spielstatus</h3></div>
+                <span className={`match-center-status status-${selectedMatch.status}`}>{getStatusLabel(selectedMatch.status)}</span>
+              </div>
+              <p>
+                {selectedMatch.status === "finished"
+                  ? `Das Spiel ist beendet. Der offizielle Endstand lautet ${getScore(selectedMatch) || "noch nicht verfügbar"}.`
+                  : selectedMatch.status === "postponed"
+                    ? "Das Spiel wurde verschoben. Ein neuer Termin wird automatisch übernommen, sobald er beim ÖFB veröffentlicht ist."
+                    : selectedMatch.status === "cancelled"
+                      ? "Das Spiel wurde abgesagt."
+                      : `Anstoß ist am ${formatLongDate(selectedMatch.kickoffAt)} um ${formatTime(selectedMatch.kickoffAt)} Uhr.`}
+              </p>
+            </section>
+
+            <div className="match-center-actions">
+              {selectedMatch.venue && (
+                <button type="button" className="match-center-action secondary" onClick={() => window.open(mapsUrl(selectedMatch.venue), "_blank", "noopener,noreferrer")}>
+                  <span>⌖</span> Route öffnen
+                </button>
+              )}
+              {selectedMatch.reportUrl && (
+                <button type="button" className="match-center-action primary" onClick={() => window.open(selectedMatch.reportUrl, "_blank", "noopener,noreferrer")}>
+                  <span>↗</span> Spielbericht
+                </button>
+              )}
             </div>
-            <div className="calendar-modal-details">
-              <span>📅 {formatLongDate(selectedMatch.kickoffAt)}</span>
-              <span>🕒 {formatTime(selectedMatch.kickoffAt)} Uhr</span>
-              {selectedMatch.venue && <span>📍 {selectedMatch.venue}</span>}
-              <span>Status: {getStatusLabel(selectedMatch.status)}</span>
-            </div>
-            {selectedMatch.reportUrl && (
-              <button type="button" className="calendar-report-button" onClick={() => window.open(selectedMatch.reportUrl, "_blank", "noopener,noreferrer")}>Offiziellen Spielbericht öffnen</button>
-            )}
           </article>
         </div>
       )}

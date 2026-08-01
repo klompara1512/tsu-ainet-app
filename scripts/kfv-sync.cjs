@@ -44,7 +44,7 @@ const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEA
   `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Tabellen`,
 ]))];
 const MAX_PAGES = 40;
-const PARSER_VERSION = "9.2.0-results-standings-sync";
+const PARSER_VERSION = "10.3.6-canonical-team-dedup-cleanup";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -222,6 +222,120 @@ function normalizeMatchStatus(rawStatus, context, hasScore) {
   return "scheduled";
 }
 
+function canonicalCompetitionName(value, teamName = "") {
+  const text = oneLine(value);
+  const normalizedTeam = oneLine(teamName);
+
+  // Seitentitel wie „Spiele - Res - Saison 2026/27 - Mannschaften“ sind
+  // keine Bewerbsnamen und dürfen keine eigenen Spieldatensätze erzeugen.
+  if (!text || /\b(?:spiele|mannschaften|saison|kader|tabellen)\b.*\b(?:mannschaften|saison)\b/i.test(text)) {
+    if (normalizedTeam === "Challenge") return "Challenge 1. Klasse West";
+    if (normalizedTeam === "Kampfmannschaft") return "1. Klasse West";
+    return normalizedTeam || "ÖFB";
+  }
+
+  if (normalizedTeam === "Challenge" && /(?:1\.?\s*klasse|liga|öfb)/i.test(text)) {
+    return "Challenge 1. Klasse West";
+  }
+  if (normalizedTeam === "Kampfmannschaft" && /(?:1\.?\s*klasse|liga|öfb)/i.test(text)) {
+    return "1. Klasse West";
+  }
+  return text;
+}
+
+function localDateKey(value) {
+  const date = value instanceof admin.firestore.Timestamp ? value.toDate() : value;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function canonicalTeamBucket(item) {
+  const text = lower(`${item.teamKey || ""} ${item.teamId || ""} ${item.teamName || ""} ${item.competitionName || ""}`);
+  if (/\bu\s*17\b/.test(text)) return "U17";
+  if (/\bu\s*12\b/.test(text)) return "U12";
+  if (/\bu\s*10\b/.test(text)) return "U10";
+  if (/\bu\s*0?8\b/.test(text)) return "U8";
+  if (/challenge|reserve|(?:^|[^a-z0-9])res(?:[^a-z0-9]|$)|km[-_ ]?res|(?:^|[^a-z0-9])1b(?:[^a-z0-9]|$)|(?:^|[^a-z0-9])ii(?:[^a-z0-9]|$)/.test(text)) {
+    return "CHALLENGE";
+  }
+  return "KM";
+}
+
+function canonicalMatchKey(item) {
+  return [
+    canonicalTeamBucket(item),
+    oneLine(item.season),
+    localDateKey(item.kickoffAt),
+    clubKey(item.homeTeam) || slug(item.homeTeam),
+    clubKey(item.awayTeam) || slug(item.awayTeam),
+  ].join("|");
+}
+
+function matchQuality(item) {
+  let score = 0;
+  if (item.gameId) score += 100;
+  if (Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore)) score += 80;
+  if (item.status === "finished") score += 30;
+  if (item.status === "cancelled" || item.status === "postponed") score += 25;
+  if (item.reportUrl && /(?:Spielbericht|\/Spiel\/|\/Match\/|[?&](?:s|:s)=\d+)/i.test(item.reportUrl)) score += 20;
+  if (item.venue) score += 8;
+  if (item.homeLogoUrl) score += 4;
+  if (item.awayLogoUrl) score += 4;
+  if (item.competitionName && !/spiele|mannschaften|saison|öfb/i.test(item.competitionName)) score += 6;
+  return score;
+}
+
+function mergeDuplicateMatches(group) {
+  const sorted = [...group].sort((a, b) => matchQuality(b) - matchQuality(a));
+  const best = { ...sorted[0] };
+
+  // Bei mehrfach gelesenen Uhrzeiten wird der am häufigsten erkannte Zeitpunkt
+  // verwendet. So gewinnt z. B. 14:45 bei drei Treffern gegen einen Fehlwert 16:45.
+  const kickoffCounts = new Map();
+  for (const item of group) {
+    const millis = item.kickoffAt?.toMillis?.() ?? item.kickoffAt?.getTime?.();
+    if (!Number.isFinite(millis)) continue;
+    kickoffCounts.set(millis, (kickoffCounts.get(millis) || 0) + 1);
+  }
+  const chosenKickoff = [...kickoffCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0];
+  if (Number.isFinite(chosenKickoff)) {
+    best.kickoffAt = admin.firestore.Timestamp.fromMillis(chosenKickoff);
+  }
+
+  const scored = sorted.find((item) => Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore));
+  const terminalStatus = sorted.find((item) => item.status === "cancelled" || item.status === "postponed");
+  if (terminalStatus) {
+    best.status = terminalStatus.status;
+    best.homeScore = null;
+    best.awayScore = null;
+    best.resultText = "";
+  } else if (scored) {
+    best.status = "finished";
+    best.homeScore = scored.homeScore;
+    best.awayScore = scored.awayScore;
+    best.resultText = scored.resultText || `${scored.homeScore}:${scored.awayScore}`;
+  }
+
+  for (const item of sorted) {
+    best.gameId ||= item.gameId || "";
+    best.venue ||= item.venue || "";
+    best.homeLogoUrl ||= item.homeLogoUrl || "";
+    best.awayLogoUrl ||= item.awayLogoUrl || "";
+    best.reportUrl ||= item.reportUrl || "";
+  }
+
+  best.competitionName = canonicalCompetitionName(best.competitionName, best.teamName);
+  const canonicalKey = canonicalMatchKey(best);
+  best.canonicalKey = canonicalKey;
+  best.id = makeId(["kfv-match-canonical", best.gameId || canonicalKey]);
+  best.duplicateSources = group.length;
+  return best;
+}
+
 function removeUndefinedDeep(value) {
   if (value === undefined) return undefined;
   if (Array.isArray(value)) {
@@ -351,13 +465,18 @@ function addMatch(target, data, sourceUrl, context = "") {
 
   const reportUrl = officialReportUrl(data.reportUrl, sourceUrl, homeTeam, awayTeam);
   const gameId = extractGameId(data.reportUrl, reportUrl, context);
-  const competitionName = oneLine(data.competitionName) || "ÖFB";
-  const identity = gameId
-    ? ["kfv-match-game", gameId]
-    : ["kfv-match", teamKey, season, competitionName, homeTeam, awayTeam];
+  const competitionName = canonicalCompetitionName(data.competitionName, teamName);
+  const preliminaryKey = [
+    teamKey,
+    season,
+    localDateKey(kickoff),
+    clubKey(homeTeam) || slug(homeTeam),
+    clubKey(awayTeam) || slug(awayTeam),
+  ].join("|");
 
   target.push({
-    id: makeId(identity),
+    id: makeId(["kfv-match-canonical", gameId || preliminaryKey]),
+    canonicalKey: preliminaryKey,
     gameId,
     teamId: slug(teamName), teamKey, teamName,
     season,
@@ -1317,6 +1436,50 @@ async function writeCollection(name, items, runId) {
   await writer.close();
 }
 
+async function cleanupExistingMatchDuplicates(runId) {
+  const snapshot = await db.collection("kfvMatches").get();
+  const groups = new Map();
+
+  for (const document of snapshot.docs) {
+    const data = document.data();
+    if (data.source !== "oefb-public" || data.active === false) continue;
+    const key = canonicalMatchKey(data);
+    if (!key || key.includes("||")) continue;
+    const group = groups.get(key) || [];
+    group.push({ id: document.id, ref: document.ref, ...data });
+    groups.set(key, group);
+  }
+
+  const writer = db.bulkWriter();
+  let deactivated = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const merged = mergeDuplicateMatches(group);
+    const canonicalId = merged.id;
+    const canonicalRef = db.collection("kfvMatches").doc(canonicalId);
+    writer.set(canonicalRef, removeUndefinedDeep({
+      ...merged,
+      active: true,
+      syncRunId: runId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }), { merge: true });
+
+    for (const duplicate of group) {
+      if (duplicate.id === canonicalId) continue;
+      writer.set(duplicate.ref, {
+        active: false,
+        duplicateOf: canonicalId,
+        deactivatedReason: "duplicate",
+        deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        syncRunId: runId,
+      }, { merge: true });
+      deactivated += 1;
+    }
+  }
+  await writer.close();
+  return deactivated;
+}
+
 async function deactivateMissing(name, currentIds, runId) {
   const snapshot = await db.collection(name).where("source", "==", "oefb-public").get();
   const writer = db.bulkWriter();
@@ -1387,39 +1550,25 @@ async function main() {
       }
     }
 
-    // Bei mehrfach erkannten Spielen den vollständigsten Datensatz behalten.
-    // Ein echtes Ergebnis hat Vorrang, eine bloße Anstoßzeit kann es nicht überschreiben.
-    const matchMap = new Map();
+    // Dieselbe Begegnung wird auf der ÖFB-Seite häufig über mehrere Ansichten
+    // erkannt. Gruppiert wird deshalb unabhängig vom Seitentitel/Bewerbsnamen.
+    const matchGroups = new Map();
     for (const item of matches) {
-      const previous = matchMap.get(item.id);
-      if (!previous) { matchMap.set(item.id, item); continue; }
-      const previousHasScore = Number.isInteger(previous.homeScore) && Number.isInteger(previous.awayScore);
-      const itemHasScore = Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore);
-      matchMap.set(item.id, {
-        ...previous,
-        ...item,
-        homeScore: itemHasScore ? item.homeScore : previousHasScore ? previous.homeScore : null,
-        awayScore: itemHasScore ? item.awayScore : previousHasScore ? previous.awayScore : null,
-        status:
-          item.status === "cancelled" || item.status === "postponed"
-            ? item.status
-            : itemHasScore || previousHasScore
-              ? "finished"
-              : item.status || previous.status,
-        resultText:
-          itemHasScore
-            ? item.resultText || `${item.homeScore}:${item.awayScore}`
-            : previousHasScore
-              ? previous.resultText || `${previous.homeScore}:${previous.awayScore}`
-              : "",
-        venue: item.venue || previous.venue,
-        homeLogoUrl: item.homeLogoUrl || previous.homeLogoUrl || "",
-        awayLogoUrl: item.awayLogoUrl || previous.awayLogoUrl || "",
-        reportUrl: item.reportUrl || previous.reportUrl || "",
-        competitionName: item.competitionName !== "ÖFB" ? item.competitionName : previous.competitionName,
-      });
+      const key = canonicalMatchKey(item);
+      if (!key || key.includes("||")) continue;
+      const group = matchGroups.get(key) || [];
+      group.push(item);
+      matchGroups.set(key, group);
     }
-    const uniqueMatches = [...matchMap.values()];
+    const uniqueMatches = [...matchGroups.values()]
+      .map(mergeDuplicateMatches)
+      .sort((a, b) => a.kickoffAt.toMillis() - b.kickoffAt.toMillis());
+
+    const duplicateMatchesRemoved = Math.max(0, matches.length - uniqueMatches.length);
+    if (duplicateMatchesRemoved > 0) {
+      warnings.push(`${duplicateMatchesRemoved} doppelte Spielerkennungen wurden zusammengeführt.`);
+    }
+
     const standingMap = new Map();
     for (const item of standings) {
       const normalizedClub = clubKey(item.clubName) || slug(item.clubName);
@@ -1509,6 +1658,7 @@ async function main() {
     if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
     if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
     const deactivatedMatches = await deactivateMissing("kfvMatches", new Set(uniqueMatches.map((item) => item.id)), runId);
+    const duplicateDocumentsDeactivated = await cleanupExistingMatchDuplicates(runId);
     const deactivatedStandings = standingsReliable
       ? await deactivateMissing("kfvStandings", new Set(uniqueStandings.map((item) => item.id)), runId)
       : 0;
@@ -1522,6 +1672,8 @@ async function main() {
       finishedAt: admin.firestore.FieldValue.serverTimestamp(),
       sourceUrl, discoveredUrls: [...visited], visitedUrls: [...visited], pageDiagnostics,
       matchCount: uniqueMatches.length,
+      rawMatchCount: matches.length,
+      duplicateMatchesRemoved,
       finishedMatchCount: uniqueMatches.filter((item) => item.status === "finished").length,
       scheduledMatchCount: uniqueMatches.filter((item) => item.status === "scheduled").length,
       postponedMatchCount: uniqueMatches.filter((item) => item.status === "postponed").length,
@@ -1546,8 +1698,9 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 9.2.0 =====");
-    console.log(`Spiele gesamt: ${uniqueMatches.length}`);
+    console.log("===== TSU Ainet ÖFB-Sync 10.3.5 =====");
+    console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
+    console.log(`Alte Firestore-Dubletten deaktiviert: ${duplicateDocumentsDeactivated}`);
     console.log(`  Geplant: ${matchStatusCounts.scheduled || 0}`);
     console.log(`  Beendet/Endstand: ${matchStatusCounts.finished || 0}`);
     console.log(`  Verschoben: ${matchStatusCounts.postponed || 0}`);

@@ -34,6 +34,100 @@ function readStatus(value: unknown): KfvMatchStatus {
   return "scheduled";
 }
 
+function normalizeMatchPart(value: string) {
+  return value
+    .toLocaleLowerCase("de-AT")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/\b(?:tsu|sg|sv|fc|sc|usv|asko|askö|union|atv)\b/g, " ")
+    .replace(/\b(?:1b|ii|reserve|challenge|kampfmannschaft|km)\b/g, " ")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function matchDayKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+function canonicalTeamBucket(match: KfvMatch) {
+  const text = `${match.teamId} ${match.teamName} ${match.competitionName}`
+    .toLocaleLowerCase("de-AT")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, " ");
+
+  if (/\bu\s*17\b/.test(text)) return "U17";
+  if (/\bu\s*12\b/.test(text)) return "U12";
+  if (/\bu\s*10\b/.test(text)) return "U10";
+  if (/\bu\s*0?8\b/.test(text)) return "U8";
+  if (/challenge|reserve|\bres\b|km[-_ ]?res|\b1b\b|\bii\b/.test(text)) {
+    return "CHALLENGE";
+  }
+  return "KM";
+}
+
+function deduplicateMatches(matches: KfvMatch[]) {
+  const groups = new Map<string, KfvMatch[]>();
+
+  for (const match of matches) {
+    const key = [
+      canonicalTeamBucket(match),
+      matchDayKey(match.kickoffAt),
+      normalizeMatchPart(match.homeTeam),
+      normalizeMatchPart(match.awayTeam),
+    ].join("|");
+    const group = groups.get(key) || [];
+    group.push(match);
+    groups.set(key, group);
+  }
+
+  return [...groups.values()]
+    .map((group) => {
+      const ranked = [...group].sort((a, b) => {
+        const quality = (match: KfvMatch) =>
+          (match.status === "finished" ? 50 : 0) +
+          (match.homeScore !== null && match.awayScore !== null ? 50 : 0) +
+          (match.reportUrl ? 10 : 0) +
+          (match.venue ? 5 : 0) +
+          (match.homeLogoUrl ? 2 : 0) +
+          (match.awayLogoUrl ? 2 : 0);
+        return quality(b) - quality(a);
+      });
+      const best = { ...ranked[0] };
+
+      const timeCounts = new Map<number, number>();
+      for (const match of group) {
+        const time = match.kickoffAt.getTime();
+        timeCounts.set(time, (timeCounts.get(time) || 0) + 1);
+      }
+      const selectedTime = [...timeCounts.entries()]
+        .sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0];
+      if (selectedTime) best.kickoffAt = new Date(selectedTime);
+
+      const scored = ranked.find(
+        (match) => match.homeScore !== null && match.awayScore !== null,
+      );
+      if (scored) {
+        best.homeScore = scored.homeScore;
+        best.awayScore = scored.awayScore;
+        best.status = "finished";
+      }
+
+      for (const match of ranked) {
+        best.homeLogoUrl ||= match.homeLogoUrl;
+        best.awayLogoUrl ||= match.awayLogoUrl;
+        best.venue ||= match.venue;
+        best.reportUrl ||= match.reportUrl;
+      }
+      return best;
+    })
+    .sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime());
+}
+
 export function subscribeKfvMatches(
   onData: (matches: KfvMatch[]) => void,
   onError: (message: string) => void,
@@ -76,7 +170,7 @@ export function subscribeKfvMatches(
             match.homeTeam &&
             match.awayTeam,
         );
-      onData(matches);
+      onData(deduplicateMatches(matches));
     },
     (error) => {
       console.error("Fehler beim Laden der KFV-Spiele:", error);

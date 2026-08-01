@@ -1,3 +1,20 @@
+## 10.3.6
+
+- Dublettenprüfung verwendet jetzt einen kanonischen Mannschaftsschlüssel.
+- Alte Firestore-Dubletten werden beim Sync automatisch deaktiviert.
+- Spieleverwaltung und öffentliche Ansichten blenden Dubletten sofort aus.
+
+## 10.3.5
+
+- ÖFB-Spiele werden unabhängig vom Seitentitel eindeutig zusammengeführt
+- Dubletten nach Mannschaft, Spieltag, Heim- und Auswärtsteam entfernt
+- häufigste erkannte Anstoßzeit gewinnt bei widersprüchlichen Parserwerten
+- alte ÖFB-Dubletten werden beim nächsten Sync automatisch deaktiviert
+- Bewerbsnamen wie „Spiele - Res - Saison …“ werden bereinigt
+- zusätzliche Dubletten-Sicherung beim Laden in der Webapp
+- Spieleverwaltung blendet inaktive Datensätze und Dubletten standardmäßig aus
+- Sync-Status protokolliert Rohdaten und entfernte Dubletten
+
 
 ## 10.3.4
 

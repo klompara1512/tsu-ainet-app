@@ -1,4 +1,12 @@
 # Changelog
+## 11.0.3 – Smart Sync Control
+
+- Aktiver Admin-Button zur kostenlosen GitHub-Actions-Synchronisierung.
+- Automatische Statusüberwachung über Firestore.
+- Fortschrittsanzeige und automatische Datenzähler-Aktualisierung.
+- Systemdiagnose für Internet, Firestore, Workflow, Historie und Match-ID.
+- Keine Cloud Functions und keine kostenpflichtigen Firebase-Dienste.
+
 
 ## 11.0.2a – Architektur- und Code-Cleanup
 

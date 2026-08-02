@@ -1620,6 +1620,18 @@ async function writeCollection(name, items, runId) {
       const incomingHasScore = Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore);
       const existingHasScore = Number.isInteger(existing?.homeScore) && Number.isInteger(existing?.awayScore);
 
+      // Kurzzeitig fehlende Bild- oder Detailfelder dürfen vorhandene Daten nicht
+      // löschen. Das verhindert zeitweise verschwundene Vereinslogos.
+      if (existing) {
+        payload.homeLogoUrl = item.homeLogoUrl || existing.homeLogoUrl || "";
+        payload.awayLogoUrl = item.awayLogoUrl || existing.awayLogoUrl || "";
+        payload.venue = item.venue || existing.venue || "";
+        payload.venueAddress = item.venueAddress || existing.venueAddress || "";
+        payload.referee = item.referee || existing.referee || "";
+        payload.reportUrl = item.reportUrl || existing.reportUrl || "";
+        payload.liveUrl = item.liveUrl || existing.liveUrl || "";
+      }
+
       if (item.status === "cancelled" || item.status === "postponed") {
         payload.homeScore = null;
         payload.awayScore = null;
@@ -1659,6 +1671,17 @@ async function writeCollection(name, items, runId) {
           reportUrl: item.reportUrl || existing.reportUrl || "",
           preservedFromPreviousSync: true,
         };
+      }
+    }
+
+    // Auch Tabellen- und Vereinslogo-Dokumente behalten ein bereits vorhandenes
+    // Logo, falls die Quelle es in einem einzelnen Lauf nicht liefert.
+    if (name === "kfvStandings" || name === "kfvClubs") {
+      const existingSnapshot = await reference.get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
+      if (existing) {
+        if (name === "kfvStandings") payload.teamLogoUrl = item.teamLogoUrl || existing.teamLogoUrl || "";
+        if (name === "kfvClubs") payload.logoUrl = item.logoUrl || existing.logoUrl || "";
       }
     }
 
@@ -1829,11 +1852,35 @@ async function main() {
       group.push(item);
       matchGroups.set(key, group);
     }
-    const uniqueMatches = [...matchGroups.values()]
+    let uniqueMatches = [...matchGroups.values()]
       .map(mergeDuplicateMatches)
       .sort((a, b) => a.kickoffAt.toMillis() - b.kickoffAt.toMillis());
 
-    const duplicateMatchesRemoved = Math.max(0, matches.length - uniqueMatches.length);
+    // Eine teilweise geladene ÖFB-Seite darf keinen bereits bekannten Spielplan
+    // löschen. Vorhandene, nicht als Dublette markierte Spiele der aktuellen Saison
+    // werden deshalb beibehalten, wenn sie im aktuellen Lauf fehlen.
+    const existingMatchesForPreservation = await db.collection("kfvMatches").get();
+    const currentMatchUids = new Set(uniqueMatches.map((item) => buildMatchUid(item)));
+    let preservedExistingMatches = 0;
+    for (const document of existingMatchesForPreservation.docs) {
+      const existing = { id: document.id, ...document.data() };
+      if (existing.source !== "oefb-public" || existing.duplicateOf) continue;
+      if (oneLine(existing.season) !== oneLine(SYNC_CONFIG.seasonLabel || seasonFromUrl(DEFAULT_SOURCE))) continue;
+      const uid = buildMatchUid(existing);
+      if (!uid || currentMatchUids.has(uid)) continue;
+      uniqueMatches.push({
+        ...existing,
+        id: matchDocumentId(existing),
+        matchUid: uid,
+        active: true,
+        preservedFromPreviousSync: true,
+      });
+      currentMatchUids.add(uid);
+      preservedExistingMatches += 1;
+    }
+    uniqueMatches.sort((a, b) => (a.kickoffAt?.toMillis?.() || 0) - (b.kickoffAt?.toMillis?.() || 0));
+
+    const duplicateMatchesRemoved = Math.max(0, matches.length - (uniqueMatches.length - preservedExistingMatches));
     if (duplicateMatchesRemoved > 0) {
       warnings.push(`${duplicateMatchesRemoved} doppelte Spielerkennungen wurden zusammengeführt.`);
     }
@@ -1961,7 +2008,9 @@ async function main() {
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
     const duplicateDocumentsDeactivated = await cleanupExistingMatchDuplicates(runId);
-    const deactivatedMatches = await deactivateMissing("kfvMatches", new Set(uniqueMatches.map((item) => item.id)), runId);
+    // Spiele werden bei einem teilweise geladenen ÖFB-Spielplan nicht deaktiviert.
+    // Echte Dubletten wurden bereits durch cleanupExistingMatchDuplicates bereinigt.
+    const deactivatedMatches = 0;
     const deactivatedStandings = standingsReliable
       ? await deactivateMissing("kfvStandings", new Set(uniqueStandings.map((item) => item.id)), runId)
       : 0;
@@ -2019,8 +2068,9 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 11.2.0 =====");
+    console.log("===== TSU Ainet ÖFB-Sync 11.2.1 =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
+    console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);
     console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
     console.log(`Alte Firestore-Dubletten deaktiviert: ${duplicateDocumentsDeactivated}`);

@@ -1,3 +1,12 @@
+# 11.2.1 – Spielplan- und Logo-Stabilisierung
+
+- Unvollständig geladene ÖFB-Seiten deaktivieren keine bereits bekannten Spiele mehr.
+- Bereits bekannte Spiele der Saison werden bei einem Teilausfall aus Firestore ergänzt.
+- U17, U12 und U10 bleiben dadurch sichtbar, auch wenn eine Quellseite vorübergehend nicht geladen wird.
+- Bestehende Vereinslogos bleiben erhalten, wenn die Quelle in einem Lauf kein Logo liefert.
+- Das Seitenlimit wurde von 40 auf 120 erhöht, damit alle Mannschafts-, Tabellen-, Kader- und Spielberichtsseiten verarbeitet werden können.
+- Echte Dubletten werden weiterhin bereinigt.
+
 # 11.2.0 – Intelligenter Spielbericht-Import
 
 - Berichtseiten werden automatisch aus der offiziellen Spiel-ID erzeugt und besucht.

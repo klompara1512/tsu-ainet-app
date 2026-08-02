@@ -4,7 +4,7 @@
   "clubSlug": "TsuAinet",
   "teamDirectoryUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften",
   "defaultSource": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele",
-  "maxPages": 40,
+  "maxPages": 120,
   "intervalMinutes": 30,
   "teams": [
     {

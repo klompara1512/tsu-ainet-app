@@ -1,5 +1,6 @@
 import {
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
@@ -10,6 +11,9 @@ import type {
   KfvClub,
   KfvMatch,
   KfvMatchStatus,
+  KfvMatchReport,
+  KfvMatchEvent,
+  KfvLineupPlayer,
   KfvStandingRow,
   KfvSquadPlayer,
 } from "./kfvTypes";
@@ -32,6 +36,95 @@ function readStatus(value: unknown): KfvMatchStatus {
     return value;
   }
   return "scheduled";
+}
+
+
+function readLineupPlayers(value: unknown): KfvLineupPlayer[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const data = item as Record<string, unknown>;
+      const name = typeof data.name === "string" ? data.name.trim() : "";
+      if (!name) return null;
+      return {
+        name,
+        number: typeof data.number === "number" ? data.number : null,
+        position: typeof data.position === "string" ? data.position : "",
+        playerUrl: typeof data.playerUrl === "string" ? data.playerUrl : "",
+        captain: data.captain === true,
+      } satisfies KfvLineupPlayer;
+    })
+    .filter((item): item is KfvLineupPlayer => item !== null);
+}
+
+function readMatchEvents(value: unknown): KfvMatchEvent[] {
+  if (!Array.isArray(value)) return [];
+  const validTypes = new Set(["goal", "yellow", "yellowRed", "red", "substitution", "halfTime", "fullTime", "other"]);
+  return value
+    .map((item, index) => {
+      if (!item || typeof item !== "object") return null;
+      const data = item as Record<string, unknown>;
+      const type = typeof data.type === "string" && validTypes.has(data.type) ? data.type as KfvMatchEvent["type"] : "other";
+      const team = data.team === "home" || data.team === "away" ? data.team : "neutral";
+      return {
+        id: typeof data.id === "string" ? data.id : `event-${index}`,
+        type,
+        minute: typeof data.minute === "number" ? data.minute : null,
+        minuteText: typeof data.minuteText === "string" ? data.minuteText : "",
+        team,
+        playerName: typeof data.playerName === "string" ? data.playerName : "",
+        secondaryPlayerName: typeof data.secondaryPlayerName === "string" ? data.secondaryPlayerName : "",
+        description: typeof data.description === "string" ? data.description : "",
+      } satisfies KfvMatchEvent;
+    })
+    .filter((item): item is KfvMatchEvent => item !== null)
+    .sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999));
+}
+
+export function subscribeKfvMatchReport(
+  matchId: string,
+  onData: (report: KfvMatchReport | null) => void,
+  onError: (message: string) => void,
+) {
+  if (!matchId) {
+    onData(null);
+    return () => undefined;
+  }
+  return onSnapshot(
+    doc(db, "kfvMatchReports", matchId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        onData(null);
+        return;
+      }
+      const data = snapshot.data();
+      onData({
+        id: snapshot.id,
+        matchId: typeof data.matchId === "string" ? data.matchId : snapshot.id,
+        matchUid: typeof data.matchUid === "string" ? data.matchUid : "",
+        oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : "",
+        reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
+        homeTeam: typeof data.homeTeam === "string" ? data.homeTeam : "",
+        awayTeam: typeof data.awayTeam === "string" ? data.awayTeam : "",
+        homeLineup: readLineupPlayers(data.homeLineup),
+        awayLineup: readLineupPlayers(data.awayLineup),
+        homeBench: readLineupPlayers(data.homeBench),
+        awayBench: readLineupPlayers(data.awayBench),
+        homeCoach: typeof data.homeCoach === "string" ? data.homeCoach : "",
+        awayCoach: typeof data.awayCoach === "string" ? data.awayCoach : "",
+        referee: typeof data.referee === "string" ? data.referee : "",
+        attendance: typeof data.attendance === "number" ? data.attendance : null,
+        events: readMatchEvents(data.events),
+        sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),
+        active: data.active !== false,
+      });
+    },
+    (error) => {
+      console.error("Fehler beim Laden des Spielberichts:", error);
+      onError("Der offizielle Spielbericht konnte nicht geladen werden.");
+    },
+  );
 }
 
 function normalizeMatchPart(value: string) {

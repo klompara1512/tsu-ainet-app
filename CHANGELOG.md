@@ -1,3 +1,21 @@
+# Version 11.1.3 – Offizieller ÖFB-Spielbericht-Sync
+
+- ÖFB-Spielberichtsseiten werden automatisch besucht.
+- Startelf, Ersatzbank und Trainer werden in `kfvMatchReports` gespeichert.
+- Tore, Karten, Wechsel, Halbzeit und Spielende werden als Timeline importiert.
+- Aufstellungen und Liveticker-Tabs lesen die offiziellen Daten aus Firestore.
+- Leere oder noch nicht veröffentlichte Berichte überschreiben keine vorhandenen Daten.
+
+# Version 11.1.2 – Premium Match-Center Tabs
+
+- Neue Tabs: Übersicht, Liveticker, Aufstellungen und Statistik.
+- Sticky Tab-Navigation für Smartphone und Desktop.
+- Direkter Wechsel ohne Verlassen der Spieldetailseite.
+- Eigene Übersichts-, Live-, Aufstellungs- und Statistikbereiche.
+- Saisonbilanz aus den bereits synchronisierten Endständen.
+- Mobile Schnellnavigation folgt der aktiven Ansicht.
+- Keine erfundenen Live-Ereignisse oder Aufstellungen.
+
 # Changelog
 ## 11.0.3 – Smart Sync Control
 

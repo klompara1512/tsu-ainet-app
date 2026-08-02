@@ -5,8 +5,9 @@ import {
   subscribeKfvMatches,
   subscribeKfvStandings,
   subscribeKfvSquad,
+  subscribeKfvMatchReport,
 } from "./kfvFirestore";
-import type { KfvMatch, KfvStandingRow, KfvSquadPlayer } from "./kfvTypes";
+import type { KfvMatch, KfvMatchReport, KfvStandingRow, KfvSquadPlayer } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
 import { Icon } from "./Icons";
 import "./assets/kfvLive.css";
@@ -25,6 +26,10 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
   const [loadingSquad, setLoadingSquad] = useState(true);
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedMatch, setSelectedMatch] = useState<KfvMatch | null>(null);
+  const [matchReport, setMatchReport] = useState<KfvMatchReport | null>(null);
+  const [loadingMatchReport, setLoadingMatchReport] = useState(false);
+  const [matchReportError, setMatchReportError] = useState("");
+  const [matchDetailTab, setMatchDetailTab] = useState<"overview" | "live" | "lineups" | "stats">("overview");
 
 
   useEffect(() => {
@@ -77,6 +82,33 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
       setSelectedMatch(requestedMatch);
     }
   }, [initialMatchId, matches]);
+
+  useEffect(() => {
+    if (selectedMatch) setMatchDetailTab("overview");
+  }, [selectedMatch?.id]);
+
+
+  useEffect(() => {
+    if (!selectedMatch) {
+      setMatchReport(null);
+      setLoadingMatchReport(false);
+      setMatchReportError("");
+      return;
+    }
+    setLoadingMatchReport(true);
+    setMatchReportError("");
+    return subscribeKfvMatchReport(
+      selectedMatch.id,
+      (report) => {
+        setMatchReport(report);
+        setLoadingMatchReport(false);
+      },
+      (message) => {
+        setMatchReportError(message);
+        setLoadingMatchReport(false);
+      },
+    );
+  }, [selectedMatch?.id]);
 
   const teams = useMemo(() => {
     const map = new Map<string, string>();
@@ -155,9 +187,11 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
     ) ?? null;
 
     const teamMatches = matches.filter((match) => match.teamId === selectedMatch.teamId);
-    const recentForm = [...teamMatches]
+    const finishedTeamMatches = [...teamMatches]
       .filter((match) => match.status === "finished")
-      .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime())
+      .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime());
+
+    const recentForm = finishedTeamMatches
       .slice(0, 5)
       .reverse()
       .map((match) => getResultForTsuAinet(match))
@@ -167,6 +201,18 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
       .filter((row) => row.teamId === selectedMatch.teamId)
       .sort((a, b) => a.position - b.position)
       .slice(0, 5);
+
+    const wins = finishedTeamMatches.filter((match) => getResultForTsuAinet(match) === "W").length;
+    const draws = finishedTeamMatches.filter((match) => getResultForTsuAinet(match) === "D").length;
+    const losses = finishedTeamMatches.filter((match) => getResultForTsuAinet(match) === "L").length;
+    const goalsFor = finishedTeamMatches.reduce((sum, match) => {
+      if (match.homeScore === null || match.awayScore === null) return sum;
+      return sum + (isTsuAinet(match.homeTeam) ? match.homeScore : match.awayScore);
+    }, 0);
+    const goalsAgainst = finishedTeamMatches.reduce((sum, match) => {
+      if (match.homeScore === null || match.awayScore === null) return sum;
+      return sum + (isTsuAinet(match.homeTeam) ? match.awayScore : match.homeScore);
+    }, 0);
 
     const now = Date.now();
     const kickoffTime = selectedMatch.kickoffAt.getTime();
@@ -186,6 +232,30 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
           : liveWindow
             ? "LIVE"
             : "Geplant";
+
+
+    const reportEvents = matchReport?.events ?? [];
+    const eventLabel = (type: string) => ({
+      goal: "Tor", yellow: "Gelbe Karte", yellowRed: "Gelb-Rote Karte", red: "Rote Karte",
+      substitution: "Wechsel", halfTime: "Halbzeit", fullTime: "Spielende", other: "Ereignis",
+    }[type] || "Ereignis");
+
+    const LineupList = ({ title, players, coach }: { title: string; players: KfvMatchReport["homeLineup"]; coach?: string }) => (
+      <article className="official-lineup-card">
+        <header><Icon name="users" /><strong>{title}</strong><span>{players.length || "–"}</span></header>
+        {players.length ? (
+          <ol>{players.map((player, index) => <li key={`${player.name}-${index}`}><b>{player.number ?? "–"}</b><div><strong>{player.name}{player.captain ? " (C)" : ""}</strong>{player.position && <small>{player.position}</small>}</div></li>)}</ol>
+        ) : <p>Noch nicht veröffentlicht.</p>}
+        {coach && <footer><small>Trainer</small><strong>{coach}</strong></footer>}
+      </article>
+    );
+
+    const tabItems = [
+      { id: "overview" as const, label: "Übersicht", icon: "ball" as const },
+      { id: "live" as const, label: "Liveticker", icon: "live" as const },
+      { id: "lineups" as const, label: "Aufstellungen", icon: "users" as const },
+      { id: "stats" as const, label: "Statistik", icon: "target" as const },
+    ];
 
     return (
       <section className="match-detail-page premium-match-center">
@@ -251,82 +321,186 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
           </div>
         </article>
 
-        <section className="premium-match-section">
-          <header>
-            <div>
-              <p className="kfv-eyebrow">Spielinformation</p>
-              <h3>Alles auf einen Blick</h3>
-            </div>
-          </header>
-          <div className="premium-info-grid">
-            <article><Icon name="location" /><small>Spielort</small><strong>{selectedMatch.venue || "Noch nicht bekannt"}</strong></article>
-            <article><Icon name="calendar" /><small>Datum</small><strong>{formatDate(selectedMatch.kickoffAt)}</strong></article>
-            <article><Icon name="clock" /><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></article>
-            <article><Icon name="users" /><small>Schiedsrichter</small><strong>{selectedMatch.referee || "Noch nicht veröffentlicht"}</strong></article>
-            <article><Icon name="table" /><small>TSU Tabellenplatz</small><strong>{tsuRow ? `${tsuRow.position}. Platz` : "Noch offen"}</strong></article>
-            <article><Icon name="sync" /><small>Letzte Aktualisierung</small><strong>{selectedMatch.sourceUpdatedAt ? `${formatDate(selectedMatch.sourceUpdatedAt)} · ${formatTime(selectedMatch.sourceUpdatedAt)}` : "Noch nicht verfügbar"}</strong></article>
-          </div>
-        </section>
+        <nav className="premium-detail-tabs" role="tablist" aria-label="Spielcenter Bereiche">
+          {tabItems.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={matchDetailTab === tab.id}
+              className={matchDetailTab === tab.id ? "active" : ""}
+              onClick={() => setMatchDetailTab(tab.id)}
+            >
+              <Icon name={tab.icon} />
+              <span>{tab.label}</span>
+              {tab.id === "live" && liveWindow && <b>LIVE</b>}
+            </button>
+          ))}
+        </nav>
 
-        <div className="premium-match-columns">
-          <section className="premium-match-section">
-            <header>
-              <div><p className="kfv-eyebrow">Spielverlauf</p><h3>{liveWindow ? "Liveticker" : "Ereignisse"}</h3></div>
-              {liveWindow && <span className="premium-live-pill">LIVE</span>}
-            </header>
-            <div className="premium-empty-state">
-              <Icon name="live" />
-              <strong>{selectedMatch.liveUrl ? "Offizieller Liveticker verfügbar" : selectedMatch.reportUrl ? "Offizielle Spieldetails verfügbar" : "Noch keine Ereignisse verfügbar"}</strong>
-              <p>{selectedMatch.liveUrl ? "Der offizielle Liveticker zeigt Tore, Karten und Wechsel." : selectedMatch.reportUrl ? "Details und Spielbericht werden auf der offiziellen KFV-/ÖFB-Spielseite angezeigt." : "Sobald Live-Daten oder ein Spielbericht vorliegen, erscheinen sie hier beziehungsweise über den offiziellen Link."}</p>
-              {(selectedMatch.liveUrl || selectedMatch.reportUrl) && <a href={selectedMatch.liveUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offizielle Spielseite öffnen</a>}
-            </div>
-          </section>
-
-          <section className="premium-match-section">
-            <header><div><p className="kfv-eyebrow">Mannschaft</p><h3>Aufstellungen</h3></div></header>
-            <div className="premium-lineup-placeholder">
-              <div><Icon name="users" /><strong>Startelf</strong><span>Noch nicht veröffentlicht</span></div>
-              <div><Icon name="users" /><strong>Ersatzbank</strong><span>Noch nicht veröffentlicht</span></div>
-            </div>
-          </section>
-        </div>
-
-        <div className="premium-match-columns">
-          <section className="premium-match-section">
-            <header><div><p className="kfv-eyebrow">Aktuelle Form</p><h3>Letzte fünf Spiele</h3></div></header>
-            {recentForm.length > 0 ? (
-              <div className="match-detail-form premium-form-row">
-                {recentForm.map((result, index) => (
-                  <span key={`${result}-${index}`} className={`form-${result}`}>
-                    {result === "W" ? "S" : result === "D" ? "U" : "N"}
-                  </span>
-                ))}
-              </div>
-            ) : <p className="premium-muted">Noch keine abgeschlossenen Spiele für die Formkurve.</p>}
-          </section>
-
-          <section className="premium-match-section">
-            <header><div><p className="kfv-eyebrow">Tabelle</p><h3>Top 5</h3></div></header>
-            {teamTable.length > 0 ? (
-              <div className="premium-mini-table">
-                {teamTable.map((row) => (
-                  <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
-                    <span>{row.position}.</span>
-                    <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
-                    <strong>{row.clubName}</strong>
-                    <b>{row.points}</b>
+        <div className="premium-tab-panel" role="tabpanel">
+          {matchDetailTab === "overview" && (
+            <>
+              <section className="premium-match-section">
+                <header>
+                  <div>
+                    <p className="kfv-eyebrow">Spielinformation</p>
+                    <h3>Alles auf einen Blick</h3>
                   </div>
-                ))}
+                </header>
+                <div className="premium-info-grid">
+                  <article><Icon name="location" /><small>Spielort</small><strong>{selectedMatch.venue || "Noch nicht bekannt"}</strong></article>
+                  <article><Icon name="calendar" /><small>Datum</small><strong>{formatDate(selectedMatch.kickoffAt)}</strong></article>
+                  <article><Icon name="clock" /><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></article>
+                  <article><Icon name="users" /><small>Schiedsrichter</small><strong>{matchReport?.referee || selectedMatch.referee || "Noch nicht veröffentlicht"}</strong></article>
+                  {matchReport?.attendance !== null && matchReport?.attendance !== undefined && <article><Icon name="users" /><small>Zuschauer</small><strong>{matchReport.attendance}</strong></article>}
+                  <article><Icon name="table" /><small>TSU Tabellenplatz</small><strong>{tsuRow ? `${tsuRow.position}. Platz` : "Noch offen"}</strong></article>
+                  <article><Icon name="sync" /><small>Letzte Aktualisierung</small><strong>{selectedMatch.sourceUpdatedAt ? `${formatDate(selectedMatch.sourceUpdatedAt)} · ${formatTime(selectedMatch.sourceUpdatedAt)}` : "Noch nicht verfügbar"}</strong></article>
+                </div>
+              </section>
+
+              <div className="premium-match-columns">
+                <section className="premium-match-section">
+                  <header><div><p className="kfv-eyebrow">Aktuelle Form</p><h3>Letzte fünf Spiele</h3></div></header>
+                  {recentForm.length > 0 ? (
+                    <div className="match-detail-form premium-form-row">
+                      {recentForm.map((result, index) => (
+                        <span key={`${result}-${index}`} className={`form-${result}`}>
+                          {result === "W" ? "S" : result === "D" ? "U" : "N"}
+                        </span>
+                      ))}
+                    </div>
+                  ) : <p className="premium-muted">Noch keine abgeschlossenen Spiele für die Formkurve.</p>}
+                </section>
+
+                <section className="premium-match-section">
+                  <header><div><p className="kfv-eyebrow">Tabelle</p><h3>Top 5</h3></div></header>
+                  {teamTable.length > 0 ? (
+                    <div className="premium-mini-table">
+                      {teamTable.map((row) => (
+                        <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
+                          <span>{row.position}.</span>
+                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
+                          <strong>{row.clubName}</strong>
+                          <b>{row.points}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="premium-muted">Für diese Mannschaft ist noch keine Tabelle verfügbar.</p>}
+                </section>
               </div>
-            ) : <p className="premium-muted">Für diese Mannschaft ist noch keine Tabelle verfügbar.</p>}
-          </section>
+            </>
+          )}
+
+          {matchDetailTab === "live" && (
+            <section className="premium-match-section premium-tab-feature">
+              <header>
+                <div><p className="kfv-eyebrow">Offizieller Spielbericht</p><h3>{liveWindow ? "Liveticker" : "Spielverlauf"}</h3></div>
+                {liveWindow && <span className="premium-live-pill">LIVE</span>}
+              </header>
+              {loadingMatchReport ? (
+                <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>Spielbericht wird geladen …</strong></div>
+              ) : matchReportError ? (
+                <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>{matchReportError}</strong></div>
+              ) : reportEvents.length ? (
+                <div className="official-event-timeline">
+                  {reportEvents.map((event) => (
+                    <article key={event.id} className={`event-${event.type} event-${event.team}`}>
+                      <time>{event.minuteText || (event.minute !== null ? `${event.minute}'` : "")}</time>
+                      <span className="event-dot" />
+                      <div><small>{eventLabel(event.type)}</small><strong>{event.playerName || event.description || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</div>
+                    </article>
+                  ))}
+                </div>
+              ) : (
+                <div className="premium-empty-state premium-empty-state-large">
+                  <Icon name="live" />
+                  <strong>Noch keine offiziellen Ereignisse veröffentlicht</strong>
+                  <p>Sobald Tore, Karten oder Wechsel im ÖFB-Spielbericht veröffentlicht sind, erscheinen sie nach dem nächsten Sync hier.</p>
+                  {(matchReport?.reportUrl || selectedMatch.liveUrl || selectedMatch.reportUrl) && <a href={matchReport?.reportUrl || selectedMatch.liveUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offizielle Spielseite öffnen</a>}
+                </div>
+              )}
+            </section>
+          )}
+
+          {matchDetailTab === "lineups" && (
+            <section className="premium-match-section premium-tab-feature">
+              <header>
+                <div><p className="kfv-eyebrow">Offizieller Spielbericht</p><h3>Aufstellungen</h3></div>
+                {matchReport?.sourceUpdatedAt && <span className="report-updated">Stand {formatDate(matchReport.sourceUpdatedAt)} · {formatTime(matchReport.sourceUpdatedAt)}</span>}
+              </header>
+              {loadingMatchReport ? (
+                <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>Aufstellungen werden geladen …</strong></div>
+              ) : matchReportError ? (
+                <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>{matchReportError}</strong></div>
+              ) : (
+                <>
+                  <div className="official-lineup-grid">
+                    <LineupList title={`${selectedMatch.homeTeam} – Startelf`} players={matchReport?.homeLineup ?? []} coach={matchReport?.homeCoach} />
+                    <LineupList title={`${selectedMatch.awayTeam} – Startelf`} players={matchReport?.awayLineup ?? []} coach={matchReport?.awayCoach} />
+                    <LineupList title={`${selectedMatch.homeTeam} – Ersatzbank`} players={matchReport?.homeBench ?? []} />
+                    <LineupList title={`${selectedMatch.awayTeam} – Ersatzbank`} players={matchReport?.awayBench ?? []} />
+                  </div>
+                  {!matchReport && <p className="premium-muted premium-tab-note">Der offizielle Spielbericht wurde noch nicht synchronisiert.</p>}
+                  {(matchReport?.reportUrl || selectedMatch.reportUrl) && <a className="official-report-link" href={matchReport?.reportUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offiziellen ÖFB-Spielbericht öffnen</a>}
+                </>
+              )}
+            </section>
+          )}
+
+          {matchDetailTab === "stats" && (
+            <>
+              <section className="premium-match-section premium-tab-feature">
+                <header><div><p className="kfv-eyebrow">Saisonbilanz</p><h3>{selectedMatch.teamName}</h3></div></header>
+                <div className="premium-stat-grid">
+                  <article><small>Spiele</small><strong>{finishedTeamMatches.length}</strong></article>
+                  <article><small>Siege</small><strong>{wins}</strong></article>
+                  <article><small>Remis</small><strong>{draws}</strong></article>
+                  <article><small>Niederlagen</small><strong>{losses}</strong></article>
+                  <article><small>Tore</small><strong>{goalsFor}</strong></article>
+                  <article><small>Gegentore</small><strong>{goalsAgainst}</strong></article>
+                </div>
+              </section>
+
+              <div className="premium-match-columns">
+                <section className="premium-match-section">
+                  <header><div><p className="kfv-eyebrow">Form</p><h3>Letzte fünf Spiele</h3></div></header>
+                  {recentForm.length > 0 ? (
+                    <div className="match-detail-form premium-form-row">
+                      {recentForm.map((result, index) => (
+                        <span key={`${result}-${index}`} className={`form-${result}`}>
+                          {result === "W" ? "S" : result === "D" ? "U" : "N"}
+                        </span>
+                      ))}
+                    </div>
+                  ) : <p className="premium-muted">Noch keine Formdaten verfügbar.</p>}
+                </section>
+
+                <section className="premium-match-section">
+                  <header><div><p className="kfv-eyebrow">Tabelle</p><h3>Top 5</h3></div></header>
+                  {teamTable.length > 0 ? (
+                    <div className="premium-mini-table">
+                      {teamTable.map((row) => (
+                        <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
+                          <span>{row.position}.</span>
+                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
+                          <strong>{row.clubName}</strong>
+                          <b>{row.points}</b>
+                        </div>
+                      ))}
+                    </div>
+                  ) : <p className="premium-muted">Noch keine Tabelle verfügbar.</p>}
+                </section>
+              </div>
+            </>
+          )}
         </div>
 
         <nav className="premium-match-shortcuts" aria-label="Spielcenter Schnellzugriffe">
-          <button type="button" onClick={() => { setSelectedMatch(null); setActiveTab("table"); }}><Icon name="table" /><span>Tabelle</span></button>
-          <button type="button" onClick={() => { setSelectedMatch(null); setActiveTab("squad"); }}><Icon name="users" /><span>Kader</span></button>
-          <button type="button" onClick={() => { setSelectedMatch(null); setActiveTab("matches"); }}><Icon name="calendar" /><span>Spielplan</span></button>
-          {(selectedMatch.liveUrl || selectedMatch.reportUrl) && <a href={selectedMatch.liveUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer"><Icon name="news" /><span>Bericht</span></a>}
+          <button type="button" onClick={() => setMatchDetailTab("overview")} className={matchDetailTab === "overview" ? "active" : ""}><Icon name="ball" /><span>Übersicht</span></button>
+          <button type="button" onClick={() => setMatchDetailTab("live")} className={matchDetailTab === "live" ? "active" : ""}><Icon name="live" /><span>Live</span></button>
+          <button type="button" onClick={() => setMatchDetailTab("lineups")} className={matchDetailTab === "lineups" ? "active" : ""}><Icon name="users" /><span>Aufstellung</span></button>
+          <button type="button" onClick={() => setMatchDetailTab("stats")} className={matchDetailTab === "stats" ? "active" : ""}><Icon name="target" /><span>Statistik</span></button>
         </nav>
       </section>
     );

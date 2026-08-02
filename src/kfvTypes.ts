@@ -67,3 +67,54 @@ export type KfvClub = {
   website: string;
   active: boolean;
 };
+
+
+export type KfvLineupPlayer = {
+  name: string;
+  number: number | null;
+  position: string;
+  playerUrl: string;
+  captain: boolean;
+};
+
+export type KfvMatchEventType =
+  | "goal"
+  | "yellow"
+  | "yellowRed"
+  | "red"
+  | "substitution"
+  | "halfTime"
+  | "fullTime"
+  | "other";
+
+export type KfvMatchEvent = {
+  id: string;
+  type: KfvMatchEventType;
+  minute: number | null;
+  minuteText: string;
+  team: "home" | "away" | "neutral";
+  playerName: string;
+  secondaryPlayerName: string;
+  description: string;
+};
+
+export type KfvMatchReport = {
+  id: string;
+  matchId: string;
+  matchUid: string;
+  oefbMatchId: string;
+  reportUrl: string;
+  homeTeam: string;
+  awayTeam: string;
+  homeLineup: KfvLineupPlayer[];
+  awayLineup: KfvLineupPlayer[];
+  homeBench: KfvLineupPlayer[];
+  awayBench: KfvLineupPlayer[];
+  homeCoach: string;
+  awayCoach: string;
+  referee: string;
+  attendance: number | null;
+  events: KfvMatchEvent[];
+  sourceUpdatedAt: Date | null;
+  active: boolean;
+};

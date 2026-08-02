@@ -53,7 +53,7 @@ const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEA
 ]))];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 40;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "11.0.2a-architecture-cleanup";
+const PARSER_VERSION = "11.1.3-official-match-report";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -1204,6 +1204,34 @@ function importClubProfiles(snapshot, profiles, sourceUrl) {
   }
 }
 
+function importMatchReports(snapshot, target, sourceUrl) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  for (const raw of snapshot.reports || []) {
+    const gameId = oneLine(raw.gameId || extractGameId(raw.reportUrl, sourceUrl));
+    if (!gameId) continue;
+    const matchUid = `oefb:${gameId}`;
+    const matchId = makeId(["kfv-match-uid-v11", matchUid]);
+    const cleanPlayers = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+      name: oneLine(item.name), number: Number.isInteger(item.number) ? item.number : null,
+      position: oneLine(item.position), playerUrl: item.playerUrl ? safeUrl(item.playerUrl, raw.reportUrl || sourceUrl) : "", captain: item.captain === true,
+    })).filter((item) => item.name);
+    const cleanEvents = (items) => (Array.isArray(items) ? items : []).map((item, index) => ({
+      id: oneLine(item.id) || `event-${index}`, type: ["goal","yellow","yellowRed","red","substitution","halfTime","fullTime","other"].includes(item.type) ? item.type : "other",
+      minute: Number.isInteger(item.minute) ? item.minute : null, minuteText: oneLine(item.minuteText),
+      team: item.team === "home" || item.team === "away" ? item.team : "neutral", playerName: oneLine(item.playerName), secondaryPlayerName: oneLine(item.secondaryPlayerName), description: oneLine(item.description),
+    }));
+    target.push({
+      id: matchId, matchId, matchUid, oefbMatchId: gameId, reportUrl: safeUrl(raw.reportUrl, sourceUrl),
+      homeTeam: oneLine(raw.homeTeam), awayTeam: oneLine(raw.awayTeam),
+      homeLineup: cleanPlayers(raw.homeLineup), awayLineup: cleanPlayers(raw.awayLineup),
+      homeBench: cleanPlayers(raw.homeBench), awayBench: cleanPlayers(raw.awayBench),
+      homeCoach: oneLine(raw.homeCoach), awayCoach: oneLine(raw.awayCoach), referee: oneLine(raw.referee),
+      attendance: Number.isInteger(raw.attendance) ? raw.attendance : null, events: cleanEvents(raw.events),
+      published: raw.published === true, active: true, source: "oefb-public", sourceUrl: safeUrl(raw.reportUrl || sourceUrl, sourceUrl),
+    });
+  }
+}
+
 async function collectWithBrowser(startUrls) {
   const browser = await puppeteer.launch({
     headless: true,
@@ -1267,6 +1295,20 @@ async function collectWithBrowser(startUrls) {
         try {
           const discovered = safeUrl(href, startUrl);
           if (!processed.has(discovered) && !queue.includes(discovered)) queue.push(discovered);
+        } catch { /* ignore */ }
+      }
+
+      // Offizielle Spielberichte werden separat besucht. Dort stehen die
+      // veröffentlichten Aufstellungen, Ersatzspieler und Spielereignisse.
+      const discoveredReportUrls = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("a[href]"))
+          .map((anchor) => anchor.href)
+          .filter((href) => /\/Spielbericht\/|[?&](?::s|s)=\d+/i.test(href)),
+      );
+      for (const href of discoveredReportUrls) {
+        try {
+          const discovered = safeUrl(href, startUrl);
+          if (!processed.has(discovered) && !queue.includes(discovered)) queue.unshift(discovered);
         } catch { /* ignore */ }
       }
 
@@ -1444,7 +1486,76 @@ async function collectWithBrowser(startUrls) {
             squadSeen.add(name.toLowerCase());
           }
         }
-        return { matches, standings, clubProfiles, squad };
+        const reports = [];
+        const isReportPage = /\/Spielbericht\//i.test(location.pathname) || /[?&](?::s|s)=\d+/i.test(location.href);
+        if (isReportPage) {
+          const gameId = new URL(location.href).searchParams.get(":s") || new URL(location.href).searchParams.get("s") || location.href.match(/[?&](?::s|s)=(\d+)/i)?.[1] || "";
+          const body = compact(document.body?.innerText || "");
+          const headingTexts = Array.from(document.querySelectorAll("h1,h2,h3,h4,[role='heading']")).map((node) => compact(node.textContent)).filter(Boolean);
+          const teamNames = [];
+          for (const node of Array.from(document.querySelectorAll("[class*='team'],[class*='club'],[class*='verein'],h1,h2,h3,h4"))) {
+            const text = compact(node.textContent);
+            if (text.length < 2 || text.length > 80 || /aufstellung|ersatz|trainer|spielbericht|schiedsrichter|tore|karten|wechsel/i.test(text)) continue;
+            if (/ainet|lurnfeld|spg|sv |fc |tsu |union|askö|sportunion/i.test(text) && !teamNames.some((name) => name.toLowerCase() === text.toLowerCase())) teamNames.push(text);
+          }
+          const playerFromNode = (node) => {
+            const text = compact(node.innerText || node.textContent);
+            const link = node.querySelector?.("a[href]");
+            const nameNode = node.querySelector?.("[class*='name'],[class*='player'],[class*='spieler'],strong,b,a[href]");
+            let name = compact(nameNode?.textContent || text).replace(/^\d{1,2}\s+/, "").replace(/\s+\(C\)$/i, "");
+            if (!name || name.length < 3 || name.length > 90 || /aufstellung|ersatz|trainer|tore|karten|wechsel|schiedsrichter/i.test(name)) return null;
+            const number = Number(text.match(/(?:^|\s)(\d{1,2})(?:\s|$)/)?.[1]);
+            const position = compact(text.match(/\b(Tor(?:wart)?|Abwehr|Verteidigung|Mittelfeld|Sturm|Angriff)\b/i)?.[1] || "");
+            let playerUrl = ""; try { playerUrl = link?.href || ""; } catch {}
+            return { name, number: Number.isInteger(number) ? number : null, position, playerUrl, captain: /\(C\)|Kapitän/i.test(text) };
+          };
+          const sectionPlayers = (labels) => {
+            const result = [];
+            for (const heading of Array.from(document.querySelectorAll("h1,h2,h3,h4,[role='heading'],strong,b"))) {
+              const title = compact(heading.textContent);
+              if (!labels.some((rx) => rx.test(title))) continue;
+              const container = heading.closest("section,article,[class*='lineup'],[class*='aufstellung'],[class*='team'],div") || heading.parentElement;
+              const candidates = Array.from(container?.querySelectorAll("li,tr,[class*='player'],[class*='spieler'],[class*='person']") || []);
+              const players = [];
+              for (const candidate of candidates) {
+                const player = playerFromNode(candidate);
+                if (player && !players.some((item) => item.name.toLowerCase() === player.name.toLowerCase())) players.push(player);
+              }
+              if (players.length) result.push({ title, players });
+            }
+            return result;
+          };
+          const lineupSections = sectionPlayers([/startelf/i,/startaufstellung/i,/^aufstellung$/i]);
+          const benchSections = sectionPlayers([/ersatzbank/i,/ersatzspieler/i,/wechselspieler/i]);
+          const allPlayerBlocks = Array.from(document.querySelectorAll("[class*='lineup'],[class*='aufstellung'],[class*='formation']"));
+          if (!lineupSections.length && allPlayerBlocks.length) {
+            for (const block of allPlayerBlocks) {
+              const players=[];
+              for (const node of Array.from(block.querySelectorAll("li,tr,[class*='player'],[class*='spieler'],[class*='person']"))) {
+                const player=playerFromNode(node); if(player&&!players.some(x=>x.name.toLowerCase()===player.name.toLowerCase()))players.push(player);
+              }
+              if(players.length) lineupSections.push({title:compact(block.querySelector("h2,h3,h4,strong")?.textContent),players});
+            }
+          }
+          const coachMatches = [...body.matchAll(/(?:Trainer(?:in)?|Coach)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .'-]{3,80})/gi)].map((match) => compact(match[1]).replace(/\s+(?:Ersatz|Aufstellung|Schiedsrichter|Zuschauer).*$/i,""));
+          const referee = compact(body.match(/(?:Schiedsrichter(?:in)?|Referee|SR)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .'-]{3,80})/i)?.[1] || "").replace(/\s+(?:Assistent|Zuschauer|Spielort).*$/i,"");
+          const attendanceRaw = body.match(/(?:Zuschauer|Besucher)\s*[:\-]?\s*(\d{1,6})/i)?.[1];
+          const events=[];
+          const eventNodes=Array.from(document.querySelectorAll("li,tr,[class*='event'],[class*='ereignis'],[class*='ticker'],[class*='timeline']"));
+          for(const node of eventNodes){
+            const text=compact(node.innerText||node.textContent); if(!text||text.length>250)continue;
+            const minuteText=compact(text.match(/\b(\d{1,3}(?:\+\d{1,2})?)\s*['’.]?\s*(?:Min(?:ute)?\.?)?/i)?.[1]||"");
+            const minute=minuteText?Number(minuteText.split("+")[0]):null;
+            let type="";
+            if(/gelb.?rot|gelb-rote/i.test(text))type="yellowRed"; else if(/rote karte|\brot\b/i.test(text))type="red"; else if(/gelbe karte|\bgelb\b/i.test(text))type="yellow"; else if(/wechsel|auswechsl|einwechsl/i.test(text))type="substitution"; else if(/halbzeit|pause/i.test(text))type="halfTime"; else if(/spielende|abpfiff|endstand/i.test(text))type="fullTime"; else if(/\btor\b|torschütze|goal/i.test(text))type="goal"; else continue;
+            const names=Array.from(node.querySelectorAll("a[href],[class*='name'],[class*='player'],[class*='spieler'],strong,b")).map(x=>compact(x.textContent)).filter(x=>x.length>=3&&x.length<=90&&!/tor|karte|wechsel|minute|halbzeit|spielende/i.test(x));
+            const eventTeam=/heim|home/i.test(compact(node.className))?"home":/gast|away/i.test(compact(node.className))?"away":"neutral";
+            events.push({id:`${type}-${minuteText||events.length}-${events.length}`,type,minute,minuteText:minuteText?`${minuteText}'`:"",team:eventTeam,playerName:names[0]||"",secondaryPlayerName:names[1]||"",description:text});
+          }
+          const uniqueEvents=events.filter((event,index,array)=>array.findIndex(item=>item.type===event.type&&item.minuteText===event.minuteText&&item.playerName===event.playerName)===index);
+          reports.push({gameId,reportUrl:location.href,homeTeam:teamNames[0]||"",awayTeam:teamNames[1]||"",homeLineup:lineupSections[0]?.players||[],awayLineup:lineupSections[1]?.players||[],homeBench:benchSections[0]?.players||[],awayBench:benchSections[1]?.players||[],homeCoach:coachMatches[0]||"",awayCoach:coachMatches[1]||"",referee,attendance:attendanceRaw?Number(attendanceRaw):null,events:uniqueEvents,published:Boolean(lineupSections.length||benchSections.length||uniqueEvents.length)});
+        }
+        return { matches, standings, clubProfiles, squad, reports };
       });
       resources.push({ text: JSON.stringify({ __browserSnapshot: structuredSnapshot }), contentType: "application/json", finalUrl: safeUrl(page.url() || startUrl, startUrl), origin: "browser-structured" });
 
@@ -1628,6 +1739,7 @@ async function main() {
     const standings = [];
     const squad = [];
     const clubProfiles = [];
+    const matchReports = [];
     const warnings = [];
     const pageDiagnostics = [];
 
@@ -1640,6 +1752,7 @@ async function main() {
           try {
             const rawSnapshot = JSON.parse(resource.text).__browserSnapshot;
             importClubProfiles(rawSnapshot, clubProfiles, resource.finalUrl);
+            importMatchReports(rawSnapshot, matchReports, resource.finalUrl);
           } catch { /* parseResource reports malformed data below */ }
         }
         const parsed = parseResource(resource.text, resource.contentType, resource.finalUrl);
@@ -1731,6 +1844,14 @@ async function main() {
     }));
     const uniqueClubProfiles = [...new Map([...profileMap.values()].map((item) => [item.id, item])).values()];
 
+    const reportMap = new Map();
+    for (const report of matchReports) {
+      const previous = reportMap.get(report.id);
+      const quality = (item) => item.homeLineup.length + item.awayLineup.length + item.homeBench.length + item.awayBench.length + item.events.length * 2;
+      if (!previous || quality(report) >= quality(previous)) reportMap.set(report.id, report);
+    }
+    const uniqueMatchReports = [...reportMap.values()].filter((item) => item.published || item.homeLineup.length || item.awayLineup.length || item.homeBench.length || item.awayBench.length || item.events.length);
+
     if (uniqueSquad.length === 0) {
       await statusRef.set({
         running: false, success: false,
@@ -1770,6 +1891,7 @@ async function main() {
     if (standingsReliable) await writeCollection("kfvStandings", uniqueStandings, runId);
     if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
     if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
+    if (uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
     const duplicateDocumentsDeactivated = await cleanupExistingMatchDuplicates(runId);
@@ -1780,6 +1902,10 @@ async function main() {
     const deactivatedSquad = uniqueSquad.length
       ? await deactivateMissing("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), runId)
       : 0;
+    // Spielberichte bleiben erhalten, wenn eine ÖFB-Seite in einem Lauf nicht
+    // erreichbar oder noch nicht veröffentlicht ist. Deshalb werden alte
+    // Berichte nicht automatisch deaktiviert.
+    const deactivatedMatchReports = 0;
 
     const finishedAt = admin.firestore.Timestamp.now();
     const durationMs = finishedAt.toMillis() - startedAt.toMillis();
@@ -1801,6 +1927,10 @@ async function main() {
       cancelledMatchCount: uniqueMatches.filter((item) => item.status === "cancelled").length,
       standingCount: standingsReliable ? uniqueStandings.length : 0,
       standingsReliable,
+      matchReportCount: uniqueMatchReports.length,
+      lineupReportCount: uniqueMatchReports.filter((item) => item.homeLineup.length || item.awayLineup.length).length,
+      matchEventCount: uniqueMatchReports.reduce((sum, item) => sum + item.events.length, 0),
+      deactivatedMatchReports,
       squadCount: uniqueSquad.length, clubLogoCount: uniqueClubProfiles.length,
       teamCounts: uniqueMatches.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),

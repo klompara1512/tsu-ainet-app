@@ -1,3 +1,18 @@
+## 10.4.4
+- Smart Dashboard 2.0 mit Matchday-, LIVE- und Endstand-Modus.
+
+## 10.4.3
+- KFV-/ÖFB Smart Sync für Spielort, Schiedsrichter, Liveticker und Aktualisierungszeit.
+
+## 10.4.2
+
+- Premium-Spielcenter mit größerem Scoreboard und klarer Statusanzeige
+- Direkte Route, Liveticker- und Spielbericht-Aktionen
+- Spielinformation, Form und Top-5-Tabelle in einer Ansicht
+- Aufstellungs- und Ereignisbereiche für künftige Live-Daten vorbereitet
+- Feste Smartphone-Schnellnavigation zu Tabelle, Kader und Spielplan
+- Doppelte Mannschaftsauswahl im KFV-Live-Filter entfernt
+
 ## 10.3.6
 
 - Dublettenprüfung verwendet jetzt einen kanonischen Mannschaftsschlüssel.

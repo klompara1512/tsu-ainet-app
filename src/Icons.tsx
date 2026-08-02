@@ -1,5 +1,5 @@
 import type { SVGProps } from "react";
-export type IconName = "ball"|"shield"|"users"|"target"|"rocket"|"sparkles"|"bell"|"calendar"|"map"|"weather"|"send"|"news"|"settings"|"sync"|"table"|"person"|"document"|"star"|"video"|"gallery"|"sponsor"|"live";
+export type IconName = "ball"|"shield"|"users"|"target"|"rocket"|"sparkles"|"bell"|"calendar"|"clock"|"location"|"map"|"weather"|"send"|"news"|"settings"|"sync"|"table"|"person"|"document"|"star"|"video"|"gallery"|"sponsor"|"live";
 const paths: Record<IconName, React.ReactNode> = {
 ball:<><circle cx="12" cy="12" r="9"/><path d="m12 7 3 2-1 4h-4L9 9l3-2Z"/><path d="m5 9 4 .2M15 9.2 19 9M10 13l-2.5 4M14 13l2.5 4M8 17h8"/></>,
 shield:<><path d="M12 3 20 6v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-3Z"/><path d="m9 12 2 2 4-5"/></>,
@@ -9,6 +9,8 @@ rocket:<><path d="M14 4c3-1 5-1 6-1 0 1 0 3-1 6l-6 6-4-4 5-7Z"/><path d="m9 11-4
 sparkles:<><path d="m12 3 1.5 4.5L18 9l-4.5 1.5L12 15l-1.5-4.5L6 9l4.5-1.5L12 3Z"/><path d="m19 15 .8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8L19 15Z"/></>,
 bell:<><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></>,
 calendar:<><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></>,
+clock:<><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></>,
+location:<><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></>,
 map:<><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Z"/><path d="M9 3v15M15 6v15"/></>,
 weather:<><path d="M8 19h9a4 4 0 1 0-.7-7.9A6 6 0 0 0 5 13a3 3 0 0 0 3 6Z"/><path d="M12 3v2M4.2 7.2l1.4 1.4M19.8 7.2l-1.4 1.4"/></>,
 send:<><path d="m22 2-7 20-4-9-9-4 20-7Z"/><path d="M22 2 11 13"/></>,

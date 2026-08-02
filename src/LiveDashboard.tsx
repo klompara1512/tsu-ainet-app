@@ -43,6 +43,7 @@ type Props = {
   onOpenNews: () => void;
   onOpenMore: () => void;
   onOpenKfvLive: () => void;
+  onOpenMatch: (matchId: string) => void;
 };
 
 function isFirstTeam(value: string) {
@@ -54,6 +55,24 @@ function isFirstTeam(value: string) {
   );
 }
 
+
+function canonicalMatchKey(match: KfvMatch) {
+  const day = match.kickoffAt.toISOString().slice(0, 10);
+  const normalize = (value: string) =>
+    value.toLocaleLowerCase("de-AT").replace(/[^a-z0-9äöüß]+/g, " ").trim();
+  return [match.teamId || match.teamName, day, normalize(match.homeTeam), normalize(match.awayTeam)].join("|");
+}
+
+function preferDashboardMatch(current: KfvMatch, candidate: KfvMatch) {
+  const score = (match: KfvMatch) =>
+    (match.status === "finished" ? 20 : 0) +
+    (match.venue ? 6 : 0) +
+    (match.reportUrl ? 4 : 0) +
+    (match.homeLogoUrl ? 2 : 0) +
+    (match.awayLogoUrl ? 2 : 0);
+  return score(candidate) > score(current) ? candidate : current;
+}
+
 function LiveDashboard({
   displayName,
   onOpenCalendar,
@@ -61,6 +80,7 @@ function LiveDashboard({
   onOpenNews,
   onOpenMore,
   onOpenKfvLive,
+  onOpenMatch,
 }: Props) {
   const [events, setEvents] = useState<ClubEvent[]>([]);
   const [matches, setMatches] = useState<KfvMatch[]>([]);
@@ -161,19 +181,40 @@ function LiveDashboard({
     };
   }, []);
 
-  const nextMatch = useMemo(
-    () =>
-      matches.find(
-        (match) =>
-          match.status === "scheduled" &&
-          match.kickoffAt.getTime() >= clock.getTime(),
-      ) ?? null,
-    [matches, clock],
-  );
+  const uniqueMatches = useMemo(() => {
+    const map = new Map<string, KfvMatch>();
+    matches.forEach((match) => {
+      const key = canonicalMatchKey(match);
+      const existing = map.get(key);
+      map.set(key, existing ? preferDashboardMatch(existing, match) : match);
+    });
+    return Array.from(map.values()).sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime());
+  }, [matches]);
+
+  const dashboardMatch = useMemo(() => {
+    const now = clock.getTime();
+    const today = clock.toDateString();
+    const liveCandidate = uniqueMatches.find((match) => {
+      const kickoff = match.kickoffAt.getTime();
+      return match.status === "scheduled" && now >= kickoff - 15 * 60_000 && now <= kickoff + 150 * 60_000;
+    });
+    if (liveCandidate) return liveCandidate;
+
+    const todayCandidate = uniqueMatches.find(
+      (match) => match.kickoffAt.toDateString() === today && match.status !== "cancelled",
+    );
+    if (todayCandidate) return todayCandidate;
+
+    return uniqueMatches.find(
+      (match) => match.status === "scheduled" && match.kickoffAt.getTime() >= now,
+    ) ?? null;
+  }, [uniqueMatches, clock]);
+
+  const nextMatch = dashboardMatch;
 
   const recentMatches = useMemo(
     () =>
-      matches
+      uniqueMatches
         .filter(
           (match) =>
             match.status === "finished" &&
@@ -182,7 +223,7 @@ function LiveDashboard({
         )
         .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime())
         .slice(0, 3),
-    [matches],
+    [uniqueMatches],
   );
 
   const firstTeamStandings = useMemo(() => {
@@ -250,14 +291,36 @@ function LiveDashboard({
   const hours = Math.floor((countdown % 86_400_000) / 3_600_000);
 
   const firstName = displayName.trim().split(/\s+/)[0] || "TSU-Fan";
+  const greeting = clock.getHours() < 11
+    ? "Guten Morgen"
+    : clock.getHours() < 17
+      ? "Guten Nachmittag"
+      : "Guten Abend";
+  const isToday = nextMatch
+    ? nextMatch.kickoffAt.toDateString() === clock.toDateString()
+    : false;
+  const isLive = nextMatch
+    ? nextMatch.status === "scheduled" && clock.getTime() >= nextMatch.kickoffAt.getTime() - 15 * 60_000 && clock.getTime() <= nextMatch.kickoffAt.getTime() + 150 * 60_000
+    : false;
+  const isFinishedToday = Boolean(nextMatch && isToday && nextMatch.status === "finished");
+  const matchStatusLabel = nextMatch
+    ? isLive
+      ? "Das Spiel läuft – direkt zum Liveticker"
+      : isFinishedToday
+        ? "Endstand ist verfügbar"
+        : isToday
+          ? "Heute ist Spieltag"
+          : `Noch ${days} ${days === 1 ? "Tag" : "Tage"} bis zum nächsten Spiel`
+    : "Aktuell kein kommendes Spiel";
+  const scheduledCount = uniqueMatches.filter((match) => match.status === "scheduled" && match.kickoffAt >= clock).length;
 
   return (
     <section className="v101-home">
       <header className="v101-intro">
         <div>
           <span className="v101-overline">TSU Ainet · Saison 2026/27</span>
-          <h1>Servus, {firstName}</h1>
-          <p>{dateText}</p>
+          <h1>{greeting}, {firstName}</h1>
+          <p>{dateText} · {matchStatusLabel}</p>
         </div>
         <img src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
       </header>
@@ -267,8 +330,9 @@ function LiveDashboard({
           <div>
             <span className="v101-overline">Nächstes Spiel</span>
             <h2>{nextMatch?.teamName || "TSU Ainet"}</h2>
+            {nextMatch && <span className={`v104-status ${isLive ? "is-live" : isToday ? "is-today" : ""}`}>{isLive ? "LIVE" : isFinishedToday ? "Beendet" : isToday ? "Heute" : "Geplant"}</span>}
           </div>
-          {nextMatch && (
+          {nextMatch && !isLive && !isFinishedToday && (
             <div className="v101-countdown" aria-label="Countdown zum Spiel">
               <span><strong>{days}</strong><small>Tage</small></span>
               <span><strong>{hours}</strong><small>Std.</small></span>
@@ -291,9 +355,9 @@ function LiveDashboard({
               </div>
 
               <div className="v101-kickoff">
-                <small>{formatDate(nextMatch.kickoffAt)}</small>
-                <b>{formatTime(nextMatch.kickoffAt)}</b>
-                <span>VS</span>
+                <small>{isFinishedToday ? "Endstand" : isLive ? "LIVE" : formatDate(nextMatch.kickoffAt)}</small>
+                <b>{nextMatch.homeScore !== null && nextMatch.awayScore !== null ? `${nextMatch.homeScore}:${nextMatch.awayScore}` : formatTime(nextMatch.kickoffAt)}</b>
+                <span>{isLive ? "● LIVE" : isFinishedToday ? "Beendet" : "VS"}</span>
               </div>
 
               <div className="v101-team">
@@ -307,13 +371,15 @@ function LiveDashboard({
             </div>
 
             <div className="v101-match-meta">
-              <span><Icon name="map" />{nextMatch.venue || "Spielort noch offen"}</span>
+              <span><Icon name="calendar" />{formatDate(nextMatch.kickoffAt)} · {formatTime(nextMatch.kickoffAt)} Uhr</span>
+              <span><Icon name="map" />{nextMatch.venue || "Spielort wird vom KFV ergänzt"}</span>
               <span><Icon name="ball" />{isTsuAinet(nextMatch.homeTeam) ? "Heimspiel" : "Auswärtsspiel"}</span>
             </div>
 
-            <button type="button" className="v101-primary" onClick={onOpenKfvLive}>
-              Spiel öffnen <span>›</span>
+            <button type="button" className="v101-primary" onClick={() => onOpenMatch(nextMatch.id)}>
+              {isLive && nextMatch.liveUrl ? "Jetzt zum Liveticker" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
             </button>
+            <small className="v104-data-freshness">{nextMatch.sourceUpdatedAt ? `KFV zuletzt aktualisiert: ${formatDate(nextMatch.sourceUpdatedAt)} · ${formatTime(nextMatch.sourceUpdatedAt)}` : "KFV-Aktualisierung ausständig"}</small>
           </>
         ) : (
           <div className="v101-empty">
@@ -327,22 +393,22 @@ function LiveDashboard({
         <button type="button" onClick={onOpenCalendar}>
           <span><Icon name="calendar" /></span>
           <strong>Spiele</strong>
-          <small>Spielplan & Termine</small>
+          <small>{scheduledCount} kommende Spiele</small>
         </button>
         <button type="button" onClick={onOpenKfvLive}>
           <span><Icon name="table" /></span>
           <strong>Tabelle</strong>
-          <small>1. Klasse West</small>
+          <small>{standing ? `${standing.position}. Platz · ${standing.points} Punkte` : "1. Klasse West"}</small>
         </button>
         <button type="button" onClick={onOpenTeams}>
           <span><Icon name="users" /></span>
           <strong>Teams</strong>
-          <small>Kader & Trainer</small>
+          <small>5 Mannschaften</small>
         </button>
         <button type="button" onClick={onOpenNews}>
           <span><Icon name="news" /></span>
           <strong>News</strong>
-          <small>Aktuelles vom Verein</small>
+          <small>Neuigkeiten & Termine</small>
         </button>
       </nav>
 
@@ -358,7 +424,7 @@ function LiveDashboard({
               const result = getResultForTsuAinet(match);
               const resultLabel = result === "W" ? "Sieg" : result === "D" ? "Remis" : "Niederlage";
               return (
-                <button type="button" key={match.id} onClick={onOpenKfvLive}>
+                <button type="button" key={match.id} onClick={() => onOpenMatch(match.id)}>
                   <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} size="small" />
                   <div><small>{formatDate(match.kickoffAt)}</small><strong>{match.homeTeam}</strong></div>
                   <b className={`v101-score v101-score-${result || "N"}`}>{match.homeScore}:{match.awayScore}</b>

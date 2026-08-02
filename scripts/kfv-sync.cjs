@@ -44,7 +44,7 @@ const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEA
   `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Tabellen`,
 ]))];
 const MAX_PAGES = 40;
-const PARSER_VERSION = "10.3.6-canonical-team-dedup-cleanup";
+const PARSER_VERSION = "10.4.3-smart-match-details";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -423,6 +423,25 @@ function addSquadPlayer(target, data, sourceUrl) {
   });
 }
 
+function extractVenueFromContext(context) {
+  const text = oneLine(context);
+  const match = text.match(/\b((?:Sportplatz|Stadion|Arena|Kunstrasen|Fußballplatz|Fussballplatz)\s+[A-Za-zÄÖÜäöüß0-9 .\-\/]{2,80})/i);
+  return match ? oneLine(match[1]).replace(/\s+(?:Schiedsrichter|Spielbericht|Ticker|Livestream).*$/i, "") : "";
+}
+
+function extractRefereeFromContext(context) {
+  const text = oneLine(context);
+  const match = text.match(/(?:Schiedsrichter(?:in)?|Referee|SR)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .\-]{3,80})/i);
+  return match ? oneLine(match[1]).replace(/\s+(?:Assistent|Spielort|Sportplatz|Stadion|Spielbericht|Ticker).*$/i, "") : "";
+}
+
+function classifyOfficialLinks(rawUrl, sourceUrl) {
+  const url = rawUrl ? safeUrl(rawUrl, sourceUrl) : "";
+  if (!url) return { reportUrl: "", liveUrl: "" };
+  const isLive = /ticker|live|livestream|liveticker/i.test(url);
+  return { reportUrl: url, liveUrl: isLive ? url : "" };
+}
+
 function addMatch(target, data, sourceUrl, context = "") {
   const kickoff = data.kickoff instanceof Date
     ? data.kickoff
@@ -464,7 +483,11 @@ function addMatch(target, data, sourceUrl, context = "") {
   }
 
   const reportUrl = officialReportUrl(data.reportUrl, sourceUrl, homeTeam, awayTeam);
+  const links = classifyOfficialLinks(data.liveUrl || reportUrl, sourceUrl);
   const gameId = extractGameId(data.reportUrl, reportUrl, context);
+  const venue = oneLine(data.venue) || extractVenueFromContext(context);
+  const venueAddress = oneLine(data.venueAddress);
+  const referee = oneLine(data.referee) || extractRefereeFromContext(context);
   const competitionName = canonicalCompetitionName(data.competitionName, teamName);
   const preliminaryKey = [
     teamKey,
@@ -493,7 +516,10 @@ function addMatch(target, data, sourceUrl, context = "") {
     homeScore, awayScore,
     resultText: homeScore !== null && awayScore !== null ? `${homeScore}:${awayScore}` : "",
     kickoffAt: admin.firestore.Timestamp.fromDate(kickoff),
-    venue: oneLine(data.venue),
+    venue,
+    venueAddress,
+    referee,
+    liveUrl: data.liveUrl ? safeUrl(data.liveUrl, sourceUrl) : links.liveUrl,
     status,
     reportUrl,
     active: true, source: "oefb-public", sourceUrl,
@@ -561,6 +587,9 @@ function parseJsonObjects(value, matches, standings, urls, sourceUrl, context = 
       awayScore: parseNumber(lookup([/away.*score/i, /gast.*tor/i, /^score2$/i])),
       competitionName: valueFromObject(lookup([/competition/i, /bewerb/i, /liga/i, /league/i])),
       venue: valueFromObject(lookup([/venue/i, /stadion/i, /sportplatz/i, /location/i])),
+      venueAddress: valueFromObject(lookup([/address/i, /adresse/i])),
+      referee: valueFromObject(lookup([/referee/i, /schiedsrichter/i])),
+      liveUrl: valueFromObject(lookup([/live.*url/i, /ticker.*url/i, /livestream/i])),
       reportUrl: valueFromObject(lookup([/report.*url/i, /detail.*url/i, /^url$/i, /^link$/i])),
       status: valueFromObject(lookup([/^status$/i, /matchstatus/i])),
     }, sourceUrl, context);
@@ -1073,6 +1102,9 @@ function importBrowserSnapshot(snapshot, matches, standings, squad, sourceUrl) {
       score,
       competitionName: item.competitionName,
       venue: item.venue,
+      venueAddress: item.venueAddress,
+      referee: item.referee,
+      liveUrl: item.liveUrl,
       reportUrl: item.reportUrl,
       status: score ? "finished" : item.status,
     }, sourceUrl, item.context || "");
@@ -1258,7 +1290,11 @@ async function collectWithBrowser(startUrls) {
             kickoff: kickoff.toISOString(),
             score: scoreText, scoreConfirmed: Boolean(scoreText),
             competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB"),
-            venue: "", reportUrl: report?.href || location.href,
+            venue: compact(context.match(/(?:Sportplatz|Stadion|Arena|Kunstrasen|Fußballplatz)\s+[A-Za-zÄÖÜäöüß0-9 .\-\/]{2,80}/i)?.[0] || ""),
+            venueAddress: "",
+            referee: compact(context.match(/(?:Schiedsrichter(?:in)?|Referee|SR)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .\-]{3,80})/i)?.[1] || ""),
+            liveUrl: /ticker|live|livestream/i.test(report?.href || "") ? report.href : "",
+            reportUrl: report?.href || location.href,
             status: /abgesagt|annulliert/i.test(context) ? "cancelled" : /verschoben/i.test(context) ? "postponed" : scoreText ? "finished" : "scheduled",
             context,
           });

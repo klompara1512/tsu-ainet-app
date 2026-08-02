@@ -121,6 +121,9 @@ function deduplicateMatches(matches: KfvMatch[]) {
         best.homeLogoUrl ||= match.homeLogoUrl;
         best.awayLogoUrl ||= match.awayLogoUrl;
         best.venue ||= match.venue;
+        best.venueAddress ||= match.venueAddress;
+        best.referee ||= match.referee;
+        best.liveUrl ||= match.liveUrl;
         best.reportUrl ||= match.reportUrl;
       }
       return best;
@@ -157,6 +160,9 @@ export function subscribeKfvMatches(
             awayScore: typeof data.awayScore === "number" ? data.awayScore : null,
             kickoffAt: readDate(data.kickoffAt),
             venue: typeof data.venue === "string" ? data.venue : "",
+            venueAddress: typeof data.venueAddress === "string" ? data.venueAddress : "",
+            referee: typeof data.referee === "string" ? data.referee : "",
+            liveUrl: typeof data.liveUrl === "string" ? data.liveUrl : "",
             status: readStatus(data.status),
             reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
             sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),

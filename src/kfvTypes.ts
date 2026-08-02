@@ -13,6 +13,9 @@ export type KfvMatch = {
   awayScore: number | null;
   kickoffAt: Date;
   venue: string;
+  venueAddress: string;
+  referee: string;
+  liveUrl: string;
   status: KfvMatchStatus;
   reportUrl: string;
   sourceUpdatedAt: Date | null;

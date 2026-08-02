@@ -47,6 +47,7 @@ function Dashboard({ user, profile }: DashboardProps) {
   const [activePage, setActivePage] =
     useState<Page>("start");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [selectedMatchId, setSelectedMatchId] = useState("");
   const canManageMatches = hasPermission(role, "manageMatches");
   const canManageStandings = hasPermission(role, "manageStandings");
   const canManagePeople = hasPermission(role, "managePeople");
@@ -207,7 +208,7 @@ function Dashboard({ user, profile }: DashboardProps) {
     }
 
     if (activePage === "kfv-live") {
-      return <KfvLive />;
+      return <KfvLive initialMatchId={selectedMatchId} />;
     }
 
     if (activePage === "club-hub") {
@@ -292,9 +293,14 @@ function Dashboard({ user, profile }: DashboardProps) {
           onOpenMore={() =>
             setActivePage("mehr")
           }
-          onOpenKfvLive={() =>
-            setActivePage("kfv-live")
-          }
+          onOpenKfvLive={() => {
+            setSelectedMatchId("");
+            setActivePage("kfv-live");
+          }}
+          onOpenMatch={(matchId) => {
+            setSelectedMatchId(matchId);
+            setActivePage("kfv-live");
+          }}
         />
       </>
     );
@@ -308,6 +314,7 @@ function Dashboard({ user, profile }: DashboardProps) {
       page === "news" ||
       page === "mehr"
     ) {
+      setSelectedMatchId("");
       setActivePage(page);
     }
   }
@@ -372,7 +379,7 @@ function Dashboard({ user, profile }: DashboardProps) {
         <footer className="dashboard-version" aria-label="App-Version">
           <img src="/tsu-ainet-logo.png" alt="" />
           <span>TSU Ainet App</span>
-          <strong>Version 10.3.3</strong>
+          <strong>Version 10.4.1</strong>
         </footer>
       </main>
 

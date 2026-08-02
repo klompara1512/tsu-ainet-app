@@ -1,3 +1,16 @@
+# Changelog
+
+## 11.0.1 – Stabile Spiel-ID und Dubletten-Migration
+
+- jedes ÖFB/KFV-Spiel erhält ein dauerhaftes Feld `matchUid`
+- offizielle ÖFB-Spiel-ID wird bevorzugt verwendet
+- Ligaspiele behalten bei Datum-, Uhrzeit- und Spielortänderungen dieselbe Dokument-ID
+- bestehende alte Match-Dokumente werden beim nächsten Sync automatisch auf die neue ID migriert
+- alte Dubletten werden deaktiviert und mit `duplicateOf` verknüpft
+- aktuelle Sync-Daten haben Vorrang vor alten, bereits mehrfach gespeicherten Terminen
+- Sync-Protokoll zeigt neue und aktualisierte Spiele getrennt
+- Sync-Status speichert `newMatchCount`, `updatedMatchCount` und `matchIdentityVersion`
+
 ## 10.4.4
 - Smart Dashboard 2.0 mit Matchday-, LIVE- und Endstand-Modus.
 

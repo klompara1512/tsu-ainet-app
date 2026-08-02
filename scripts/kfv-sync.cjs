@@ -44,7 +44,7 @@ const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEA
   `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Tabellen`,
 ]))];
 const MAX_PAGES = 40;
-const PARSER_VERSION = "10.4.3-smart-match-details";
+const PARSER_VERSION = "11.0.1-stable-match-uid";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -274,6 +274,39 @@ function canonicalMatchKey(item) {
   ].join("|");
 }
 
+function canonicalCompetitionBucket(item) {
+  const text = lower(`${item.competitionType || ""} ${item.competitionName || ""}`);
+  if (/cup|pokal/.test(text)) return "CUP";
+  if (/test|freund/.test(text)) return "FRIENDLY";
+  return "LEAGUE";
+}
+
+// Stabile Identität eines Spiels. Die offizielle ÖFB-Spiel-ID hat immer Vorrang.
+// Für Ligaspiele bleibt der Fallback auch bei Datum-, Uhrzeit- oder Spielortänderungen
+// identisch. Freundschafts- und Cupspiele erhalten zusätzlich das Datum, weil dieselbe
+// Paarung dort mehrmals in einer Saison vorkommen kann.
+function buildMatchUid(item) {
+  const officialId = oneLine(item.gameId || item.oefbMatchId || "");
+  if (officialId) return `oefb:${officialId}`;
+
+  const competitionBucket = canonicalCompetitionBucket(item);
+  const parts = [
+    "fixture",
+    canonicalTeamBucket(item),
+    oneLine(item.season),
+    competitionBucket,
+    clubKey(item.homeTeam) || slug(item.homeTeam),
+    clubKey(item.awayTeam) || slug(item.awayTeam),
+  ];
+
+  if (competitionBucket !== "LEAGUE") parts.push(localDateKey(item.kickoffAt));
+  return parts.join("|");
+}
+
+function matchDocumentId(item) {
+  return makeId(["kfv-match-uid-v11", buildMatchUid(item)]);
+}
+
 function matchQuality(item) {
   let score = 0;
   if (item.gameId) score += 100;
@@ -331,7 +364,9 @@ function mergeDuplicateMatches(group) {
   best.competitionName = canonicalCompetitionName(best.competitionName, best.teamName);
   const canonicalKey = canonicalMatchKey(best);
   best.canonicalKey = canonicalKey;
-  best.id = makeId(["kfv-match-canonical", best.gameId || canonicalKey]);
+  best.matchUid = buildMatchUid(best);
+  best.oefbMatchId = best.gameId || best.oefbMatchId || "";
+  best.id = matchDocumentId(best);
   best.duplicateSources = group.length;
   return best;
 }
@@ -497,8 +532,28 @@ function addMatch(target, data, sourceUrl, context = "") {
     clubKey(awayTeam) || slug(awayTeam),
   ].join("|");
 
+  const matchIdentity = {
+    gameId,
+    teamKey,
+    teamId: slug(teamName),
+    teamName,
+    season,
+    competitionType: /cup|pokal/i.test(data.competitionName || context)
+      ? "Cup"
+      : /test|freund/i.test(data.competitionName || context)
+        ? "Freundschaftsspiel"
+        : "Liga",
+    competitionName,
+    homeTeam,
+    awayTeam,
+    kickoffAt: admin.firestore.Timestamp.fromDate(kickoff),
+  };
+  const matchUid = buildMatchUid(matchIdentity);
+
   target.push({
-    id: makeId(["kfv-match-canonical", gameId || preliminaryKey]),
+    id: matchDocumentId(matchIdentity),
+    matchUid,
+    oefbMatchId: gameId,
     canonicalKey: preliminaryKey,
     gameId,
     teamId: slug(teamName), teamKey, teamName,
@@ -1479,7 +1534,7 @@ async function cleanupExistingMatchDuplicates(runId) {
   for (const document of snapshot.docs) {
     const data = document.data();
     if (data.source !== "oefb-public" || data.active === false) continue;
-    const key = canonicalMatchKey(data);
+    const key = buildMatchUid(data);
     if (!key || key.includes("||")) continue;
     const group = groups.get(key) || [];
     group.push({ id: document.id, ref: document.ref, ...data });
@@ -1490,7 +1545,10 @@ async function cleanupExistingMatchDuplicates(runId) {
   let deactivated = 0;
   for (const group of groups.values()) {
     if (group.length < 2) continue;
-    const merged = mergeDuplicateMatches(group);
+    // Der Datensatz aus dem aktuellen Lauf ist die verlässlichste Quelle. Alte
+    // Dubletten dürfen insbesondere kein bereits verschobenes Datum zurückschreiben.
+    const currentRunItems = group.filter((item) => item.syncRunId === runId);
+    const merged = mergeDuplicateMatches(currentRunItems.length ? currentRunItems : group);
     const canonicalId = merged.id;
     const canonicalRef = db.collection("kfvMatches").doc(canonicalId);
     writer.set(canonicalRef, removeUndefinedDeep({
@@ -1689,12 +1747,19 @@ async function main() {
       warnings.push(`Tabellen-Sync wurde übersprungen: nur ${uniqueStandings.length} plausible Tabellenzeilen erkannt.`);
     }
 
+    const existingMatchesSnapshot = await db.collection("kfvMatches").get();
+    const existingMatchIds = new Set(existingMatchesSnapshot.docs.map((document) => document.id));
+    const newMatchCount = uniqueMatches.filter((item) => !existingMatchIds.has(item.id)).length;
+    const updatedMatchCount = uniqueMatches.length - newMatchCount;
+
     await writeCollection("kfvMatches", uniqueMatches, runId);
     if (standingsReliable) await writeCollection("kfvStandings", uniqueStandings, runId);
     if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
     if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
-    const deactivatedMatches = await deactivateMissing("kfvMatches", new Set(uniqueMatches.map((item) => item.id)), runId);
+    // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
+    // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
     const duplicateDocumentsDeactivated = await cleanupExistingMatchDuplicates(runId);
+    const deactivatedMatches = await deactivateMissing("kfvMatches", new Set(uniqueMatches.map((item) => item.id)), runId);
     const deactivatedStandings = standingsReliable
       ? await deactivateMissing("kfvStandings", new Set(uniqueStandings.map((item) => item.id)), runId)
       : 0;
@@ -1709,7 +1774,11 @@ async function main() {
       sourceUrl, discoveredUrls: [...visited], visitedUrls: [...visited], pageDiagnostics,
       matchCount: uniqueMatches.length,
       rawMatchCount: matches.length,
+      newMatchCount,
+      updatedMatchCount,
       duplicateMatchesRemoved,
+      duplicateDocumentsDeactivated,
+      matchIdentityVersion: "11.0.1",
       finishedMatchCount: uniqueMatches.filter((item) => item.status === "finished").length,
       scheduledMatchCount: uniqueMatches.filter((item) => item.status === "scheduled").length,
       postponedMatchCount: uniqueMatches.filter((item) => item.status === "postponed").length,
@@ -1734,8 +1803,10 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 10.3.5 =====");
+    console.log("===== TSU Ainet ÖFB-Sync 11.0.1 =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
+    console.log(`Neue Spiele: ${newMatchCount}`);
+    console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
     console.log(`Alte Firestore-Dubletten deaktiviert: ${duplicateDocumentsDeactivated}`);
     console.log(`  Geplant: ${matchStatusCounts.scheduled || 0}`);
     console.log(`  Beendet/Endstand: ${matchStatusCounts.finished || 0}`);

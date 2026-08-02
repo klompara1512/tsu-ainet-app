@@ -1,3 +1,5 @@
+> Aktueller Entwicklungsstand: **Version 11.0.1** – stabile Match-ID und automatische Dubletten-Migration.
+
 # TSU Ainet Vereinsapp – Version 3.6
 
 Diese Version synchronisiert öffentliche KFV-Daten kostenlos über GitHub Actions alle 30 Minuten mit Firestore. Firebase Blaze ist dafür nicht erforderlich.

@@ -1,3 +1,14 @@
+# Changelog
+
+## 11.0.2a – Architektur- und Code-Cleanup
+
+- zentrale Sync-Konfiguration eingeführt
+- produktiven GitHub-Workflow vereinheitlicht
+- automatische Projekt- und Konfigurationsprüfung ergänzt
+- Sync-Logs als GitHub-Artefakt und Job-Zusammenfassung verfügbar
+- Dokumentation, `.gitignore` und `.env.example` ergänzt
+- keine Änderung an bestehenden App-Funktionen oder Firestore-Collections
+
 # Version 11.0.2 – Admin Sync Center
 
 - neues, ausschließlich für Administratoren sichtbares Synchronisationszentrum

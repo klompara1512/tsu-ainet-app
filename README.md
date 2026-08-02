@@ -1,3 +1,19 @@
+# TSU Ainet App
+
+**Aktueller Stand:** 11.0.2a – Architektur- und Code-Cleanup
+
+Wichtige Befehle:
+
+```powershell
+npm install
+npm run sync:check
+npm run dev
+npm run build
+```
+
+Technische Übersicht: `docs/ARCHITEKTUR.md`  
+Sync-Konfiguration: `config/kfv-sync.config.json`
+
 > Aktueller Entwicklungsstand: **Version 11.0.1** – stabile Match-ID und automatische Dubletten-Migration.
 
 # TSU Ainet Vereinsapp – Version 3.6

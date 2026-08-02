@@ -289,7 +289,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
         <div className="sync-system-list">
           <div><span className="sync-dot sync-dot--success" /><span>Firestore erreichbar</span><strong>Online</strong></div>
           <div><span className={`sync-dot ${stale ? "sync-dot--warning" : "sync-dot--success"}`} /><span>GitHub-Synchronisierung</span><strong>{stale ? "Prüfen" : "Aktiv"}</strong></div>
-          <div><span className="sync-dot sync-dot--success" /><span>App-Version</span><strong>11.0.2</strong></div>
+          <div><span className="sync-dot sync-dot--success" /><span>App-Version</span><strong>11.0.2a</strong></div>
           <div><span className="sync-dot sync-dot--success" /><span>Match-ID-Schema</span><strong>{status.matchIdentityVersion || "11.0.1"}</strong></div>
         </div>
       </section>

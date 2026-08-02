@@ -4,6 +4,8 @@ const admin = require("firebase-admin");
 const cheerio = require("cheerio");
 const crypto = require("crypto");
 const puppeteer = require("puppeteer");
+const path = require("path");
+const fs = require("fs");
 
 const rawCredentials = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!rawCredentials) throw new Error("FIREBASE_SERVICE_ACCOUNT fehlt.");
@@ -21,30 +23,37 @@ const db = admin.firestore();
 // Optionale Parser-Felder dürfen einen kompletten Synchronisationslauf nicht abbrechen.
 db.settings({ ignoreUndefinedProperties: true });
 
-const DEFAULT_SOURCE = "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele";
-const TEAM_PAGES = [
-  { key: "KM", name: "Kampfmannschaft", slugs: ["KM"] },
-  { key: "CHALLENGE", name: "Challenge", slugs: ["Challenge", "KM-Res", "KM-Reserve", "Reserve", "Res"] },
-  { key: "U17", name: "U17", slugs: ["U17", "U17-A"] },
-  { key: "U12", name: "U12", slugs: ["U12", "U12-A"] },
-  { key: "U10", name: "U10", slugs: ["U10", "U10-A"] },
-  { key: "U08", name: "U8", slugs: ["U08", "U8", "U08-A"] },
-];
-const TEAM_DIRECTORY_URL = "https://vereine.oefb.at/TsuAinet/Mannschaften";
-const SQUAD_URL = "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Kader/";
+const CONFIG_PATH = path.resolve(__dirname, "../config/kfv-sync.config.json");
+
+function loadSyncConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    if (!Array.isArray(parsed.teams) || parsed.teams.length === 0) {
+      throw new Error("teams fehlt oder ist leer");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`Sync-Konfiguration konnte nicht geladen werden (${CONFIG_PATH}): ${error.message || error}`);
+  }
+}
+
+const SYNC_CONFIG = loadSyncConfig();
+const DEFAULT_SOURCE = SYNC_CONFIG.defaultSource;
+const TEAM_PAGES = SYNC_CONFIG.teams;
+const TEAM_DIRECTORY_URL = SYNC_CONFIG.teamDirectoryUrl;
+const SEASON_SLUG = SYNC_CONFIG.season;
+const SQUAD_URL = `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/KM/Kader/`;
 const SQUAD_URLS = TEAM_PAGES.flatMap((team) => team.slugs.map((slugName) =>
-  `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Kader/`
+  `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/${slugName}/Kader/`
 ));
-const CLUB_SEED_URLS = [
-  "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
-  "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal",
-];
+const CLUB_SEED_URLS = SYNC_CONFIG.clubSeedUrls || [];
 const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEAM_PAGES.flatMap((team) => team.slugs.flatMap((slugName) => [
-  `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Spiele`,
-  `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Tabellen`,
+  `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/${slugName}/Spiele`,
+  `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/${slugName}/Tabellen`,
 ]))];
-const MAX_PAGES = 40;
-const PARSER_VERSION = "11.0.1-stable-match-uid";
+const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 40;
+const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
+const PARSER_VERSION = "11.0.2a-architecture-cleanup";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -1600,7 +1609,7 @@ async function main() {
   const trigger = process.env.GITHUB_ACTIONS ? "github-actions" : "local";
   const initialRunData = {
     runId, status: "running", running: true, success: null,
-    trigger, startedAt, intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
+    trigger, startedAt, intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
   };
   await Promise.all([
     statusRef.set(initialRunData, { merge: true }),
@@ -1798,7 +1807,7 @@ async function main() {
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
-      intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
+      intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
       lastError: admin.firestore.FieldValue.delete(),
     };
     await Promise.all([
@@ -1814,7 +1823,7 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 11.0.2 =====");
+    console.log("===== TSU Ainet ÖFB-Sync 11.0.2a =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Neue Spiele: ${newMatchCount}`);
     console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
@@ -1834,7 +1843,7 @@ async function main() {
       runId, status: "error", running: false, success: false,
       startedAt, finishedAt, durationMs,
       lastError: String(error.message || error),
-      intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
+      intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
     };
     await Promise.all([
       statusRef.set(errorRunData, { merge: true }),

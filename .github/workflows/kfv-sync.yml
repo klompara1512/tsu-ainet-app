@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   sync:
-    name: Spiele, Tabellen und Kader nach Firestore übertragen
+    name: Spiele, Tabellen, Kader und Logos synchronisieren
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
@@ -28,6 +28,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          cache: npm
 
       - name: Firebase-Zugang prüfen
         shell: bash
@@ -39,14 +40,41 @@ jobs:
             exit 1
           fi
 
-      - name: Nur Sync-Abhängigkeiten installieren
+      - name: Sync-Abhängigkeiten installieren
         run: npm install --no-save --no-audit --no-fund firebase-admin@13.10.0 cheerio@1.2.0 puppeteer@24.43.1
 
-      - name: Parser prüfen
-        run: node --check scripts/kfv-sync.cjs
+      - name: Projekt und Parser prüfen
+        run: npm run sync:check
 
-      - name: Spiele, Tabellen, Vereine und Kader synchronisieren
+      - name: ÖFB-Daten synchronisieren
+        id: sync
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           NODE_ENV: production
-        run: node scripts/kfv-sync.cjs
+        shell: bash
+        run: |
+          set -o pipefail
+          node scripts/kfv-sync.cjs 2>&1 | tee sync-output.log
+
+      - name: Zusammenfassung erstellen
+        if: always()
+        shell: bash
+        run: |
+          echo "## TSU Ainet ÖFB-Synchronisierung" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f sync-output.log ]; then
+            echo '```text' >> "$GITHUB_STEP_SUMMARY"
+            tail -n 40 sync-output.log >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Kein Sync-Protokoll vorhanden." >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Sync-Protokoll speichern
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: oefb-sync-log-${{ github.run_number }}
+          path: sync-output.log
+          if-no-files-found: ignore
+          retention-days: 14

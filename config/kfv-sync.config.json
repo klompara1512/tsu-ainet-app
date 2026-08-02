@@ -1,0 +1,66 @@
+{
+  "season": "2026-27",
+  "seasonLabel": "2026/27",
+  "clubSlug": "TsuAinet",
+  "teamDirectoryUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften",
+  "defaultSource": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele",
+  "maxPages": 40,
+  "intervalMinutes": 30,
+  "teams": [
+    {
+      "key": "KM",
+      "name": "Kampfmannschaft",
+      "slugs": [
+        "KM"
+      ]
+    },
+    {
+      "key": "CHALLENGE",
+      "name": "Challenge",
+      "slugs": [
+        "Challenge",
+        "KM-Res",
+        "KM-Reserve",
+        "Reserve",
+        "Res"
+      ]
+    },
+    {
+      "key": "U17",
+      "name": "U17",
+      "slugs": [
+        "U17",
+        "U17-A"
+      ]
+    },
+    {
+      "key": "U12",
+      "name": "U12",
+      "slugs": [
+        "U12",
+        "U12-A"
+      ]
+    },
+    {
+      "key": "U10",
+      "name": "U10",
+      "slugs": [
+        "U10",
+        "U10-A"
+      ]
+    },
+    {
+      "key": "U08",
+      "name": "U8",
+      "slugs": [
+        "U08",
+        "U8",
+        "U08-A"
+      ]
+    }
+  ],
+  "clubSeedUrls": [
+    "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
+    "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
+  ]
+}

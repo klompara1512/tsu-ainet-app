@@ -53,7 +53,7 @@ function Dashboard({ user, profile }: DashboardProps) {
   const canManagePeople = hasPermission(role, "managePeople");
   const canManageEvents = hasPermission(role, "manageEvents");
   const canManageNews = hasPermission(role, "manageNews");
-  const canManageSync = role === "admin" || role === "section";
+  const canManageSync = role === "admin";
   const canManageClub = role === "admin" || role === "section";
   const canManageAnything =
     canManageMatches || canManageStandings || canManagePeople || canManageEvents || canManageNews;

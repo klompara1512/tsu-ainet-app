@@ -1596,11 +1596,16 @@ async function main() {
   const statusRef = db.doc("settings/kfvSyncStatus");
   const startedAt = admin.firestore.Timestamp.now();
   const runId = String(startedAt.toMillis());
-  await statusRef.set({
-    running: true, success: null,
-    trigger: process.env.GITHUB_ACTIONS ? "github-actions" : "local",
-    startedAt, intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
-  }, { merge: true });
+  const runRef = db.collection("kfvSyncRuns").doc(runId);
+  const trigger = process.env.GITHUB_ACTIONS ? "github-actions" : "local";
+  const initialRunData = {
+    runId, status: "running", running: true, success: null,
+    trigger, startedAt, intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
+  };
+  await Promise.all([
+    statusRef.set(initialRunData, { merge: true }),
+    runRef.set(initialRunData, { merge: false }),
+  ]);
 
   try {
     const settings = (await db.doc("settings/kfvSync").get()).data() || {};
@@ -1767,10 +1772,12 @@ async function main() {
       ? await deactivateMissing("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), runId)
       : 0;
 
-    await statusRef.set({
-      running: false, success: true,
-      lastSuccessAt: admin.firestore.FieldValue.serverTimestamp(),
-      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    const finishedAt = admin.firestore.Timestamp.now();
+    const durationMs = finishedAt.toMillis() - startedAt.toMillis();
+    const successRunData = {
+      runId, status: "success", running: false, success: true,
+      lastSuccessAt: finishedAt,
+      finishedAt, durationMs,
       sourceUrl, discoveredUrls: [...visited], visitedUrls: [...visited], pageDiagnostics,
       matchCount: uniqueMatches.length,
       rawMatchCount: matches.length,
@@ -1793,7 +1800,11 @@ async function main() {
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
       intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
       lastError: admin.firestore.FieldValue.delete(),
-    }, { merge: true });
+    };
+    await Promise.all([
+      statusRef.set(successRunData, { merge: true }),
+      runRef.set({ ...successRunData, lastError: "" }, { merge: true }),
+    ]);
 
     const squadTeamCounts = uniqueSquad.reduce((result, item) => {
       result[item.teamKey] = (result[item.teamKey] || 0) + 1;
@@ -1803,7 +1814,7 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 11.0.1 =====");
+    console.log("===== TSU Ainet ÖFB-Sync 11.0.2 =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Neue Spiele: ${newMatchCount}`);
     console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
@@ -1817,12 +1828,18 @@ async function main() {
     console.log(`Vereinslogos: ${uniqueClubProfiles.length}`);
     console.log(`Warnungen: ${warnings.length}`);
   } catch (error) {
-    await statusRef.set({
-      running: false, success: false,
-      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    const finishedAt = admin.firestore.Timestamp.now();
+    const durationMs = finishedAt.toMillis() - startedAt.toMillis();
+    const errorRunData = {
+      runId, status: "error", running: false, success: false,
+      startedAt, finishedAt, durationMs,
       lastError: String(error.message || error),
       intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
-    }, { merge: true });
+    };
+    await Promise.all([
+      statusRef.set(errorRunData, { merge: true }),
+      runRef.set(errorRunData, { merge: true }),
+    ]);
     throw error;
   }
 }

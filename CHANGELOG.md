@@ -1,3 +1,13 @@
+# Version 11.0.2 – Admin Sync Center
+
+- neues, ausschließlich für Administratoren sichtbares Synchronisationszentrum
+- Live-Zähler für Spiele, Tabellenzeilen, Kaderspieler und Vereinslogos
+- letzter Status, Laufzeit, Parser-Version und Systemzustand
+- Ergebnisübersicht für neue und aktualisierte Spiele sowie Dubletten und Warnungen
+- Historie der letzten zehn Synchronisationsläufe mit Detailansicht
+- das Sync-Script schreibt ab jetzt jeden Lauf nach `kfvSyncRuns`
+- Vorbereitung des kostenlosen GitHub-Startbuttons für Version 11.0.3
+
 # Changelog
 
 ## 11.0.1 – Stabile Spiel-ID und Dubletten-Migration

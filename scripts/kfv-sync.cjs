@@ -4,6 +4,8 @@ const admin = require("firebase-admin");
 const cheerio = require("cheerio");
 const crypto = require("crypto");
 const puppeteer = require("puppeteer");
+const path = require("path");
+const fs = require("fs");
 
 const rawCredentials = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!rawCredentials) throw new Error("FIREBASE_SERVICE_ACCOUNT fehlt.");
@@ -18,27 +20,40 @@ try {
 admin.initializeApp({ credential: admin.credential.cert(credentials) });
 const db = admin.firestore();
 
-// Firestore verwirft optionale Felder mit dem Wert `undefined`.
-// Das verhindert, dass ein einzelnes unvollständiges ÖFB-Feld den gesamten
-// Synchronisationslauf abbricht.
+// Optionale Parser-Felder dürfen einen kompletten Synchronisationslauf nicht abbrechen.
 db.settings({ ignoreUndefinedProperties: true });
 
-const DEFAULT_SOURCE = "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele";
-const TEAM_PAGES = [
-  { key: "KM", name: "Kampfmannschaft", slugs: ["KM"] },
-  { key: "CHALLENGE", name: "Challenge", slugs: ["Challenge", "KM-Res", "KM-Reserve", "Reserve", "Res"] },
-  { key: "U17", name: "U17", slugs: ["U17", "U17-A"] },
-  { key: "U12", name: "U12", slugs: ["U12", "U12-A"] },
-  { key: "U10", name: "U10", slugs: ["U10", "U10-A"] },
-  { key: "U08", name: "U8", slugs: ["U08", "U8", "U08-A"] },
-];
-const TEAM_DIRECTORY_URL = "https://vereine.oefb.at/TsuAinet/Mannschaften";
-const START_URLS = [TEAM_DIRECTORY_URL, ...TEAM_PAGES.flatMap((team) => team.slugs.flatMap((slugName) => [
-  `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Spiele`,
-  `https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/${slugName}/Tabellen`,
+const CONFIG_PATH = path.resolve(__dirname, "../config/kfv-sync.config.json");
+
+function loadSyncConfig() {
+  try {
+    const parsed = JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"));
+    if (!Array.isArray(parsed.teams) || parsed.teams.length === 0) {
+      throw new Error("teams fehlt oder ist leer");
+    }
+    return parsed;
+  } catch (error) {
+    throw new Error(`Sync-Konfiguration konnte nicht geladen werden (${CONFIG_PATH}): ${error.message || error}`);
+  }
+}
+
+const SYNC_CONFIG = loadSyncConfig();
+const DEFAULT_SOURCE = SYNC_CONFIG.defaultSource;
+const TEAM_PAGES = SYNC_CONFIG.teams;
+const TEAM_DIRECTORY_URL = SYNC_CONFIG.teamDirectoryUrl;
+const SEASON_SLUG = SYNC_CONFIG.season;
+const SQUAD_URL = `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/KM/Kader/`;
+const SQUAD_URLS = TEAM_PAGES.flatMap((team) => team.slugs.map((slugName) =>
+  `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/${slugName}/Kader/`
+));
+const CLUB_SEED_URLS = SYNC_CONFIG.clubSeedUrls || [];
+const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEAM_PAGES.flatMap((team) => team.slugs.flatMap((slugName) => [
+  `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/${slugName}/Spiele`,
+  `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/${slugName}/Tabellen`,
 ]))];
-const MAX_PAGES = 40;
-const PARSER_VERSION = "6.5.1-undefined-firestore-fix";
+const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 40;
+const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
+const PARSER_VERSION = "11.1.3.1-squad-warning-fix";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -59,9 +74,11 @@ const slug = (value) => lower(value).normalize("NFD").replace(/[\u0300-\u036f]/g
 
 function safeUrl(raw, base = DEFAULT_SOURCE) {
   const url = new URL(raw, base);
-  const allowedHost = url.hostname === "oefb.at" || url.hostname.endsWith(".oefb.at");
+  const allowedHost =
+    url.hostname === "oefb.at" || url.hostname.endsWith(".oefb.at") ||
+    url.hostname === "kfv-fussball.at" || url.hostname.endsWith(".kfv-fussball.at");
   if (url.protocol !== "https:" || !allowedHost) {
-    throw new Error("Nur öffentliche ÖFB-HTTPS-URLs sind erlaubt.");
+    throw new Error("Nur öffentliche ÖFB-/KFV-HTTPS-URLs sind erlaubt.");
   }
   url.hash = "";
   return url.toString();
@@ -79,6 +96,29 @@ function safeImageUrl(raw, base = DEFAULT_SOURCE) {
   }
 }
 
+
+function clubKey(value) {
+  return lower(value)
+    .replace(/\b(?:tsu|sg|sv|fc|sc|usv|askö|asko|union|atv|u)?\b/g, " ")
+    .replace(/\b(?:1b|ii|reserve|challenge|kampfmannschaft|km)\b/g, " ")
+    .replace(/[^a-z0-9äöüß]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function clubAliases(value) {
+  const exact = lower(value).replace(/[^a-z0-9äöüß]+/g, " ").replace(/\s+/g, " ").trim();
+  const reduced = clubKey(value);
+  return [...new Set([exact, reduced].filter(Boolean))];
+}
+
+function chooseClubLogo(profileMap, clubName) {
+  for (const alias of clubAliases(clubName)) {
+    const profile = profileMap.get(alias);
+    if (profile?.logoUrl) return profile.logoUrl;
+  }
+  return "";
+}
 
 function teamFromUrl(sourceUrl) {
   const path = decodeURIComponent(new URL(sourceUrl).pathname).toLowerCase();
@@ -171,6 +211,193 @@ function parseScore(value) {
   return match ? [Number(match[1]), Number(match[2])] : [null, null];
 }
 
+function extractGameId(...values) {
+  for (const value of values) {
+    if (!value) continue;
+    const text = String(value);
+    const id =
+      text.match(/[?&](?::s|s)=(\d{5,})/i)?.[1] ||
+      text.match(/(?:Spielbericht|Spiel|Match)\/?[^?#]*?(\d{5,})/i)?.[1];
+    if (id) return id;
+  }
+  return "";
+}
+
+function normalizeMatchStatus(rawStatus, context, hasScore) {
+  const text = lower(`${rawStatus || ""} ${context || ""}`);
+  if (/abgesagt|annulliert|cancelled|canceled|nicht ausgetragen/.test(text)) return "cancelled";
+  if (/verschoben|postponed|verlegt/.test(text)) return "postponed";
+  if (hasScore || /endstand|beendet|spielende|full[ -]?time|finished|abpfiff/.test(text)) return "finished";
+  return "scheduled";
+}
+
+function canonicalCompetitionName(value, teamName = "") {
+  const text = oneLine(value);
+  const normalizedTeam = oneLine(teamName);
+
+  // Seitentitel wie „Spiele - Res - Saison 2026/27 - Mannschaften“ sind
+  // keine Bewerbsnamen und dürfen keine eigenen Spieldatensätze erzeugen.
+  if (!text || /\b(?:spiele|mannschaften|saison|kader|tabellen)\b.*\b(?:mannschaften|saison)\b/i.test(text)) {
+    if (normalizedTeam === "Challenge") return "Challenge 1. Klasse West";
+    if (normalizedTeam === "Kampfmannschaft") return "1. Klasse West";
+    return normalizedTeam || "ÖFB";
+  }
+
+  if (normalizedTeam === "Challenge" && /(?:1\.?\s*klasse|liga|öfb)/i.test(text)) {
+    return "Challenge 1. Klasse West";
+  }
+  if (normalizedTeam === "Kampfmannschaft" && /(?:1\.?\s*klasse|liga|öfb)/i.test(text)) {
+    return "1. Klasse West";
+  }
+  return text;
+}
+
+function localDateKey(value) {
+  const date = value instanceof admin.firestore.Timestamp ? value.toDate() : value;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function canonicalTeamBucket(item) {
+  const text = lower(`${item.teamKey || ""} ${item.teamId || ""} ${item.teamName || ""} ${item.competitionName || ""}`);
+  if (/\bu\s*17\b/.test(text)) return "U17";
+  if (/\bu\s*12\b/.test(text)) return "U12";
+  if (/\bu\s*10\b/.test(text)) return "U10";
+  if (/\bu\s*0?8\b/.test(text)) return "U8";
+  if (/challenge|reserve|(?:^|[^a-z0-9])res(?:[^a-z0-9]|$)|km[-_ ]?res|(?:^|[^a-z0-9])1b(?:[^a-z0-9]|$)|(?:^|[^a-z0-9])ii(?:[^a-z0-9]|$)/.test(text)) {
+    return "CHALLENGE";
+  }
+  return "KM";
+}
+
+function canonicalMatchKey(item) {
+  return [
+    canonicalTeamBucket(item),
+    oneLine(item.season),
+    localDateKey(item.kickoffAt),
+    clubKey(item.homeTeam) || slug(item.homeTeam),
+    clubKey(item.awayTeam) || slug(item.awayTeam),
+  ].join("|");
+}
+
+function canonicalCompetitionBucket(item) {
+  const text = lower(`${item.competitionType || ""} ${item.competitionName || ""}`);
+  if (/cup|pokal/.test(text)) return "CUP";
+  if (/test|freund/.test(text)) return "FRIENDLY";
+  return "LEAGUE";
+}
+
+// Stabile Identität eines Spiels. Die offizielle ÖFB-Spiel-ID hat immer Vorrang.
+// Für Ligaspiele bleibt der Fallback auch bei Datum-, Uhrzeit- oder Spielortänderungen
+// identisch. Freundschafts- und Cupspiele erhalten zusätzlich das Datum, weil dieselbe
+// Paarung dort mehrmals in einer Saison vorkommen kann.
+function buildMatchUid(item) {
+  const officialId = oneLine(item.gameId || item.oefbMatchId || "");
+  if (officialId) return `oefb:${officialId}`;
+
+  const competitionBucket = canonicalCompetitionBucket(item);
+  const parts = [
+    "fixture",
+    canonicalTeamBucket(item),
+    oneLine(item.season),
+    competitionBucket,
+    clubKey(item.homeTeam) || slug(item.homeTeam),
+    clubKey(item.awayTeam) || slug(item.awayTeam),
+  ];
+
+  if (competitionBucket !== "LEAGUE") parts.push(localDateKey(item.kickoffAt));
+  return parts.join("|");
+}
+
+function matchDocumentId(item) {
+  return makeId(["kfv-match-uid-v11", buildMatchUid(item)]);
+}
+
+function matchQuality(item) {
+  let score = 0;
+  if (item.gameId) score += 100;
+  if (Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore)) score += 80;
+  if (item.status === "finished") score += 30;
+  if (item.status === "cancelled" || item.status === "postponed") score += 25;
+  if (item.reportUrl && /(?:Spielbericht|\/Spiel\/|\/Match\/|[?&](?:s|:s)=\d+)/i.test(item.reportUrl)) score += 20;
+  if (item.venue) score += 8;
+  if (item.homeLogoUrl) score += 4;
+  if (item.awayLogoUrl) score += 4;
+  if (item.competitionName && !/spiele|mannschaften|saison|öfb/i.test(item.competitionName)) score += 6;
+  return score;
+}
+
+function mergeDuplicateMatches(group) {
+  const sorted = [...group].sort((a, b) => matchQuality(b) - matchQuality(a));
+  const best = { ...sorted[0] };
+
+  // Bei mehrfach gelesenen Uhrzeiten wird der am häufigsten erkannte Zeitpunkt
+  // verwendet. So gewinnt z. B. 14:45 bei drei Treffern gegen einen Fehlwert 16:45.
+  const kickoffCounts = new Map();
+  for (const item of group) {
+    const millis = item.kickoffAt?.toMillis?.() ?? item.kickoffAt?.getTime?.();
+    if (!Number.isFinite(millis)) continue;
+    kickoffCounts.set(millis, (kickoffCounts.get(millis) || 0) + 1);
+  }
+  const chosenKickoff = [...kickoffCounts.entries()]
+    .sort((a, b) => b[1] - a[1] || a[0] - b[0])[0]?.[0];
+  if (Number.isFinite(chosenKickoff)) {
+    best.kickoffAt = admin.firestore.Timestamp.fromMillis(chosenKickoff);
+  }
+
+  const scored = sorted.find((item) => Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore));
+  const terminalStatus = sorted.find((item) => item.status === "cancelled" || item.status === "postponed");
+  if (terminalStatus) {
+    best.status = terminalStatus.status;
+    best.homeScore = null;
+    best.awayScore = null;
+    best.resultText = "";
+  } else if (scored) {
+    best.status = "finished";
+    best.homeScore = scored.homeScore;
+    best.awayScore = scored.awayScore;
+    best.resultText = scored.resultText || `${scored.homeScore}:${scored.awayScore}`;
+  }
+
+  for (const item of sorted) {
+    best.gameId ||= item.gameId || "";
+    best.venue ||= item.venue || "";
+    best.homeLogoUrl ||= item.homeLogoUrl || "";
+    best.awayLogoUrl ||= item.awayLogoUrl || "";
+    best.reportUrl ||= item.reportUrl || "";
+  }
+
+  best.competitionName = canonicalCompetitionName(best.competitionName, best.teamName);
+  const canonicalKey = canonicalMatchKey(best);
+  best.canonicalKey = canonicalKey;
+  best.matchUid = buildMatchUid(best);
+  best.oefbMatchId = best.gameId || best.oefbMatchId || "";
+  best.id = matchDocumentId(best);
+  best.duplicateSources = group.length;
+  return best;
+}
+
+function removeUndefinedDeep(value) {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return value.map(removeUndefinedDeep).filter((item) => item !== undefined);
+  }
+  if (value && typeof value === "object") {
+    const prototype = Object.getPrototypeOf(value);
+    if (prototype !== Object.prototype && prototype !== null) return value;
+    const result = {};
+    for (const [key, item] of Object.entries(value)) {
+      const cleaned = removeUndefinedDeep(item);
+      if (cleaned !== undefined) result[key] = cleaned;
+    }
+    return result;
+  }
+  return value;
+}
+
 async function fetchResource(url) {
   const safe = safeUrl(url);
   const response = await fetch(safe, {
@@ -191,55 +418,174 @@ async function fetchResource(url) {
   return { text, contentType, finalUrl: safeUrl(response.url || safe) };
 }
 
+
+function officialReportUrl(rawUrl, sourceUrl, homeTeam, awayTeam) {
+  const candidates = [rawUrl, sourceUrl].filter(Boolean);
+  for (const candidate of candidates) {
+    try {
+      const parsed = new URL(String(candidate), sourceUrl || DEFAULT_SOURCE);
+      const gameId =
+        parsed.searchParams.get(":s") ||
+        parsed.searchParams.get("s") ||
+        String(candidate).match(/[?&](?::s|s)=(\d+)/i)?.[1] ||
+        String(candidate).match(/(?:Spielbericht|Spiel)\/?.*?(\d{5,})/i)?.[1];
+      if (!gameId) continue;
+      const label = `${slug(homeTeam) || "heim"}-vs-${slug(awayTeam) || "gast"}`;
+      return `https://vereine.oefb.at/TsuAinet/Spielbericht/?${label}&:s=${encodeURIComponent(gameId)}`;
+    } catch { /* ignore malformed URL */ }
+  }
+  return "";
+}
+
+function addSquadPlayer(target, data, sourceUrl) {
+  const name = oneLine(data.name);
+  if (!name || name.length < 3 || name.length > 90) return;
+  const profileUrl = data.profileUrl ? safeUrl(data.profileUrl, sourceUrl) : "";
+  const number = parseNumber(data.number);
+  const positionText = oneLine(data.position);
+  const position =
+    /tor|goalkeeper/i.test(positionText) ? "Tor" :
+    /abwehr|verteid|defen/i.test(positionText) ? "Abwehr" :
+    /mittel|midfield/i.test(positionText) ? "Mittelfeld" :
+    /sturm|angriff|forward/i.test(positionText) ? "Sturm" :
+    positionText || "Spieler";
+  const urlTeam = teamFromUrl(sourceUrl) || { teamKey: "KM", teamName: "Kampfmannschaft" };
+  target.push({
+    id: makeId(["kfv-squad", urlTeam.teamKey, profileUrl || name]),
+    teamId: slug(urlTeam.teamName),
+    teamKey: urlTeam.teamKey,
+    teamName: urlTeam.teamName,
+    season: seasonFromUrl(sourceUrl),
+    name,
+    number: Number.isInteger(number) ? number : null,
+    position,
+    imageUrl: safeImageUrl(data.imageUrl, sourceUrl),
+    profileUrl,
+    active: true,
+    source: "oefb-public",
+    sourceUrl,
+  });
+}
+
+function extractVenueFromContext(context) {
+  const text = oneLine(context);
+  const match = text.match(/\b((?:Sportplatz|Stadion|Arena|Kunstrasen|Fußballplatz|Fussballplatz)\s+[A-Za-zÄÖÜäöüß0-9 .\-\/]{2,80})/i);
+  return match ? oneLine(match[1]).replace(/\s+(?:Schiedsrichter|Spielbericht|Ticker|Livestream).*$/i, "") : "";
+}
+
+function extractRefereeFromContext(context) {
+  const text = oneLine(context);
+  const match = text.match(/(?:Schiedsrichter(?:in)?|Referee|SR)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .\-]{3,80})/i);
+  return match ? oneLine(match[1]).replace(/\s+(?:Assistent|Spielort|Sportplatz|Stadion|Spielbericht|Ticker).*$/i, "") : "";
+}
+
+function classifyOfficialLinks(rawUrl, sourceUrl) {
+  const url = rawUrl ? safeUrl(rawUrl, sourceUrl) : "";
+  if (!url) return { reportUrl: "", liveUrl: "" };
+  const isLive = /ticker|live|livestream|liveticker/i.test(url);
+  return { reportUrl: url, liveUrl: isLive ? url : "" };
+}
+
 function addMatch(target, data, sourceUrl, context = "") {
-  const kickoff = data.kickoff instanceof Date ? data.kickoff : parseDate(data.kickoff || context, new Date().getFullYear(), sourceUrl);
+  const kickoff = data.kickoff instanceof Date
+    ? data.kickoff
+    : parseDate(data.kickoff || context, new Date().getFullYear(), sourceUrl);
+
   const normalizeAinetName = (value) => {
     const cleaned = oneLine(value).replace(/^[-|: ]+|[-|: ]+$/g, "");
     return /^(?:tsu\s+)?ainet(?:\s+(?:1b|ii|reserve|challenge))?$/i.test(cleaned)
       ? cleaned.replace(/^ainet$/i, "TSU Ainet")
       : cleaned;
   };
+
   const homeTeam = normalizeAinetName(data.homeTeam);
   const awayTeam = normalizeAinetName(data.awayTeam);
   if (!kickoff || homeTeam.length < 2 || awayTeam.length < 2 || homeTeam === awayTeam) return;
   if (!lower(`${homeTeam} ${awayTeam}`).includes("ainet")) return;
 
-  // Resultate niemals aus dem gesamten Karten-/Seitentext ableiten: Dort steht auch die Anstoßzeit.
-  // Nur ein ausdrücklich vom Parser erkanntes Ergebnis darf als Score gespeichert werden.
   const [parsedHomeScore, parsedAwayScore] = parseScore(data.score || "");
   let homeScore = Number.isInteger(data.homeScore) ? data.homeScore : parsedHomeScore;
   let awayScore = Number.isInteger(data.awayScore) ? data.awayScore : parsedAwayScore;
 
-  // Letzte Sicherheitsstufe: Wenn die vermeintlichen Tore exakt der Anstoßzeit entsprechen,
-  // handelt es sich um eine falsch gelesene Uhrzeit und nicht um ein Resultat.
+  // Anstoßzeiten dürfen niemals als Endstand gespeichert werden.
   if (homeScore === kickoff.getHours() && awayScore === kickoff.getMinutes()) {
     homeScore = null;
     awayScore = null;
   }
+
   const urlTeam = teamFromUrl(sourceUrl);
   const teamName = urlTeam?.teamName || data.teamName || teamFromText(`${data.competitionName || ""} ${context}`);
   const teamKey = urlTeam?.teamKey || data.teamKey || slug(teamName).toUpperCase();
-  const contextLower = lower(context);
-  const status = data.status || (
-    /abgesagt|annulliert/.test(contextLower) ? "cancelled" :
-    /verschoben/.test(contextLower) ? "postponed" :
-    homeScore !== null && awayScore !== null ? "finished" : "scheduled"
-  );
+  const season = seasonFromUrl(sourceUrl);
+  const hasScore = Number.isInteger(homeScore) && Number.isInteger(awayScore);
+  const status = normalizeMatchStatus(data.status, context, hasScore);
+
+  // Abgesagte oder verschobene Spiele dürfen keinen alten Endstand behalten.
+  if (status === "cancelled" || status === "postponed") {
+    homeScore = null;
+    awayScore = null;
+  }
+
+  const reportUrl = officialReportUrl(data.reportUrl, sourceUrl, homeTeam, awayTeam);
+  const links = classifyOfficialLinks(data.liveUrl || reportUrl, sourceUrl);
+  const gameId = extractGameId(data.reportUrl, reportUrl, context);
+  const venue = oneLine(data.venue) || extractVenueFromContext(context);
+  const venueAddress = oneLine(data.venueAddress);
+  const referee = oneLine(data.referee) || extractRefereeFromContext(context);
+  const competitionName = canonicalCompetitionName(data.competitionName, teamName);
+  const preliminaryKey = [
+    teamKey,
+    season,
+    localDateKey(kickoff),
+    clubKey(homeTeam) || slug(homeTeam),
+    clubKey(awayTeam) || slug(awayTeam),
+  ].join("|");
+
+  const matchIdentity = {
+    gameId,
+    teamKey,
+    teamId: slug(teamName),
+    teamName,
+    season,
+    competitionType: /cup|pokal/i.test(data.competitionName || context)
+      ? "Cup"
+      : /test|freund/i.test(data.competitionName || context)
+        ? "Freundschaftsspiel"
+        : "Liga",
+    competitionName,
+    homeTeam,
+    awayTeam,
+    kickoffAt: admin.firestore.Timestamp.fromDate(kickoff),
+  };
+  const matchUid = buildMatchUid(matchIdentity);
 
   target.push({
-    id: makeId(["kfv-match", teamKey, kickoff.toISOString(), homeTeam, awayTeam]),
+    id: matchDocumentId(matchIdentity),
+    matchUid,
+    oefbMatchId: gameId,
+    canonicalKey: preliminaryKey,
+    gameId,
     teamId: slug(teamName), teamKey, teamName,
-    season: seasonFromUrl(sourceUrl),
-    competitionType: /cup|pokal/i.test(data.competitionName || context) ? "Cup" : /test|freund/i.test(data.competitionName || context) ? "Freundschaftsspiel" : "Liga",
+    season,
+    competitionType: /cup|pokal/i.test(data.competitionName || context)
+      ? "Cup"
+      : /test|freund/i.test(data.competitionName || context)
+        ? "Freundschaftsspiel"
+        : "Liga",
     isHomeGame: /ainet/i.test(homeTeam),
-    competitionName: oneLine(data.competitionName) || "ÖFB",
+    competitionName,
     homeTeam, awayTeam,
     homeLogoUrl: safeImageUrl(data.homeLogoUrl, sourceUrl),
     awayLogoUrl: safeImageUrl(data.awayLogoUrl, sourceUrl),
     homeScore, awayScore,
+    resultText: homeScore !== null && awayScore !== null ? `${homeScore}:${awayScore}` : "",
     kickoffAt: admin.firestore.Timestamp.fromDate(kickoff),
-    venue: oneLine(data.venue), status,
-    reportUrl: data.reportUrl ? safeUrl(data.reportUrl, sourceUrl) : sourceUrl,
+    venue,
+    venueAddress,
+    referee,
+    liveUrl: data.liveUrl ? safeUrl(data.liveUrl, sourceUrl) : links.liveUrl,
+    status,
+    reportUrl,
     active: true, source: "oefb-public", sourceUrl,
   });
 }
@@ -305,6 +651,9 @@ function parseJsonObjects(value, matches, standings, urls, sourceUrl, context = 
       awayScore: parseNumber(lookup([/away.*score/i, /gast.*tor/i, /^score2$/i])),
       competitionName: valueFromObject(lookup([/competition/i, /bewerb/i, /liga/i, /league/i])),
       venue: valueFromObject(lookup([/venue/i, /stadion/i, /sportplatz/i, /location/i])),
+      venueAddress: valueFromObject(lookup([/address/i, /adresse/i])),
+      referee: valueFromObject(lookup([/referee/i, /schiedsrichter/i])),
+      liveUrl: valueFromObject(lookup([/live.*url/i, /ticker.*url/i, /livestream/i])),
       reportUrl: valueFromObject(lookup([/report.*url/i, /detail.*url/i, /^url$/i, /^link$/i])),
       status: valueFromObject(lookup([/^status$/i, /matchstatus/i])),
     }, sourceUrl, context);
@@ -611,18 +960,20 @@ function parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title) {
 
 function parseStrictScoreText(value, kickoff = null) {
   const text = oneLine(value);
-  const match = text.match(/^(endstand\s*)?(\d{1,2})\s*:\s*(\d{1,2})(?:\s*(?:\([^)]*\)|i\.?\s*e\.?|n\.?\s*v\.?))?$/i);
+  if (!text || /halbzeit|pause|hz\b|zwischenstand/i.test(text)) return null;
+
+  const match = text.match(
+    /^(?:(endstand|beendet|full[ -]?time|ft|abpfiff)\s*[:|-]?\s*)?(\d{1,2})\s*:\s*(\d{1,2})(?:\s*(\([^)]*\)|i\.?\s*e\.?|n\.?\s*v\.?))?(?:\s*[-|:]?\s*(endstand|beendet|full[ -]?time|ft|abpfiff))?$/i,
+  );
   if (!match) return null;
 
   const leftRaw = match[2];
   const rightRaw = match[3];
   const homeScore = Number(leftRaw);
   const awayScore = Number(rightRaw);
+  const explicitFinal = Boolean(match[1] || match[5]);
 
-  // ÖFB zeigt Anstoßzeiten ebenfalls mit Doppelpunkt. Werte wie 17:00, 18:30 oder 19:00
-  // dürfen niemals als Resultat importiert werden. Ein ausdrücklich vorangestelltes "Endstand"
-  // bleibt erlaubt, ebenso echte Resultate mit einstelliger rechter Seite wie 2:0.
-  const looksLikeClock = !match[1] && leftRaw.length <= 2 && rightRaw.length === 2 &&
+  const looksLikeClock = !explicitFinal && leftRaw.length <= 2 && rightRaw.length === 2 &&
     homeScore >= 0 && homeScore <= 23 && awayScore >= 0 && awayScore <= 59;
   if (looksLikeClock) return null;
 
@@ -630,7 +981,15 @@ function parseStrictScoreText(value, kickoff = null) {
     return null;
   }
 
-  return { homeScore, awayScore, score: `${homeScore}:${awayScore}` };
+  const suffix = oneLine(match[4] || "");
+  return {
+    homeScore,
+    awayScore,
+    score: `${homeScore}:${awayScore}`,
+    resultText: `${homeScore}:${awayScore}${suffix ? ` ${suffix}` : ""}`,
+    scoreConfirmed: true,
+    explicitFinal,
+  };
 }
 
 function parseDomMatchCards($, matches, sourceUrl, title) {
@@ -752,6 +1111,7 @@ function parseStandingText(bodyText, standings, sourceUrl, title) {
 function parseResource(text, contentType, sourceUrl) {
   const matches = [];
   const standings = [];
+  const squad = [];
   const urls = new Set([sourceUrl]);
   let title = "ÖFB";
   let bodyText = "";
@@ -759,10 +1119,10 @@ function parseResource(text, contentType, sourceUrl) {
   if (contentType.includes("json") || /^[\s]*[\[{]/.test(text)) {
     try {
       const parsed = JSON.parse(text);
-      if (parsed && parsed.__browserSnapshot) importBrowserSnapshot(parsed.__browserSnapshot, matches, standings, sourceUrl);
+      if (parsed && parsed.__browserSnapshot) importBrowserSnapshot(parsed.__browserSnapshot, matches, standings, squad, sourceUrl);
       else parseJsonObjects(parsed, matches, standings, urls, sourceUrl, title);
       bodyText = oneLine(JSON.stringify(parsed));
-      return { matches, standings, urls: [...urls], title, bytes: Buffer.byteLength(text), kind: "json" };
+      return { matches, standings, squad, urls: [...urls], title, bytes: Buffer.byteLength(text), kind: "json" };
     } catch { /* continue as HTML/text */ }
   }
 
@@ -782,7 +1142,7 @@ function parseResource(text, contentType, sourceUrl) {
   parseStandingText(bodyText, standings, sourceUrl, title);
 
 
-  return { matches, standings, urls: [...urls], title, bytes: Buffer.byteLength(text), kind: "html", textPreview: bodyText.slice(0, 1000) };
+  return { matches, standings, squad, urls: [...urls], title, bytes: Buffer.byteLength(text), kind: "html", textPreview: bodyText.slice(0, 1000) };
 }
 
 
@@ -792,7 +1152,7 @@ function normalizeBrowserTeam(value) {
   return /^(?:TSU\s+)?Ainet$/i.test(text) ? "TSU Ainet" : text;
 }
 
-function importBrowserSnapshot(snapshot, matches, standings, sourceUrl) {
+function importBrowserSnapshot(snapshot, matches, standings, squad, sourceUrl) {
   if (!snapshot || typeof snapshot !== "object") return;
   for (const item of snapshot.matches || []) {
     const kickoff = item.kickoff ? new Date(item.kickoff) : null;
@@ -806,9 +1166,15 @@ function importBrowserSnapshot(snapshot, matches, standings, sourceUrl) {
       score,
       competitionName: item.competitionName,
       venue: item.venue,
+      venueAddress: item.venueAddress,
+      referee: item.referee,
+      liveUrl: item.liveUrl,
       reportUrl: item.reportUrl,
       status: score ? "finished" : item.status,
     }, sourceUrl, item.context || "");
+  }
+  for (const player of snapshot.squad || []) {
+    addSquadPlayer(squad, player, sourceUrl);
   }
   for (const row of snapshot.standings || []) {
     addStanding(standings, {
@@ -816,6 +1182,53 @@ function importBrowserSnapshot(snapshot, matches, standings, sourceUrl) {
       teamName: teamFromUrl(sourceUrl).teamName,
       teamKey: teamFromUrl(sourceUrl).teamKey,
     }, sourceUrl);
+  }
+}
+
+function importClubProfiles(snapshot, profiles, sourceUrl) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  for (const item of snapshot.clubProfiles || []) {
+    const name = oneLine(item.name);
+    const logoUrl = safeImageUrl(item.logoUrl, item.pageUrl || sourceUrl);
+    if (!name || !logoUrl) continue;
+    profiles.push({
+      id: makeId(["kfv-club", name]),
+      name,
+      normalizedName: clubKey(name),
+      logoUrl,
+      pageUrl: item.pageUrl ? safeUrl(item.pageUrl, sourceUrl) : sourceUrl,
+      oefbClubId: oneLine(item.clubId),
+      source: "oefb-public",
+      active: true,
+    });
+  }
+}
+
+function importMatchReports(snapshot, target, sourceUrl) {
+  if (!snapshot || typeof snapshot !== "object") return;
+  for (const raw of snapshot.reports || []) {
+    const gameId = oneLine(raw.gameId || extractGameId(raw.reportUrl, sourceUrl));
+    if (!gameId) continue;
+    const matchUid = `oefb:${gameId}`;
+    const matchId = makeId(["kfv-match-uid-v11", matchUid]);
+    const cleanPlayers = (items) => (Array.isArray(items) ? items : []).map((item) => ({
+      name: oneLine(item.name), number: Number.isInteger(item.number) ? item.number : null,
+      position: oneLine(item.position), playerUrl: item.playerUrl ? safeUrl(item.playerUrl, raw.reportUrl || sourceUrl) : "", captain: item.captain === true,
+    })).filter((item) => item.name);
+    const cleanEvents = (items) => (Array.isArray(items) ? items : []).map((item, index) => ({
+      id: oneLine(item.id) || `event-${index}`, type: ["goal","yellow","yellowRed","red","substitution","halfTime","fullTime","other"].includes(item.type) ? item.type : "other",
+      minute: Number.isInteger(item.minute) ? item.minute : null, minuteText: oneLine(item.minuteText),
+      team: item.team === "home" || item.team === "away" ? item.team : "neutral", playerName: oneLine(item.playerName), secondaryPlayerName: oneLine(item.secondaryPlayerName), description: oneLine(item.description),
+    }));
+    target.push({
+      id: matchId, matchId, matchUid, oefbMatchId: gameId, reportUrl: safeUrl(raw.reportUrl, sourceUrl),
+      homeTeam: oneLine(raw.homeTeam), awayTeam: oneLine(raw.awayTeam),
+      homeLineup: cleanPlayers(raw.homeLineup), awayLineup: cleanPlayers(raw.awayLineup),
+      homeBench: cleanPlayers(raw.homeBench), awayBench: cleanPlayers(raw.awayBench),
+      homeCoach: oneLine(raw.homeCoach), awayCoach: oneLine(raw.awayCoach), referee: oneLine(raw.referee),
+      attendance: Number.isInteger(raw.attendance) ? raw.attendance : null, events: cleanEvents(raw.events),
+      published: raw.published === true, active: true, source: "oefb-public", sourceUrl: safeUrl(raw.reportUrl || sourceUrl, sourceUrl),
+    });
   }
 }
 
@@ -842,7 +1255,7 @@ async function collectWithBrowser(startUrls) {
       page.on("response", async (response) => {
         try {
           const url = response.url();
-          if (!url.includes("oefb.at") || seenResponses.has(url)) return;
+          if (!(url.includes("oefb.at") || url.includes("kfv-fussball.at")) || seenResponses.has(url)) return;
           const contentType = (response.headers()["content-type"] || "").toLowerCase();
           if (!/(json|javascript|text\/plain)/.test(contentType)) return;
           seenResponses.add(url);
@@ -876,11 +1289,39 @@ async function collectWithBrowser(startUrls) {
       const discoveredTeamUrls = await page.evaluate(() =>
         Array.from(document.querySelectorAll("a[href]"))
           .map((anchor) => anchor.href)
-          .filter((href) => /\/TsuAinet\/Mannschaften\/Saison-2026-27\/[^/]+\/(?:Spiele|Tabellen)\/?$/i.test(href)),
+          .filter((href) => /\/TsuAinet\/Mannschaften\/Saison-2026-27\/[^/]+\/(?:Spiele|Tabellen|Kader)\/?$/i.test(href)),
       );
       for (const href of discoveredTeamUrls) {
         try {
           const discovered = safeUrl(href, startUrl);
+          if (!processed.has(discovered) && !queue.includes(discovered)) queue.push(discovered);
+        } catch { /* ignore */ }
+      }
+
+      // Offizielle Spielberichte werden separat besucht. Dort stehen die
+      // veröffentlichten Aufstellungen, Ersatzspieler und Spielereignisse.
+      const discoveredReportUrls = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("a[href]"))
+          .map((anchor) => anchor.href)
+          .filter((href) => /\/Spielbericht\/|[?&](?::s|s)=\d+/i.test(href)),
+      );
+      for (const href of discoveredReportUrls) {
+        try {
+          const discovered = safeUrl(href, startUrl);
+          if (!processed.has(discovered) && !queue.includes(discovered)) queue.unshift(discovered);
+        } catch { /* ignore */ }
+      }
+
+      // Vereinsseiten aus Team-/Tabellenlinks erkennen. Auf diesen Seiten liegt das
+      // offizielle Logo oft separat und wird auf den Spielseiten nicht als <img> ausgegeben.
+      const discoveredClubUrls = await page.evaluate(() =>
+        Array.from(document.querySelectorAll("a[href]"))
+          .map((anchor) => ({ href: anchor.href, text: (anchor.textContent || "").replace(/\s+/g, " ").trim() }))
+          .filter((item) => /(?:kfv-fussball\.at\/kfv\/Verein\/\d+|vereine\.oefb\.at\/[^/]+\/?$)/i.test(item.href)),
+      );
+      for (const item of discoveredClubUrls) {
+        try {
+          const discovered = safeUrl(item.href, startUrl);
           if (!processed.has(discovered) && !queue.includes(discovered)) queue.push(discovered);
         } catch { /* ignore */ }
       }
@@ -955,7 +1396,11 @@ async function collectWithBrowser(startUrls) {
             kickoff: kickoff.toISOString(),
             score: scoreText, scoreConfirmed: Boolean(scoreText),
             competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB"),
-            venue: "", reportUrl: report?.href || location.href,
+            venue: compact(context.match(/(?:Sportplatz|Stadion|Arena|Kunstrasen|Fußballplatz)\s+[A-Za-zÄÖÜäöüß0-9 .\-\/]{2,80}/i)?.[0] || ""),
+            venueAddress: "",
+            referee: compact(context.match(/(?:Schiedsrichter(?:in)?|Referee|SR)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .\-]{3,80})/i)?.[1] || ""),
+            liveUrl: /ticker|live|livestream/i.test(report?.href || "") ? report.href : "",
+            reportUrl: report?.href || location.href,
             status: /abgesagt|annulliert/i.test(context) ? "cancelled" : /verschoben/i.test(context) ? "postponed" : scoreText ? "finished" : "scheduled",
             context,
           });
@@ -981,8 +1426,155 @@ async function collectWithBrowser(startUrls) {
             standings.push({ position: Number(cells[0].replace(/\D/g, "")), clubName: cells[clubIndex], teamLogoUrl, played: numbers[0], won: numbers[1], drawn: numbers[2], lost: numbers[3], goalsFor: gm ? Number(gm[1]) : 0, goalsAgainst: gm ? Number(gm[2]) : 0, goalDifference: gm ? Number(gm[1]) - Number(gm[2]) : 0, points: numbers.at(-1) || 0, competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB") });
           }
         }
-        return { matches, standings };
+        const absoluteImage = (raw) => {
+          try { return raw ? new URL(raw, location.href).href : ""; } catch { return ""; }
+        };
+        const pageText = compact(document.body?.innerText || "");
+        const pageTitle = compact(document.querySelector("h1")?.textContent || document.title || "");
+        const pageClubMatch = location.pathname.match(/\/Verein\/(\d+)/i);
+        const isClubPage = Boolean(pageClubMatch) || /vereinsdaten|verein|club/i.test(pageTitle + " " + pageText.slice(0, 500));
+        const clubProfiles = [];
+        if (isClubPage) {
+          const candidates = [];
+          const addCandidate = (url, score) => {
+            const absolute = absoluteImage(url);
+            if (!absolute || /(?:favicon|icon-192|icon-512|placeholder|default|sponsor|banner)/i.test(absolute)) return;
+            if (!/\.(?:png|jpe?g|webp|svg)(?:[?#]|$)/i.test(absolute) && !/logo|wappen|verein|club/i.test(absolute)) return;
+            candidates.push({ url: absolute, score });
+          };
+          addCandidate(document.querySelector('meta[property="og:image"]')?.content, 80);
+          addCandidate(document.querySelector('meta[name="twitter:image"]')?.content, 70);
+          for (const image of Array.from(document.images)) {
+            const meta = compact(`${image.alt || ""} ${image.title || ""} ${image.className || ""} ${image.id || ""} ${image.src || ""}`);
+            let score = 0;
+            if (/logo|wappen|vereinslogo|club-logo|team-logo/i.test(meta)) score += 100;
+            if (/header|profile|portrait|verein|club/i.test(meta)) score += 35;
+            const rect = image.getBoundingClientRect();
+            if (rect.width >= 60 && rect.height >= 60) score += 15;
+            if (rect.width <= 500 && rect.height <= 500) score += 10;
+            addCandidate(image.currentSrc || image.src || image.getAttribute("data-src") || image.getAttribute("data-lazy-src"), score);
+          }
+          candidates.sort((a, b) => b.score - a.score);
+          const rawName = compact(document.querySelector("h1")?.textContent || document.querySelector('[class*="club-name"], [class*="verein-name"], [class*="team-name"]')?.textContent || document.title);
+          const name = rawName.replace(/\s*[|–-]\s*(?:KFV|ÖFB|Fußball.*)$/i, "").trim();
+          if (name && candidates[0]?.url) clubProfiles.push({ name, logoUrl: candidates[0].url, pageUrl: location.href, clubId: pageClubMatch?.[1] || "" });
+        }
+        const squad = [];
+        if (/\/Mannschaften\/Saison-\d{4}-\d{2}\/KM\/Kader\/?$/i.test(location.pathname)) {
+          const playerLinks = Array.from(document.querySelectorAll("a[href]"))
+            .filter((anchor) => /spieler|player|person/i.test(anchor.href));
+          const squadSeen = new Set();
+          for (const anchor of playerLinks) {
+            const card = anchor.closest("article, li, [class*='player'], [class*='spieler'], [class*='squad'], [class*='kader'], .card, div") || anchor;
+            const text = compact(card.innerText || card.textContent);
+            const heading = compact(
+              card.querySelector("h2,h3,h4,[class*='name'],[class*='player-name'],[class*='spieler-name']")?.textContent ||
+              anchor.textContent
+            );
+            const name = heading.replace(/^\d{1,2}\s+/, "").trim();
+            if (!name || name.length < 3 || name.length > 90 || squadSeen.has(name.toLowerCase())) continue;
+            const numberMatch = text.match(/(?:^|\s)(\d{1,2})(?:\s|$)/);
+            const positionMatch = text.match(/\b(Tor(?:wart)?|Goalkeeper|Abwehr|Verteidigung|Mittelfeld|Sturm|Angriff)\b/i);
+            const image = card.querySelector("img");
+            squad.push({
+              name,
+              number: numberMatch?.[1] || "",
+              position: positionMatch?.[1] || "Spieler",
+              imageUrl: image?.currentSrc || image?.src || image?.getAttribute("data-src") || "",
+              profileUrl: anchor.href,
+            });
+            squadSeen.add(name.toLowerCase());
+          }
+        }
+        const reports = [];
+        const isReportPage = /\/Spielbericht\//i.test(location.pathname) || /[?&](?::s|s)=\d+/i.test(location.href);
+        if (isReportPage) {
+          const gameId = new URL(location.href).searchParams.get(":s") || new URL(location.href).searchParams.get("s") || location.href.match(/[?&](?::s|s)=(\d+)/i)?.[1] || "";
+          const body = compact(document.body?.innerText || "");
+          const headingTexts = Array.from(document.querySelectorAll("h1,h2,h3,h4,[role='heading']")).map((node) => compact(node.textContent)).filter(Boolean);
+          const teamNames = [];
+          for (const node of Array.from(document.querySelectorAll("[class*='team'],[class*='club'],[class*='verein'],h1,h2,h3,h4"))) {
+            const text = compact(node.textContent);
+            if (text.length < 2 || text.length > 80 || /aufstellung|ersatz|trainer|spielbericht|schiedsrichter|tore|karten|wechsel/i.test(text)) continue;
+            if (/ainet|lurnfeld|spg|sv |fc |tsu |union|askö|sportunion/i.test(text) && !teamNames.some((name) => name.toLowerCase() === text.toLowerCase())) teamNames.push(text);
+          }
+          const playerFromNode = (node) => {
+            const text = compact(node.innerText || node.textContent);
+            const link = node.querySelector?.("a[href]");
+            const nameNode = node.querySelector?.("[class*='name'],[class*='player'],[class*='spieler'],strong,b,a[href]");
+            let name = compact(nameNode?.textContent || text).replace(/^\d{1,2}\s+/, "").replace(/\s+\(C\)$/i, "");
+            if (!name || name.length < 3 || name.length > 90 || /aufstellung|ersatz|trainer|tore|karten|wechsel|schiedsrichter/i.test(name)) return null;
+            const number = Number(text.match(/(?:^|\s)(\d{1,2})(?:\s|$)/)?.[1]);
+            const position = compact(text.match(/\b(Tor(?:wart)?|Abwehr|Verteidigung|Mittelfeld|Sturm|Angriff)\b/i)?.[1] || "");
+            let playerUrl = ""; try { playerUrl = link?.href || ""; } catch {}
+            return { name, number: Number.isInteger(number) ? number : null, position, playerUrl, captain: /\(C\)|Kapitän/i.test(text) };
+          };
+          const sectionPlayers = (labels) => {
+            const result = [];
+            for (const heading of Array.from(document.querySelectorAll("h1,h2,h3,h4,[role='heading'],strong,b"))) {
+              const title = compact(heading.textContent);
+              if (!labels.some((rx) => rx.test(title))) continue;
+              const container = heading.closest("section,article,[class*='lineup'],[class*='aufstellung'],[class*='team'],div") || heading.parentElement;
+              const candidates = Array.from(container?.querySelectorAll("li,tr,[class*='player'],[class*='spieler'],[class*='person']") || []);
+              const players = [];
+              for (const candidate of candidates) {
+                const player = playerFromNode(candidate);
+                if (player && !players.some((item) => item.name.toLowerCase() === player.name.toLowerCase())) players.push(player);
+              }
+              if (players.length) result.push({ title, players });
+            }
+            return result;
+          };
+          const lineupSections = sectionPlayers([/startelf/i,/startaufstellung/i,/^aufstellung$/i]);
+          const benchSections = sectionPlayers([/ersatzbank/i,/ersatzspieler/i,/wechselspieler/i]);
+          const allPlayerBlocks = Array.from(document.querySelectorAll("[class*='lineup'],[class*='aufstellung'],[class*='formation']"));
+          if (!lineupSections.length && allPlayerBlocks.length) {
+            for (const block of allPlayerBlocks) {
+              const players=[];
+              for (const node of Array.from(block.querySelectorAll("li,tr,[class*='player'],[class*='spieler'],[class*='person']"))) {
+                const player=playerFromNode(node); if(player&&!players.some(x=>x.name.toLowerCase()===player.name.toLowerCase()))players.push(player);
+              }
+              if(players.length) lineupSections.push({title:compact(block.querySelector("h2,h3,h4,strong")?.textContent),players});
+            }
+          }
+          const coachMatches = [...body.matchAll(/(?:Trainer(?:in)?|Coach)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .'-]{3,80})/gi)].map((match) => compact(match[1]).replace(/\s+(?:Ersatz|Aufstellung|Schiedsrichter|Zuschauer).*$/i,""));
+          const referee = compact(body.match(/(?:Schiedsrichter(?:in)?|Referee|SR)\s*[:\-]?\s*([A-Za-zÄÖÜäöüß .'-]{3,80})/i)?.[1] || "").replace(/\s+(?:Assistent|Zuschauer|Spielort).*$/i,"");
+          const attendanceRaw = body.match(/(?:Zuschauer|Besucher)\s*[:\-]?\s*(\d{1,6})/i)?.[1];
+          const events=[];
+          const eventNodes=Array.from(document.querySelectorAll("li,tr,[class*='event'],[class*='ereignis'],[class*='ticker'],[class*='timeline']"));
+          for(const node of eventNodes){
+            const text=compact(node.innerText||node.textContent); if(!text||text.length>250)continue;
+            const minuteText=compact(text.match(/\b(\d{1,3}(?:\+\d{1,2})?)\s*['’.]?\s*(?:Min(?:ute)?\.?)?/i)?.[1]||"");
+            const minute=minuteText?Number(minuteText.split("+")[0]):null;
+            let type="";
+            if(/gelb.?rot|gelb-rote/i.test(text))type="yellowRed"; else if(/rote karte|\brot\b/i.test(text))type="red"; else if(/gelbe karte|\bgelb\b/i.test(text))type="yellow"; else if(/wechsel|auswechsl|einwechsl/i.test(text))type="substitution"; else if(/halbzeit|pause/i.test(text))type="halfTime"; else if(/spielende|abpfiff|endstand/i.test(text))type="fullTime"; else if(/\btor\b|torschütze|goal/i.test(text))type="goal"; else continue;
+            const names=Array.from(node.querySelectorAll("a[href],[class*='name'],[class*='player'],[class*='spieler'],strong,b")).map(x=>compact(x.textContent)).filter(x=>x.length>=3&&x.length<=90&&!/tor|karte|wechsel|minute|halbzeit|spielende/i.test(x));
+            const eventTeam=/heim|home/i.test(compact(node.className))?"home":/gast|away/i.test(compact(node.className))?"away":"neutral";
+            events.push({id:`${type}-${minuteText||events.length}-${events.length}`,type,minute,minuteText:minuteText?`${minuteText}'`:"",team:eventTeam,playerName:names[0]||"",secondaryPlayerName:names[1]||"",description:text});
+          }
+          const uniqueEvents=events.filter((event,index,array)=>array.findIndex(item=>item.type===event.type&&item.minuteText===event.minuteText&&item.playerName===event.playerName)===index);
+          reports.push({gameId,reportUrl:location.href,homeTeam:teamNames[0]||"",awayTeam:teamNames[1]||"",homeLineup:lineupSections[0]?.players||[],awayLineup:lineupSections[1]?.players||[],homeBench:benchSections[0]?.players||[],awayBench:benchSections[1]?.players||[],homeCoach:coachMatches[0]||"",awayCoach:coachMatches[1]||"",referee,attendance:attendanceRaw?Number(attendanceRaw):null,events:uniqueEvents,published:Boolean(lineupSections.length||benchSections.length||uniqueEvents.length)});
+        }
+        return { matches, standings, clubProfiles, squad, reports };
       });
+
+      // 11.2.0: Spielberichte nicht nur über sichtbare Links finden. Sobald eine
+      // Spielkarte eine offizielle Spiel-ID oder einen Bericht-Link enthält, wird
+      // die kanonische ÖFB-Spielberichtseite ebenfalls in die Browser-Warteschlange
+      // aufgenommen. Dadurch werden Aufstellungen auch dann geladen, wenn der Link
+      // auf der Mannschaftsseite erst per JavaScript oder hinter einem Button liegt.
+      for (const match of structuredSnapshot.matches || []) {
+        try {
+          const gameId = extractGameId(match.reportUrl, match.context, startUrl);
+          const reportUrl = officialReportUrl(match.reportUrl || startUrl, startUrl, match.homeTeam, match.awayTeam) ||
+            (gameId ? `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Spielbericht/?spiel-vs-spiel&:s=${encodeURIComponent(gameId)}` : "");
+          if (reportUrl) {
+            const discovered = safeUrl(reportUrl, startUrl);
+            if (!processed.has(discovered) && !queue.includes(discovered)) queue.unshift(discovered);
+          }
+        } catch { /* unvollständige Spielkarte ignorieren */ }
+      }
+
       resources.push({ text: JSON.stringify({ __browserSnapshot: structuredSnapshot }), contentType: "application/json", finalUrl: safeUrl(page.url() || startUrl, startUrl), origin: "browser-structured" });
 
       const renderedHtml = await page.content();
@@ -997,7 +1589,7 @@ async function collectWithBrowser(startUrls) {
         textBytes: Buffer.byteLength(renderedText),
         networkResponses: resources.filter((r) => r.origin === "network").length,
         navigationError,
-        discoveredTeamUrls,
+        discoveredTeamUrls, discoveredClubUrls,
         preview: oneLine(renderedText).slice(0, 1500),
       });
       await page.close();
@@ -1008,70 +1600,146 @@ async function collectWithBrowser(startUrls) {
   return { resources, diagnostics };
 }
 
-
-function removeUndefinedDeep(value) {
-  if (value === undefined) return undefined;
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => removeUndefinedDeep(item))
-      .filter((item) => item !== undefined);
-  }
-
-  // Firestore-Timestamps, FieldValues, DocumentReferences und andere
-  // Klasseninstanzen dürfen nicht in einfache Objekte zerlegt werden.
-  if (value && typeof value === "object") {
-    const prototype = Object.getPrototypeOf(value);
-    const isPlainObject =
-      prototype === Object.prototype || prototype === null;
-
-    if (!isPlainObject) return value;
-
-    const cleaned = {};
-    for (const [key, item] of Object.entries(value)) {
-      const cleanedItem = removeUndefinedDeep(item);
-      if (cleanedItem !== undefined) cleaned[key] = cleanedItem;
-    }
-    return cleaned;
-  }
-
-  return value;
-}
-
 async function writeCollection(name, items, runId) {
   const writer = db.bulkWriter();
-
   writer.onWriteError((error) => {
-    console.error(
-      `Firestore-Schreibfehler in ${name} bei Dokument ${error.documentRef?.id || "unbekannt"}:`,
-      error.message,
-    );
-
-    // Vorübergehende Firestore-Fehler höchstens dreimal erneut versuchen.
+    console.error(`Firestore-Schreibfehler in ${name}/${error.documentRef?.id || "unbekannt"}:`, error.message);
     return error.failedAttempts < 3;
   });
 
   for (const item of items) {
-    if (!item || typeof item !== "object" || !item.id) {
-      console.warn(`Ungültiger Eintrag für ${name} wurde übersprungen.`, item);
-      continue;
+    if (!item || typeof item !== "object" || !item.id) continue;
+    let payload = { ...item };
+    const reference = db.collection(name).doc(String(item.id));
+
+    // Endstände bleiben erhalten, wenn eine unvollständige Quellantwort kurzfristig
+    // nur den geplanten Termin liefert. Neue Endstände und Absagen haben Vorrang.
+    if (name === "kfvMatches") {
+      const existingSnapshot = await reference.get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
+      const incomingHasScore = Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore);
+      const existingHasScore = Number.isInteger(existing?.homeScore) && Number.isInteger(existing?.awayScore);
+
+      if (item.status === "cancelled" || item.status === "postponed") {
+        payload.homeScore = null;
+        payload.awayScore = null;
+        payload.resultText = "";
+      } else if (!incomingHasScore && existingHasScore && existing?.status === "finished") {
+        payload.homeScore = existing.homeScore;
+        payload.awayScore = existing.awayScore;
+        payload.resultText = existing.resultText || `${existing.homeScore}:${existing.awayScore}`;
+        payload.status = "finished";
+      }
+    }
+
+    // Bereits veröffentlichte Spielberichte dürfen durch eine kurzfristig leere
+    // oder unvollständig geladene ÖFB-Seite nicht überschrieben werden.
+    if (name === "kfvMatchReports") {
+      const existingSnapshot = await reference.get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
+      const incomingContent = (item.homeLineup?.length || 0) + (item.awayLineup?.length || 0) +
+        (item.homeBench?.length || 0) + (item.awayBench?.length || 0) + (item.events?.length || 0);
+      const existingContent = (existing?.homeLineup?.length || 0) + (existing?.awayLineup?.length || 0) +
+        (existing?.homeBench?.length || 0) + (existing?.awayBench?.length || 0) + (existing?.events?.length || 0);
+      if (existing && existingContent > incomingContent) {
+        payload = {
+          ...item,
+          homeTeam: item.homeTeam || existing.homeTeam || "",
+          awayTeam: item.awayTeam || existing.awayTeam || "",
+          homeLineup: existing.homeLineup || item.homeLineup || [],
+          awayLineup: existing.awayLineup || item.awayLineup || [],
+          homeBench: existing.homeBench || item.homeBench || [],
+          awayBench: existing.awayBench || item.awayBench || [],
+          homeCoach: item.homeCoach || existing.homeCoach || "",
+          awayCoach: item.awayCoach || existing.awayCoach || "",
+          referee: item.referee || existing.referee || "",
+          attendance: Number.isInteger(item.attendance) ? item.attendance : (existing.attendance ?? null),
+          events: existing.events || item.events || [],
+          published: existing.published === true || item.published === true,
+          reportUrl: item.reportUrl || existing.reportUrl || "",
+          preservedFromPreviousSync: true,
+        };
+      }
+    }
+
+    // In der App manuell bearbeitete ÖFB-Kaderspieler behalten ihre Änderungen.
+    if (name === "kfvSquad") {
+      const existingSnapshot = await reference.get();
+      const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
+      if (existing?.manualOverride === true) {
+        payload = {
+          ...item,
+          name: typeof existing.name === "string" ? existing.name : item.name,
+          number: typeof existing.number === "number" || existing.number === null ? existing.number : item.number,
+          position: typeof existing.position === "string" ? existing.position : item.position,
+          imageUrl: typeof existing.imageUrl === "string" ? existing.imageUrl : item.imageUrl,
+          profileUrl: typeof existing.profileUrl === "string" ? existing.profileUrl : item.profileUrl,
+          birthday: typeof existing.birthday === "string" ? existing.birthday : (existing.birthday || ""),
+          active: typeof existing.active === "boolean" ? existing.active : item.active,
+          order: typeof existing.order === "number" ? existing.order : (typeof item.order === "number" ? item.order : 999),
+          manualOverride: true,
+          manualUpdatedAt: existing.manualUpdatedAt || admin.firestore.FieldValue.serverTimestamp(),
+        };
+      }
     }
 
     const documentData = removeUndefinedDeep({
-      ...item,
+      ...payload,
       syncRunId: runId,
       sourceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     });
 
-    writer.set(
-      db.collection(name).doc(String(item.id)),
-      documentData,
-      { merge: false },
-    );
+    writer.set(reference, documentData, { merge: false });
+  }
+  await writer.close();
+}
+
+async function cleanupExistingMatchDuplicates(runId) {
+  const snapshot = await db.collection("kfvMatches").get();
+  const groups = new Map();
+
+  for (const document of snapshot.docs) {
+    const data = document.data();
+    if (data.source !== "oefb-public" || data.active === false) continue;
+    const key = buildMatchUid(data);
+    if (!key || key.includes("||")) continue;
+    const group = groups.get(key) || [];
+    group.push({ id: document.id, ref: document.ref, ...data });
+    groups.set(key, group);
   }
 
+  const writer = db.bulkWriter();
+  let deactivated = 0;
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    // Der Datensatz aus dem aktuellen Lauf ist die verlässlichste Quelle. Alte
+    // Dubletten dürfen insbesondere kein bereits verschobenes Datum zurückschreiben.
+    const currentRunItems = group.filter((item) => item.syncRunId === runId);
+    const merged = mergeDuplicateMatches(currentRunItems.length ? currentRunItems : group);
+    const canonicalId = merged.id;
+    const canonicalRef = db.collection("kfvMatches").doc(canonicalId);
+    writer.set(canonicalRef, removeUndefinedDeep({
+      ...merged,
+      active: true,
+      syncRunId: runId,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }), { merge: true });
+
+    for (const duplicate of group) {
+      if (duplicate.id === canonicalId) continue;
+      writer.set(duplicate.ref, {
+        active: false,
+        duplicateOf: canonicalId,
+        deactivatedReason: "duplicate",
+        deactivatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        syncRunId: runId,
+      }, { merge: true });
+      deactivated += 1;
+    }
+  }
   await writer.close();
+  return deactivated;
 }
 
 async function deactivateMissing(name, currentIds, runId) {
@@ -1096,11 +1764,16 @@ async function main() {
   const statusRef = db.doc("settings/kfvSyncStatus");
   const startedAt = admin.firestore.Timestamp.now();
   const runId = String(startedAt.toMillis());
-  await statusRef.set({
-    running: true, success: null,
-    trigger: process.env.GITHUB_ACTIONS ? "github-actions" : "local",
-    startedAt, intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
-  }, { merge: true });
+  const runRef = db.collection("kfvSyncRuns").doc(runId);
+  const trigger = process.env.GITHUB_ACTIONS ? "github-actions" : "local";
+  const initialRunData = {
+    runId, status: "running", running: true, success: null,
+    trigger, startedAt, intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
+  };
+  await Promise.all([
+    statusRef.set(initialRunData, { merge: true }),
+    runRef.set(initialRunData, { merge: false }),
+  ]);
 
   try {
     const settings = (await db.doc("settings/kfvSync").get()).data() || {};
@@ -1112,6 +1785,9 @@ async function main() {
     const visited = new Set(startUrls);
     const matches = [];
     const standings = [];
+    const squad = [];
+    const clubProfiles = [];
+    const matchReports = [];
     const warnings = [];
     const pageDiagnostics = [];
 
@@ -1120,13 +1796,21 @@ async function main() {
 
     for (const resource of browserResult.resources) {
       try {
+        if (resource.contentType.includes("json") && resource.text.includes("__browserSnapshot")) {
+          try {
+            const rawSnapshot = JSON.parse(resource.text).__browserSnapshot;
+            importClubProfiles(rawSnapshot, clubProfiles, resource.finalUrl);
+            importMatchReports(rawSnapshot, matchReports, resource.finalUrl);
+          } catch { /* parseResource reports malformed data below */ }
+        }
         const parsed = parseResource(resource.text, resource.contentType, resource.finalUrl);
         matches.push(...parsed.matches);
         standings.push(...parsed.standings);
+        squad.push(...parsed.squad);
         if (resource.origin === "network") {
           pageDiagnostics.push({
             url: resource.finalUrl, title: parsed.title, kind: `network-${parsed.kind}`,
-            bytes: parsed.bytes, matches: parsed.matches.length, standings: parsed.standings.length,
+            bytes: parsed.bytes, matches: parsed.matches.length, standings: parsed.standings.length, squad: parsed.squad.length,
             preview: parsed.textPreview || "",
           });
         }
@@ -1135,37 +1819,117 @@ async function main() {
       }
     }
 
-    // Bei mehrfach erkannten Spielen den vollständigsten Datensatz behalten.
-    // Ein echtes Ergebnis hat Vorrang, eine bloße Anstoßzeit kann es nicht überschreiben.
-    const matchMap = new Map();
+    // Dieselbe Begegnung wird auf der ÖFB-Seite häufig über mehrere Ansichten
+    // erkannt. Gruppiert wird deshalb unabhängig vom Seitentitel/Bewerbsnamen.
+    const matchGroups = new Map();
     for (const item of matches) {
-      const previous = matchMap.get(item.id);
-      if (!previous) { matchMap.set(item.id, item); continue; }
-      const previousHasScore = Number.isInteger(previous.homeScore) && Number.isInteger(previous.awayScore);
-      const itemHasScore = Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore);
-      matchMap.set(item.id, {
-        ...previous,
-        ...item,
-        homeScore: itemHasScore ? item.homeScore : previousHasScore ? previous.homeScore : null,
-        awayScore: itemHasScore ? item.awayScore : previousHasScore ? previous.awayScore : null,
-        status: itemHasScore || previousHasScore ? "finished" : item.status || previous.status,
-        venue: item.venue || previous.venue,
-        homeLogoUrl: item.homeLogoUrl || previous.homeLogoUrl || "",
-        awayLogoUrl: item.awayLogoUrl || previous.awayLogoUrl || "",
-        competitionName: item.competitionName !== "ÖFB" ? item.competitionName : previous.competitionName,
-      });
+      const key = canonicalMatchKey(item);
+      if (!key || key.includes("||")) continue;
+      const group = matchGroups.get(key) || [];
+      group.push(item);
+      matchGroups.set(key, group);
     }
-    const uniqueMatches = [...matchMap.values()];
+    const uniqueMatches = [...matchGroups.values()]
+      .map(mergeDuplicateMatches)
+      .sort((a, b) => a.kickoffAt.toMillis() - b.kickoffAt.toMillis());
+
+    const duplicateMatchesRemoved = Math.max(0, matches.length - uniqueMatches.length);
+    if (duplicateMatchesRemoved > 0) {
+      warnings.push(`${duplicateMatchesRemoved} doppelte Spielerkennungen wurden zusammengeführt.`);
+    }
+
     const standingMap = new Map();
     for (const item of standings) {
-      const previous = standingMap.get(item.id);
-      standingMap.set(item.id, previous ? {
+      const normalizedClub = clubKey(item.clubName) || slug(item.clubName);
+      const key = `${item.teamKey}|${normalizedClub}`;
+      const previous = standingMap.get(key);
+      const itemQuality = [item.played, item.won, item.drawn, item.lost, item.points].filter(Number.isFinite).length;
+      const previousQuality = previous
+        ? [previous.played, previous.won, previous.drawn, previous.lost, previous.points].filter(Number.isFinite).length
+        : -1;
+      standingMap.set(key, !previous || itemQuality >= previousQuality ? {
         ...previous,
         ...item,
-        teamLogoUrl: item.teamLogoUrl || previous.teamLogoUrl || "",
-      } : item);
+        id: previous?.id || item.id,
+        teamLogoUrl: item.teamLogoUrl || previous?.teamLogoUrl || "",
+      } : previous);
     }
-    const uniqueStandings = [...standingMap.values()];
+    let uniqueStandings = [...standingMap.values()]
+      .filter((row) => row.position > 0 && row.position <= 100 && row.clubName)
+      .sort((a, b) => a.teamKey.localeCompare(b.teamKey) || a.position - b.position);
+    const uniqueSquad = [...new Map(squad.map((item) => [item.id, item])).values()]
+      .sort((a, b) => (a.number ?? 999) - (b.number ?? 999) || a.name.localeCompare(b.name, "de-AT"));
+
+    // Logo-Cache aus allen bereits gefundenen Logos und den separat besuchten Vereinsseiten.
+    const profileMap = new Map();
+    const registerProfile = (name, logoUrl, pageUrl = "", clubId = "") => {
+      const safeLogo = safeImageUrl(logoUrl, pageUrl || sourceUrl);
+      if (!name || !safeLogo) return;
+      const profile = {
+        id: makeId(["kfv-club", clubKey(name) || name]), name: oneLine(name),
+        normalizedName: clubKey(name), logoUrl: safeLogo, pageUrl: pageUrl || "",
+        oefbClubId: clubId || "", source: "oefb-public", active: true,
+      };
+      for (const alias of clubAliases(name)) {
+        const previous = profileMap.get(alias);
+        if (!previous?.logoUrl) profileMap.set(alias, profile);
+      }
+    };
+    for (const profile of clubProfiles) registerProfile(profile.name, profile.logoUrl, profile.pageUrl, profile.oefbClubId);
+    for (const item of uniqueMatches) {
+      registerProfile(item.homeTeam, item.homeLogoUrl, item.sourceUrl);
+      registerProfile(item.awayTeam, item.awayLogoUrl, item.sourceUrl);
+    }
+    for (const item of uniqueStandings) registerProfile(item.clubName, item.teamLogoUrl, item.sourceUrl);
+
+    for (const item of uniqueMatches) {
+      item.homeLogoUrl = item.homeLogoUrl || chooseClubLogo(profileMap, item.homeTeam);
+      item.awayLogoUrl = item.awayLogoUrl || chooseClubLogo(profileMap, item.awayTeam);
+    }
+    uniqueStandings = uniqueStandings.map((item) => ({
+      ...item,
+      teamLogoUrl: item.teamLogoUrl || chooseClubLogo(profileMap, item.clubName),
+    }));
+    const uniqueClubProfiles = [...new Map([...profileMap.values()].map((item) => [item.id, item])).values()];
+
+    const matchByGameId = new Map(uniqueMatches.filter((item) => item.gameId).map((item) => [String(item.gameId), item]));
+    const reportMap = new Map();
+    for (const rawReport of matchReports) {
+      const linkedMatch = matchByGameId.get(String(rawReport.oefbMatchId || ""));
+      const report = {
+        ...rawReport,
+        homeTeam: rawReport.homeTeam || linkedMatch?.homeTeam || "",
+        awayTeam: rawReport.awayTeam || linkedMatch?.awayTeam || "",
+        reportUrl: rawReport.reportUrl || linkedMatch?.reportUrl || "",
+      };
+      const previous = reportMap.get(report.id);
+      const quality = (item) => item.homeLineup.length + item.awayLineup.length + item.homeBench.length + item.awayBench.length + item.events.length * 2 + (item.referee ? 1 : 0) + (item.attendance !== null ? 1 : 0);
+      if (!previous || quality(report) >= quality(previous)) reportMap.set(report.id, report);
+    }
+    const uniqueMatchReports = [...reportMap.values()]
+      .filter((item) => item.published || item.homeLineup.length || item.awayLineup.length || item.homeBench.length || item.awayBench.length || item.events.length)
+      .map((item) => ({
+        ...item,
+        lineupPlayerCount: item.homeLineup.length + item.awayLineup.length,
+        benchPlayerCount: item.homeBench.length + item.awayBench.length,
+        eventCount: item.events.length,
+        dataQuality: item.homeLineup.length && item.awayLineup.length ? "complete" : item.events.length || item.homeLineup.length || item.awayLineup.length ? "partial" : "empty",
+      }));
+
+    const matchesWithReportId = uniqueMatches.filter((item) => item.gameId && item.reportUrl).length;
+    if (matchesWithReportId > 0 && uniqueMatchReports.length === 0) {
+      warnings.push(`${matchesWithReportId} Spiele besitzen einen offiziellen Bericht-Link, aber es wurden noch keine veröffentlichten Berichtsdaten erkannt.`);
+    }
+
+    if (uniqueSquad.length === 0) {
+      const squadWarning = "ÖFB-Kader-Sync: 0 Spieler erkannt. Bestehende Kaderdaten bleiben unverändert.";
+      warnings.push(squadWarning);
+      console.warn(`⚠ ${squadWarning}`);
+      console.warn(`Geprüfte Kader-URLs: ${SQUAD_URLS.join(", ")}`);
+      console.warn("Der restliche Sync wird fortgesetzt; kfvSquad wird weder überschrieben noch deaktiviert.");
+    } else {
+      console.log(`✅ ÖFB-Kader-Sync: ${uniqueSquad.length} Spieler erkannt.`);
+    }
 
     if (uniqueMatches.length === 0) {
       await statusRef.set({
@@ -1179,33 +1943,111 @@ async function main() {
       throw new Error("ÖFB-Browser-Sync: 0 Spiele erkannt. Bestehende Spieldaten bleiben unverändert. Bitte settings/kfvSyncStatus → pageDiagnostics prüfen.");
     }
 
-    await writeCollection("kfvMatches", uniqueMatches, runId);
-    await writeCollection("kfvStandings", uniqueStandings, runId);
-    const deactivatedMatches = await deactivateMissing("kfvMatches", new Set(uniqueMatches.map((item) => item.id)), runId);
-    const deactivatedStandings = await deactivateMissing("kfvStandings", new Set(uniqueStandings.map((item) => item.id)), runId);
+    const standingsReliable = uniqueStandings.length >= 3;
+    if (!standingsReliable) {
+      warnings.push(`Tabellen-Sync wurde übersprungen: nur ${uniqueStandings.length} plausible Tabellenzeilen erkannt.`);
+    }
 
-    await statusRef.set({
-      running: false, success: true,
-      lastSuccessAt: admin.firestore.FieldValue.serverTimestamp(),
-      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    const existingMatchesSnapshot = await db.collection("kfvMatches").get();
+    const existingMatchIds = new Set(existingMatchesSnapshot.docs.map((document) => document.id));
+    const newMatchCount = uniqueMatches.filter((item) => !existingMatchIds.has(item.id)).length;
+    const updatedMatchCount = uniqueMatches.length - newMatchCount;
+
+    await writeCollection("kfvMatches", uniqueMatches, runId);
+    if (standingsReliable) await writeCollection("kfvStandings", uniqueStandings, runId);
+    if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
+    if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
+    if (uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
+    // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
+    // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
+    const duplicateDocumentsDeactivated = await cleanupExistingMatchDuplicates(runId);
+    const deactivatedMatches = await deactivateMissing("kfvMatches", new Set(uniqueMatches.map((item) => item.id)), runId);
+    const deactivatedStandings = standingsReliable
+      ? await deactivateMissing("kfvStandings", new Set(uniqueStandings.map((item) => item.id)), runId)
+      : 0;
+    const deactivatedSquad = uniqueSquad.length
+      ? await deactivateMissing("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), runId)
+      : 0;
+    // Spielberichte bleiben erhalten, wenn eine ÖFB-Seite in einem Lauf nicht
+    // erreichbar oder noch nicht veröffentlicht ist. Deshalb werden alte
+    // Berichte nicht automatisch deaktiviert.
+    const deactivatedMatchReports = 0;
+
+    const finishedAt = admin.firestore.Timestamp.now();
+    const durationMs = finishedAt.toMillis() - startedAt.toMillis();
+    const successRunData = {
+      runId, status: "success", running: false, success: true,
+      lastSuccessAt: finishedAt,
+      finishedAt, durationMs,
       sourceUrl, discoveredUrls: [...visited], visitedUrls: [...visited], pageDiagnostics,
-      matchCount: uniqueMatches.length, standingCount: uniqueStandings.length,
+      matchCount: uniqueMatches.length,
+      rawMatchCount: matches.length,
+      newMatchCount,
+      updatedMatchCount,
+      duplicateMatchesRemoved,
+      duplicateDocumentsDeactivated,
+      matchIdentityVersion: "11.0.1",
+      finishedMatchCount: uniqueMatches.filter((item) => item.status === "finished").length,
+      scheduledMatchCount: uniqueMatches.filter((item) => item.status === "scheduled").length,
+      postponedMatchCount: uniqueMatches.filter((item) => item.status === "postponed").length,
+      cancelledMatchCount: uniqueMatches.filter((item) => item.status === "cancelled").length,
+      standingCount: standingsReliable ? uniqueStandings.length : 0,
+      standingsReliable,
+      matchReportCount: uniqueMatchReports.length,
+      lineupReportCount: uniqueMatchReports.filter((item) => item.homeLineup.length || item.awayLineup.length).length,
+      matchEventCount: uniqueMatchReports.reduce((sum, item) => sum + item.events.length, 0),
+      deactivatedMatchReports,
+      squadCount: uniqueSquad.length, clubLogoCount: uniqueClubProfiles.length,
       teamCounts: uniqueMatches.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
-      deactivatedMatches, deactivatedStandings,
+      squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
+      deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
-      intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
+      intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
       lastError: admin.firestore.FieldValue.delete(),
-    }, { merge: true });
+    };
+    await Promise.all([
+      statusRef.set(successRunData, { merge: true }),
+      runRef.set({ ...successRunData, lastError: "" }, { merge: true }),
+    ]);
 
-    console.log(`ÖFB-Sync erfolgreich: ${uniqueMatches.length} Spiele, ${uniqueStandings.length} Tabellenzeilen.`);
+    const squadTeamCounts = uniqueSquad.reduce((result, item) => {
+      result[item.teamKey] = (result[item.teamKey] || 0) + 1;
+      return result;
+    }, {});
+    const matchStatusCounts = uniqueMatches.reduce((result, item) => {
+      result[item.status] = (result[item.status] || 0) + 1;
+      return result;
+    }, {});
+    console.log("===== TSU Ainet ÖFB-Sync 11.2.0 =====");
+    console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
+    console.log(`Neue Spiele: ${newMatchCount}`);
+    console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
+    console.log(`Alte Firestore-Dubletten deaktiviert: ${duplicateDocumentsDeactivated}`);
+    console.log(`  Geplant: ${matchStatusCounts.scheduled || 0}`);
+    console.log(`  Beendet/Endstand: ${matchStatusCounts.finished || 0}`);
+    console.log(`  Verschoben: ${matchStatusCounts.postponed || 0}`);
+    console.log(`  Abgesagt: ${matchStatusCounts.cancelled || 0}`);
+    console.log(`Tabellenzeilen: ${standingsReliable ? uniqueStandings.length : "übersprungen (unvollständig)"}`);
+    console.log(`Kaderspieler: ${uniqueSquad.length} aus ${Object.keys(squadTeamCounts).length} Mannschaften`);
+    console.log(`Vereinslogos: ${uniqueClubProfiles.length}`);
+    console.log(`Offizielle Spielberichte: ${uniqueMatchReports.length}`);
+    console.log(`  Mit Aufstellungen: ${uniqueMatchReports.filter((item) => item.lineupPlayerCount > 0).length}`);
+    console.log(`  Importierte Ereignisse: ${uniqueMatchReports.reduce((sum, item) => sum + item.eventCount, 0)}`);
+    console.log(`Warnungen: ${warnings.length}`);
   } catch (error) {
-    await statusRef.set({
-      running: false, success: false,
-      finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+    const finishedAt = admin.firestore.Timestamp.now();
+    const durationMs = finishedAt.toMillis() - startedAt.toMillis();
+    const errorRunData = {
+      runId, status: "error", running: false, success: false,
+      startedAt, finishedAt, durationMs,
       lastError: String(error.message || error),
-      intervalMinutes: 30, provider: "github-actions", parserVersion: PARSER_VERSION,
-    }, { merge: true });
+      intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
+    };
+    await Promise.all([
+      statusRef.set(errorRunData, { merge: true }),
+      runRef.set(errorRunData, { merge: true }),
+    ]);
     throw error;
   }
 }

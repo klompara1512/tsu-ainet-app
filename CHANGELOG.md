@@ -1,3 +1,19 @@
+# 11.2.0 – Intelligenter Spielbericht-Import
+
+- Berichtseiten werden automatisch aus der offiziellen Spiel-ID erzeugt und besucht.
+- Veröffentlichte Berichtsdaten werden vor leeren Folgeantworten geschützt.
+- Verbesserte Zuordnung zu Spielen und ausführlichere Sync-Statistik.
+
+# Changelog
+
+## 11.1.3.1 – Kader-Sync-Bugfix
+
+- Ein fehlgeschlagener Kader-Parser beendet nicht mehr die komplette ÖFB-Synchronisierung.
+- Spiele, Tabellen, Logos und offizielle Spielberichte werden weiterhin verarbeitet.
+- Bestehende Dokumente in `kfvSquad` bleiben bei 0 erkannten Spielern unverändert.
+- Der Sync-Status enthält eine Warnung statt eines Fehlers.
+- Zusätzliche Diagnoseausgaben zeigen die geprüften Kader-URLs.
+
 # Version 11.1.3 – Offizieller ÖFB-Spielbericht-Sync
 
 - ÖFB-Spielberichtsseiten werden automatisch besucht.

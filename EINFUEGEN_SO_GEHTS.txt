@@ -1,0 +1,14 @@
+TSU Ainet App – Version 12.2.1 Logo-Zuordnung Fix
+
+1. ZIP entpacken.
+2. Gesamten Inhalt in dein bestehendes GitHub-Projekt kopieren.
+3. Vorhandene Dateien ersetzen.
+4. Auch den Ordner .github übernehmen.
+5. Änderungen zu GitHub hochladen/committen.
+6. GitHub -> Actions -> "KFV / ÖFB Daten synchronisieren" -> Run workflow.
+7. Danach die App im Browser mit Strg+F5 neu laden.
+
+Wichtig:
+- Die App blendet falsche Ainet-Logos bei Gegnern sofort aus.
+- Der nächste Sync bereinigt zusätzlich die gespeicherten Logo-Zuordnungen in Firestore.
+- Ist für einen Gegner noch kein sicher erkanntes offizielles Logo vorhanden, wird bewusst ein neutrales Wappen statt eines falschen Logos angezeigt.

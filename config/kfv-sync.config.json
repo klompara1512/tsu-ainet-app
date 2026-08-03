@@ -89,5 +89,5 @@
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
   ],
-  "syncArchitecture": "v12-single-source-of-truth"
+  "syncArchitecture": "v12.2-official-team-pages"
 }

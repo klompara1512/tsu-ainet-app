@@ -478,13 +478,52 @@ export function findKfvClub(clubs: KfvClub[], teamName: string) {
   );
 }
 
+function normalizeLogoUrl(value: string) {
+  if (!value) return "";
+  try {
+    const url = new URL(value, window.location.origin);
+    url.hash = "";
+    // Cache-Parameter dürfen die Erkennung desselben Logos nicht verhindern.
+    for (const key of ["v", "ver", "version", "cache", "cb", "t"]) {
+      url.searchParams.delete(key);
+    }
+    return url.toString().replace(/\/$/, "").toLocaleLowerCase("de-AT");
+  } catch {
+    return value.trim().toLocaleLowerCase("de-AT");
+  }
+}
+
+function isAinetLogoUrl(clubs: KfvClub[], value: string) {
+  const normalized = normalizeLogoUrl(value);
+  if (!normalized) return false;
+  if (normalized.includes("/tsu-ainet-logo.png")) return true;
+
+  return clubs.some(
+    (club) =>
+      isTsuAinet(club.name) &&
+      Boolean(club.logoUrl) &&
+      normalizeLogoUrl(club.logoUrl) === normalized,
+  );
+}
+
 export function getKfvClubLogo(
   clubs: KfvClub[],
   teamName: string,
   matchLogoUrl = "",
 ) {
   const club = findKfvClub(clubs, teamName);
-  if (club?.logoUrl) return club.logoUrl;
-  if (matchLogoUrl.trim()) return matchLogoUrl.trim();
-  return "";
+  const clubLogo = club?.logoUrl?.trim() || "";
+  const sourceLogo = matchLogoUrl.trim();
+
+  // Ein häufiger Fehler der ÖFB-Seite ist, dass das Header-/Ainet-Wappen als
+  // Gegnerlogo mitgeparst wird. Für fremde Vereine wird dieses Logo verworfen.
+  if (!isTsuAinet(teamName)) {
+    if (clubLogo && !isAinetLogoUrl(clubs, clubLogo)) return clubLogo;
+    if (sourceLogo && !isAinetLogoUrl(clubs, sourceLogo)) return sourceLogo;
+    return "";
+  }
+
+  if (clubLogo) return clubLogo;
+  if (sourceLogo) return sourceLogo;
+  return "/tsu-ainet-logo.png";
 }

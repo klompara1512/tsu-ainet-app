@@ -53,13 +53,18 @@ const RUN_DAILY_TASKS = process.env.RUN_DAILY_TASKS === "true";
 // Produktiv werden ausschließlich die offiziellen Spiele-/Tabellenseiten jeder
 // einzelnen Mannschaft besucht. Allgemeine Vereinsseiten dürfen keine Tabellen
 // oder Spielpläne mehr in den Sync einmischen.
+const CLUB_SEED_URLS = Array.isArray(SYNC_CONFIG.clubSeedUrls) ? SYNC_CONFIG.clubSeedUrls.filter(Boolean) : [];
 const START_URLS = [
   ...TEAM_SYNC_SOURCES.map((entry) => entry.url),
+  // Vereinsseiten werden bewusst mitgeladen: nur dort ist das offizielle Wappen
+  // vieler Gegner zuverlässig verfügbar. In V12.0 waren diese URLs konfiguriert,
+  // wurden aber nie besucht.
+  ...CLUB_SEED_URLS,
   ...(RUN_DAILY_TASKS ? SQUAD_URLS : []),
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "12.0.0-core-reset";
+const PARSER_VERSION = "12.2.0-official-team-pages";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -105,7 +110,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "12.0.0";
+const DATASET_VERSION = "12.2.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -150,7 +155,9 @@ function safeImageUrl(raw, base = DEFAULT_SOURCE) {
 
 function clubKey(value) {
   return lower(value)
-    .replace(/\b(?:tsu|sg|sv|fc|sc|usv|askö|asko|union|atv|u)?\b/g, " ")
+    // Kein optionales Präfix: die frühere Regex konnte auch leere Treffer bilden
+    // und dadurch Clubnamen unzuverlässig normalisieren.
+    .replace(/\b(?:tsu|sg|sv|fc|sc|usv|askö|asko|union|atv)\b/g, " ")
     .replace(/\b(?:1b|ii|reserve|challenge|kampfmannschaft|km)\b/g, " ")
     .replace(/[^a-z0-9äöüß]+/g, " ")
     .replace(/\s+/g, " ")
@@ -171,6 +178,23 @@ function chooseClubLogo(profileMap, clubName) {
   return "";
 }
 
+function isAinetClubName(value) {
+  const key = clubKey(value);
+  return key === "ainet" || key.startsWith("ainet ");
+}
+
+function logoFingerprint(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(String(value));
+    url.hash = "";
+    for (const key of ["v", "ver", "version", "cache", "cb", "t"]) url.searchParams.delete(key);
+    return url.toString().replace(/\/$/, "").toLowerCase();
+  } catch {
+    return String(value).trim().toLowerCase();
+  }
+}
+
 function sourceDescriptor(sourceUrl) {
   const normalized = String(sourceUrl || "").replace(/\/$/, "");
   for (const source of TEAM_SYNC_SOURCES) {
@@ -183,7 +207,8 @@ function sourceDescriptor(sourceUrl) {
   }
   const path = (() => { try { return decodeURIComponent(new URL(sourceUrl).pathname); } catch { return ""; } })();
   const team = ACTIVE_TEAMS.find((entry) => (entry.slugs || []).some((slugName) => path.toLowerCase().includes(`/${String(slugName).toLowerCase()}/`)));
-  const kind = /\/Tabellen\/?$/i.test(path) ? "table" : /\/Spiele\/?$/i.test(path) ? "games" : /\/Kader\/?$/i.test(path) ? "squad" : /\/Spielbericht\//i.test(path) ? "report" : "other";
+  const isConfiguredClubSeed = CLUB_SEED_URLS.some((url) => String(url).replace(/\/$/, "") === String(sourceUrl).replace(/\/$/, ""));
+  const kind = /\/Tabellen\/?$/i.test(path) ? "table" : /\/Spiele\/?$/i.test(path) ? "games" : /\/Kader\/?$/i.test(path) ? "squad" : /\/Spielbericht\//i.test(path) ? "report" : isConfiguredClubSeed || /\/Verein\/\d+/i.test(path) ? "club" : "other";
   return team ? { teamKey: team.key, teamName: team.name, kind, url: sourceUrl } : { teamKey: "", teamName: "", kind, url: sourceUrl };
 }
 
@@ -310,10 +335,10 @@ function canonicalCompetitionName(value, teamName = "") {
     return normalizedTeam || "ÖFB";
   }
 
-  if (normalizedTeam === "Challenge" && /(?:1\.?\s*klasse|liga|öfb)/i.test(text)) {
+  if (normalizedTeam === "Challenge" && /(?:1\.?\s*klasse|liga|öfb|res|challenge)/i.test(text)) {
     return "Challenge 1. Klasse West";
   }
-  if (normalizedTeam === "Kampfmannschaft" && /(?:1\.?\s*klasse|liga|öfb)/i.test(text)) {
+  if (normalizedTeam === "Kampfmannschaft" && /(?:1\.?\s*klasse|liga|öfb|kampfmannschaft|km)/i.test(text)) {
     return "1. Klasse West";
   }
   return text;
@@ -2048,7 +2073,11 @@ async function main() {
     const reliableStandingTeams = new Set();
     uniqueStandings = [...standingGroups.entries()]
       .filter(([key, group]) => {
-        const reliable = group.length >= 4 && new Set(group.map((row) => row.position)).size === group.length;
+        const positions = group.map((row) => row.position).sort((a, b) => a - b);
+        const uniquePositions = new Set(positions).size === group.length;
+        const containsAinet = group.some((row) => /\bainet\b/i.test(row.clubName));
+        const plausibleRange = positions[0] === 1 && positions.at(-1) <= 30;
+        const reliable = group.length >= 4 && uniquePositions && containsAinet && plausibleRange;
         if (reliable) reliableStandingTeams.add(group[0].teamKey);
         return reliable;
       })
@@ -2086,7 +2115,30 @@ async function main() {
     }
     for (const item of uniqueStandings) registerProfile(item.clubName, item.teamLogoUrl, item.sourceUrl);
 
+    // Das Seiten-Headerlogo von TSU Ainet wurde bisher teilweise als Gegnerlogo
+    // erkannt. Alle fremden Profile mit demselben Bild werden aus dem Cache entfernt.
+    const ainetLogoFingerprints = new Set(
+      [...profileMap.values()]
+        .filter((profile) => isAinetClubName(profile.name))
+        .map((profile) => logoFingerprint(profile.logoUrl))
+        .filter(Boolean),
+    );
+    for (const [alias, profile] of [...profileMap.entries()]) {
+      if (!isAinetClubName(profile.name) && ainetLogoFingerprints.has(logoFingerprint(profile.logoUrl))) {
+        profileMap.delete(alias);
+      }
+    }
+
     for (const item of uniqueMatches) {
+      const homeFingerprint = logoFingerprint(item.homeLogoUrl);
+      const awayFingerprint = logoFingerprint(item.awayLogoUrl);
+      if (homeFingerprint && homeFingerprint === awayFingerprint && clubKey(item.homeTeam) !== clubKey(item.awayTeam)) {
+        if (isAinetClubName(item.homeTeam) && !isAinetClubName(item.awayTeam)) item.awayLogoUrl = "";
+        else if (isAinetClubName(item.awayTeam) && !isAinetClubName(item.homeTeam)) item.homeLogoUrl = "";
+        else { item.homeLogoUrl = ""; item.awayLogoUrl = ""; }
+      }
+      if (!isAinetClubName(item.homeTeam) && ainetLogoFingerprints.has(logoFingerprint(item.homeLogoUrl))) item.homeLogoUrl = "";
+      if (!isAinetClubName(item.awayTeam) && ainetLogoFingerprints.has(logoFingerprint(item.awayLogoUrl))) item.awayLogoUrl = "";
       item.homeLogoUrl = item.homeLogoUrl || chooseClubLogo(profileMap, item.homeTeam);
       item.awayLogoUrl = item.awayLogoUrl || chooseClubLogo(profileMap, item.awayTeam);
     }
@@ -2232,7 +2284,7 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 12.0.0 Core Reset =====");
+    console.log("===== TSU Ainet ÖFB-Sync 12.2.0 Official Team Pages =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);

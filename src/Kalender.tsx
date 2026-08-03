@@ -182,8 +182,9 @@ function buildLogoCandidates(
 
   const candidates = [
     localClubLogo(teamName),
-    getKfvClubLogo(clubs, teamName, ""),
-    typeof matchLogoUrl === "string" ? matchLogoUrl.trim() : "",
+    // Match-URL wird zentral validiert. So kann das Ainet-Wappen nicht mehr
+    // irrtümlich als Gegnerlogo angezeigt werden.
+    getKfvClubLogo(clubs, teamName, typeof matchLogoUrl === "string" ? matchLogoUrl : ""),
     CLUB_FALLBACK_LOGO,
   ];
 

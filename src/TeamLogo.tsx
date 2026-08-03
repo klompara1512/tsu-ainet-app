@@ -73,8 +73,9 @@ function TeamLogo({ url = "", name, size = "normal", className = "" }: Props) {
   const candidates = useMemo(() => {
     const values = [
       localLogoFor(name),
-      getKfvClubLogo(clubs, name, ""),
-      url.trim(),
+      // Die zentrale Funktion prüft zusätzlich, ob bei einem Gegner irrtümlich
+      // das TSU-Ainet-Wappen gespeichert wurde.
+      getKfvClubLogo(clubs, name, url),
     ].filter(Boolean);
 
     return values.filter((value, index) => values.indexOf(value) === index);

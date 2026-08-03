@@ -1,126 +1,42 @@
-name: ÖFB-Daten automatisch synchronisieren
+name: KFV / ÖFB Daten synchronisieren
 
 on:
-  schedule:
-    - cron: "*/30 * * * *"
   workflow_dispatch:
-    inputs:
-      duplicate_cleanup:
-        description: "Dublettenbereinigung zusätzlich ausführen"
-        required: false
-        type: boolean
-        default: false
+  schedule:
+    - cron: "7,37 * * * *"
+
+concurrency:
+  group: kfv-oefb-sync
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
-concurrency:
-  group: tsu-ainet-oefb-sync
-  cancel-in-progress: false
-
 jobs:
   sync:
-    name: Spiele, Tabellen, Kader und Logos synchronisieren
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
     env:
       TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      RUN_DAILY_TASKS: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+      RUN_DUPLICATE_CLEANUP: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
 
     steps:
-      - name: Zeitfenster prüfen
-        id: window
-        shell: bash
-        run: |
-          LOCAL_HOUR=$(TZ=Europe/Vienna date +%H)
-          LOCAL_MINUTE=$(TZ=Europe/Vienna date +%M)
-          LOCAL_TIME=$(TZ=Europe/Vienna date '+%d.%m.%Y %H:%M')
-          SHOULD_RUN=false
-          RUN_CLEANUP=false
-
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            SHOULD_RUN=true
-            if [ "${{ inputs.duplicate_cleanup }}" = "true" ]; then RUN_CLEANUP=true; fi
-          elif [ "$LOCAL_HOUR" -ge 8 ] && { [ "$LOCAL_HOUR" -lt 22 ] || { [ "$LOCAL_HOUR" -eq 22 ] && [ "$LOCAL_MINUTE" -eq 00 ]; }; }; then
-            SHOULD_RUN=true
-            # Nur der erste automatische Lauf ab 08:00 bereinigt Dubletten.
-            if [ "$LOCAL_HOUR" -eq 8 ]; then RUN_CLEANUP=true; fi
-          fi
-
-          echo "local_time=$LOCAL_TIME" >> "$GITHUB_OUTPUT"
-          echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
-          echo "run_cleanup=$RUN_CLEANUP" >> "$GITHUB_OUTPUT"
-          echo "Lokale Zeit: $LOCAL_TIME | Sync: $SHOULD_RUN | Dubletten: $RUN_CLEANUP"
-
-      - name: Außerhalb des Zeitfensters
-        if: steps.window.outputs.should_run != 'true'
-        run: echo "Automatischer Sync wird außerhalb 08:00–22:00 Uhr übersprungen."
-
       - name: Projekt laden
-        if: steps.window.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Node.js einrichten
-        if: steps.window.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 22
           cache: npm
 
-      - name: Firebase-Zugang prüfen
-        if: steps.window.outputs.should_run == 'true'
-        shell: bash
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-        run: |
-          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "Fehler: Das GitHub-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
-            exit 1
-          fi
+      - name: Abhängigkeiten installieren
+        run: npm ci
 
-      - name: Sync-Abhängigkeiten installieren
-        if: steps.window.outputs.should_run == 'true'
-        run: npm install --no-save --no-audit --no-fund firebase-admin@13.10.0 cheerio@1.2.0 puppeteer@24.43.1
-
-      - name: Projekt und Parser prüfen
-        if: steps.window.outputs.should_run == 'true'
+      - name: Projekt und Sync prüfen
         run: npm run sync:check
 
-      - name: ÖFB-Daten synchronisieren
-        if: steps.window.outputs.should_run == 'true'
-        id: sync
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          NODE_ENV: production
-          RUN_DUPLICATE_CLEANUP: ${{ steps.window.outputs.run_cleanup }}
-          RUN_DAILY_TASKS: ${{ steps.window.outputs.run_cleanup }}
-        shell: bash
-        run: |
-          set -o pipefail
-          node scripts/kfv-sync.cjs 2>&1 | tee sync-output.log
-
-      - name: Zusammenfassung erstellen
-        if: always()
-        shell: bash
-        run: |
-          echo "## TSU Ainet ÖFB-Synchronisierung" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "Lokale Zeit: ${{ steps.window.outputs.local_time }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Ausgeführt: ${{ steps.window.outputs.should_run }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "Dublettenbereinigung: ${{ steps.window.outputs.run_cleanup }}" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f sync-output.log ]; then
-            echo '```text' >> "$GITHUB_STEP_SUMMARY"
-            tail -n 50 sync-output.log >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "Kein Sync-Protokoll vorhanden." >> "$GITHUB_STEP_SUMMARY"
-          fi
-
-      - name: Sync-Protokoll speichern
-        if: always() && steps.window.outputs.should_run == 'true'
-        uses: actions/upload-artifact@v4
-        with:
-          name: oefb-sync-log-${{ github.run_number }}
-          path: sync-output.log
-          if-no-files-found: ignore
-          retention-days: 14
+      - name: Offizielle ÖFB-/KFV-Daten synchronisieren
+        run: npm run sync:kfv

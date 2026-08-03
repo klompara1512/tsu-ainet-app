@@ -91,6 +91,7 @@ jobs:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           NODE_ENV: production
           RUN_DUPLICATE_CLEANUP: ${{ steps.window.outputs.run_cleanup }}
+          RUN_DAILY_TASKS: ${{ steps.window.outputs.run_cleanup }}
         shell: bash
         run: |
           set -o pipefail

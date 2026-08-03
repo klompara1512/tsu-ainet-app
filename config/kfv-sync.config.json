@@ -12,7 +12,12 @@
       "name": "Kampfmannschaft",
       "slugs": [
         "KM"
-      ]
+      ],
+      "enabled": true,
+      "primarySlug": "KM",
+      "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele",
+      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Tabellen",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Kader/"
     },
     {
       "key": "CHALLENGE",
@@ -23,7 +28,12 @@
         "KM-Reserve",
         "Reserve",
         "Res"
-      ]
+      ],
+      "enabled": true,
+      "primarySlug": "Res",
+      "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Spiele",
+      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Tabellen",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Kader/"
     },
     {
       "key": "U17",
@@ -31,7 +41,12 @@
       "slugs": [
         "U17",
         "U17-A"
-      ]
+      ],
+      "enabled": true,
+      "primarySlug": "U17",
+      "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Spiele",
+      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Tabellen",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Kader/"
     },
     {
       "key": "U12",
@@ -39,7 +54,12 @@
       "slugs": [
         "U12",
         "U12-A"
-      ]
+      ],
+      "enabled": true,
+      "primarySlug": "U12",
+      "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Spiele",
+      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Tabellen",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Kader/"
     },
     {
       "key": "U10",
@@ -47,7 +67,12 @@
       "slugs": [
         "U10",
         "U10-A"
-      ]
+      ],
+      "enabled": true,
+      "primarySlug": "U10",
+      "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Spiele",
+      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Tabellen",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Kader/"
     },
     {
       "key": "U08",
@@ -56,11 +81,13 @@
         "U08",
         "U8",
         "U08-A"
-      ]
+      ],
+      "enabled": false
     }
   ],
   "clubSeedUrls": [
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
-  ]
+  ],
+  "syncArchitecture": "team-specific-v1"
 }

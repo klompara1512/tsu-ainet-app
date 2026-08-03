@@ -1,3 +1,10 @@
+## 11.2.2 – Mannschaftsspezifische ÖFB-Quellen
+
+- Eigene Spielplan- und Tabellenquelle für KM, Challenge, U17, U12 und U10.
+- Strikte Trennung von Spiele- und Tabellenparser.
+- Schutz vor vermischten oder veralteten Tabellen.
+- Mannschaftsbezogene Sync-Diagnose.
+
 # 11.2.1 – Spielplan- und Logo-Stabilisierung
 
 - Unvollständig geladene ÖFB-Seiten deaktivieren keine bereits bekannten Spiele mehr.

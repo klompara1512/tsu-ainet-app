@@ -53,7 +53,48 @@ const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEA
 ]))];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 40;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "11.2.2-sprint1-sync-window";
+const PARSER_VERSION = "11.2.2-smart-sync-table-fix";
+
+
+const SYNC_WINDOW_PAST_DAYS = 14;
+const SYNC_WINDOW_FUTURE_DAYS = 7;
+const RUN_DUPLICATE_CLEANUP = process.env.RUN_DUPLICATE_CLEANUP === "true";
+
+function startOfLocalDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function isInActiveSyncWindow(value, now = new Date()) {
+  const date = value instanceof admin.firestore.Timestamp ? value.toDate() : value;
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return false;
+  const today = startOfLocalDay(now);
+  const from = new Date(today); from.setDate(from.getDate() - SYNC_WINDOW_PAST_DAYS);
+  const until = new Date(today); until.setDate(until.getDate() + SYNC_WINDOW_FUTURE_DAYS + 1);
+  return date >= from && date < until;
+}
+
+function cleanCompetitionTitle(value, teamName = "") {
+  const text = oneLine(value)
+    .replace(/\|.*$/g, "")
+    .replace(/(?:Vereinshomepage|Resultate|Tore|Ausschlüsse|Torverteilung).*/i, "")
+    .replace(/^.*?\b(?:Tabelle|Tabellen)\b\s*[-|:]?\s*/i, "")
+    .trim();
+  return canonicalCompetitionName(text, teamName);
+}
+
+function isPlausibleStandingRow(row) {
+  if (!row || !Number.isInteger(row.position) || row.position < 1 || row.position > 30) return false;
+  if (!row.clubName || row.clubName.length < 2 || row.clubName.length > 80) return false;
+  const values = [row.played, row.won, row.drawn, row.lost, row.goalsFor, row.goalsAgainst, row.points];
+  if (!values.every(Number.isFinite)) return false;
+  if (values.some((n) => n < 0)) return false;
+  if (row.played !== row.won + row.drawn + row.lost) return false;
+  if (row.points > row.played * 3 + 3) return false;
+  // Eine bereits gespielte Tabelle mit durchgehend 0:0 ist fast immer eine
+  // Vereinsstatistik und keine offizielle Ligatabelle.
+  if (row.played > 0 && row.goalsFor === 0 && row.goalsAgainst === 0) return false;
+  return true;
+}
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -601,7 +642,7 @@ function addStanding(target, data, sourceUrl) {
     id: makeId(["kfv-standing", teamKey, data.competitionName || "ÖFB", clubName]),
     teamId: slug(teamName), teamKey, teamName,
     season: seasonFromUrl(sourceUrl),
-    competitionName: oneLine(data.competitionName) || "ÖFB",
+    competitionName: cleanCompetitionTitle(data.competitionName, teamName) || "ÖFB",
     position, clubName,
     teamLogoUrl: safeImageUrl(data.teamLogoUrl, sourceUrl),
     played: parseNumber(data.played) || 0,
@@ -1407,9 +1448,16 @@ async function collectWithBrowser(startUrls) {
         }
 
         const standings = [];
+        const isOfficialTablePage = /\/Tabellen\/?$/i.test(location.pathname);
         for (const table of Array.from(document.querySelectorAll("table"))) {
+          if (!isOfficialTablePage) continue;
           const headers = Array.from(table.querySelectorAll("th")).map((x) => compact(x.textContent).toLowerCase());
-          if (!headers.some((h) => /platz|rang|punkte|pkt|spiele|tore/.test(h))) continue;
+          const headerText = headers.join(" | ");
+          const hasRank = /platz|rang|^#$/i.test(headerText);
+          const hasPlayed = /(?:^|\b)(?:sp|spiele|gespielt)(?:\b|$)/i.test(headerText);
+          const hasPoints = /punkte|pkt|pts/i.test(headerText);
+          const hasGoals = /tore|torverhältnis|tv/i.test(headerText);
+          if (!(hasRank && hasPlayed && hasPoints && hasGoals)) continue;
           for (const row of Array.from(table.querySelectorAll("tbody tr, tr"))) {
             const cells = Array.from(row.querySelectorAll("th,td")).map((x) => compact(x.textContent)).filter(Boolean);
             if (cells.length < 3 || !/^\d{1,2}[.)]?$/.test(cells[0])) continue;
@@ -1423,7 +1471,8 @@ async function collectWithBrowser(startUrls) {
             const logoRaw = logo?.currentSrc || logo?.getAttribute("src") || logo?.getAttribute("data-src") || logo?.getAttribute("data-lazy-src") || "";
             let teamLogoUrl = "";
             try { teamLogoUrl = logoRaw ? new URL(logoRaw, location.href).href : ""; } catch { teamLogoUrl = ""; }
-            standings.push({ position: Number(cells[0].replace(/\D/g, "")), clubName: cells[clubIndex], teamLogoUrl, played: numbers[0], won: numbers[1], drawn: numbers[2], lost: numbers[3], goalsFor: gm ? Number(gm[1]) : 0, goalsAgainst: gm ? Number(gm[2]) : 0, goalDifference: gm ? Number(gm[1]) - Number(gm[2]) : 0, points: numbers.at(-1) || 0, competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB") });
+            const standing = { position: Number(cells[0].replace(/\D/g, "")), clubName: cells[clubIndex], teamLogoUrl, played: numbers[0], won: numbers[1], drawn: numbers[2], lost: numbers[3], goalsFor: gm ? Number(gm[1]) : NaN, goalsAgainst: gm ? Number(gm[2]) : NaN, goalDifference: gm ? Number(gm[1]) - Number(gm[2]) : NaN, points: numbers.at(-1), competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB") };
+            if (Number.isFinite(standing.played) && standing.played === standing.won + standing.drawn + standing.lost && Number.isFinite(standing.goalsFor) && Number.isFinite(standing.goalsAgainst) && standing.points <= standing.played * 3 + 3 && !(standing.played > 0 && standing.goalsFor === 0 && standing.goalsAgainst === 0)) standings.push(standing);
           }
         }
         const absoluteImage = (raw) => {
@@ -1857,6 +1906,10 @@ async function main() {
       .sort((a, b) => a.kickoffAt.toMillis() - b.kickoffAt.toMillis());
 
     // Eine teilweise geladene ÖFB-Seite darf keinen bereits bekannten Spielplan
+    // Nur das gewünschte Zeitfenster aktiv von der Quelle aktualisieren.
+    // Historische und weiter entfernte zukünftige Spiele bleiben in Firestore erhalten.
+    uniqueMatches = uniqueMatches.filter((item) => isInActiveSyncWindow(item.kickoffAt));
+
     // löschen. Vorhandene, nicht als Dublette markierte Spiele der aktuellen Saison
     // werden deshalb beibehalten, wenn sie im aktuellen Lauf fehlen.
     const existingMatchesForPreservation = await db.collection("kfvMatches").get();
@@ -1887,6 +1940,8 @@ async function main() {
 
     const standingMap = new Map();
     for (const item of standings) {
+      item.competitionName = cleanCompetitionTitle(item.competitionName, item.teamName);
+      if (!isPlausibleStandingRow(item)) continue;
       const normalizedClub = clubKey(item.clubName) || slug(item.clubName);
       const key = `${item.teamKey}|${normalizedClub}`;
       const previous = standingMap.get(key);
@@ -1903,6 +1958,16 @@ async function main() {
     }
     let uniqueStandings = [...standingMap.values()]
       .filter((row) => row.position > 0 && row.position <= 100 && row.clubName)
+      .sort((a, b) => a.teamKey.localeCompare(b.teamKey) || a.position - b.position);
+    const standingGroups = new Map();
+    for (const row of uniqueStandings) {
+      const key = `${row.teamKey}|${row.competitionName}`;
+      const group = standingGroups.get(key) || [];
+      group.push(row); standingGroups.set(key, group);
+    }
+    uniqueStandings = [...standingGroups.values()]
+      .filter((group) => group.length >= 4 && new Set(group.map((row) => row.position)).size === group.length)
+      .flat()
       .sort((a, b) => a.teamKey.localeCompare(b.teamKey) || a.position - b.position);
     const uniqueSquad = [...new Map(squad.map((item) => [item.id, item])).values()]
       .sort((a, b) => (a.number ?? 999) - (b.number ?? 999) || a.name.localeCompare(b.name, "de-AT"));
@@ -1953,7 +2018,9 @@ async function main() {
       const quality = (item) => item.homeLineup.length + item.awayLineup.length + item.homeBench.length + item.awayBench.length + item.events.length * 2 + (item.referee ? 1 : 0) + (item.attendance !== null ? 1 : 0);
       if (!previous || quality(report) >= quality(previous)) reportMap.set(report.id, report);
     }
+    const activeWindowGameIds = new Set(uniqueMatches.filter((item) => isInActiveSyncWindow(item.kickoffAt)).map((item) => String(item.gameId || item.oefbMatchId || "")).filter(Boolean));
     const uniqueMatchReports = [...reportMap.values()]
+      .filter((item) => activeWindowGameIds.has(String(item.oefbMatchId || "")))
       .filter((item) => item.published || item.homeLineup.length || item.awayLineup.length || item.homeBench.length || item.awayBench.length || item.events.length)
       .map((item) => ({
         ...item,
@@ -2007,13 +2074,10 @@ async function main() {
     if (uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
-    const runDuplicateCleanup = String(process.env.RUN_DEDUP || "false").toLowerCase() === "true";
-    const duplicateDocumentsDeactivated = runDuplicateCleanup
+    const duplicateDocumentsDeactivated = RUN_DUPLICATE_CLEANUP
       ? await cleanupExistingMatchDuplicates(runId)
       : 0;
-    if (!runDuplicateCleanup) {
-      console.log("Dublettenbereinigung: heute bereits erledigt bzw. für diesen Lauf übersprungen.");
-    }
+    if (!RUN_DUPLICATE_CLEANUP) console.log("Dublettenbereinigung: heute übersprungen.");
     // Spiele werden bei einem teilweise geladenen ÖFB-Spielplan nicht deaktiviert.
     // Echte Dubletten wurden bereits durch cleanupExistingMatchDuplicates bereinigt.
     const deactivatedMatches = 0;
@@ -2041,9 +2105,6 @@ async function main() {
       updatedMatchCount,
       duplicateMatchesRemoved,
       duplicateDocumentsDeactivated,
-      duplicateCleanupExecuted: runDuplicateCleanup,
-      syncLocalTime: process.env.SYNC_LOCAL_TIME || "",
-      syncLocalDate: process.env.SYNC_LOCAL_DATE || "",
       matchIdentityVersion: "11.0.1",
       finishedMatchCount: uniqueMatches.filter((item) => item.status === "finished").length,
       scheduledMatchCount: uniqueMatches.filter((item) => item.status === "scheduled").length,
@@ -2077,12 +2138,11 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 11.2.2 Sprint 1 =====");
+    console.log("===== TSU Ainet ÖFB-Sync 11.2.1 =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);
     console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
-    console.log(`Dublettenbereinigung ausgeführt: ${runDuplicateCleanup ? "ja" : "nein"}`);
     console.log(`Alte Firestore-Dubletten deaktiviert: ${duplicateDocumentsDeactivated}`);
     console.log(`  Geplant: ${matchStatusCounts.scheduled || 0}`);
     console.log(`  Beendet/Endstand: ${matchStatusCounts.finished || 0}`);

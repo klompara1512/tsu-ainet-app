@@ -1,7 +1,7 @@
 {
   "name": "tsu-ainet-app",
   "private": true,
-  "version": "13.4.0",
+  "version": "14.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,11 +9,13 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "sync:kfv": "node scripts/kfv-sync.cjs",
+    "sync:kfv": "node scripts/kfv-core-sync.cjs",
     "check": "npm run sync:check && npm run typecheck",
     "typecheck": "tsc -b --pretty false",
-    "sync:check": "node --check scripts/kfv-sync.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
-    "sync:selftest": "node scripts/official-sync-selftest.cjs"
+    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
+    "sync:selftest": "node scripts/official-sync-selftest.cjs",
+    "sync:core": "node scripts/kfv-core-sync.cjs",
+    "sync:full": "node scripts/kfv-sync.cjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

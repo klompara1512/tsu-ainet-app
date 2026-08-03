@@ -1,4 +1,4 @@
-name: KFV / ÖFB Daten synchronisieren
+name: KFV / ÖFB Core-Daten synchronisieren
 
 on:
   workflow_dispatch:
@@ -6,8 +6,8 @@ on:
     - cron: "7,37 * * * *"
 
 concurrency:
-  group: kfv-oefb-sync
-  cancel-in-progress: false
+  group: kfv-oefb-core-sync
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -15,12 +15,13 @@ permissions:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 15
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      RUN_DAILY_TASKS: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
-      RUN_DUPLICATE_CLEANUP: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+      SYNC_MODE: core
+      RUN_DAILY_TASKS: "false"
+      RUN_DUPLICATE_CLEANUP: "false"
 
     steps:
       - name: Projekt laden
@@ -29,14 +30,14 @@ jobs:
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
 
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Projekt und Sync prüfen
+      - name: Projekt und Core-Sync prüfen
         run: npm run sync:check
 
-      - name: Offizielle ÖFB-/KFV-Daten synchronisieren
-        run: npm run sync:kfv
+      - name: Spielpläne, Ergebnisse und Tabellen synchronisieren
+        run: npm run sync:core

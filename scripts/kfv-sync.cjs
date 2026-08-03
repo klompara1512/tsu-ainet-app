@@ -52,21 +52,26 @@ const TEAM_SYNC_SOURCES = ACTIVE_TEAMS.flatMap((team) => [
 const SQUAD_URLS = ACTIVE_TEAMS.map((team) => team.squadUrl).filter(Boolean);
 const SQUAD_URL = SQUAD_URLS[0] || `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/KM/Kader/`;
 const RUN_DAILY_TASKS = process.env.RUN_DAILY_TASKS === "true";
+const SYNC_MODE = String(process.env.SYNC_MODE || "full").toLowerCase();
+const CORE_SYNC = SYNC_MODE === "core";
 // Produktiv werden ausschließlich die offiziellen Spiele-/Tabellenseiten jeder
 // einzelnen Mannschaft besucht. Allgemeine Vereinsseiten dürfen keine Tabellen
 // oder Spielpläne mehr in den Sync einmischen.
 const CLUB_SEED_URLS = Array.isArray(SYNC_CONFIG.clubSeedUrls) ? SYNC_CONFIG.clubSeedUrls.filter(Boolean) : [];
-const START_URLS = [
-  ...TEAM_SYNC_SOURCES.map((entry) => entry.url),
-  // Vereinsseiten werden bewusst mitgeladen: nur dort ist das offizielle Wappen
-  // vieler Gegner zuverlässig verfügbar. In V12.0 waren diese URLs konfiguriert,
-  // wurden aber nie besucht.
-  ...CLUB_SEED_URLS,
-  ...SQUAD_URLS,
-];
-const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
+const START_URLS = CORE_SYNC
+  ? TEAM_SYNC_SOURCES.map((entry) => entry.url)
+  : [
+      ...TEAM_SYNC_SOURCES.map((entry) => entry.url),
+      ...CLUB_SEED_URLS,
+      ...SQUAD_URLS,
+    ];
+const MAX_PAGES = CORE_SYNC
+  ? Math.max(12, START_URLS.length + 4)
+  : (Number(SYNC_CONFIG.maxPages) || 80);
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "13.4.0-independent-official-sync";
+const PARSER_VERSION = CORE_SYNC
+  ? "14.0.0-phase1-core-sync"
+  : "13.4.0-independent-official-sync";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -1444,7 +1449,7 @@ async function collectWithBrowser(startUrls) {
         await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
         // ÖFB/KFV laden Tabellen und Kader teilweise nach der ersten Navigation nach.
         // Daher auf Netzwerkruhe und anschließend auf sichtbare Datenstrukturen warten.
-        await page.waitForNetworkIdle({ idleTime: 1200, timeout: 30000 }).catch(() => {});
+        await page.waitForNetworkIdle({ idleTime: CORE_SYNC ? 500 : 1200, timeout: CORE_SYNC ? 10000 : 30000 }).catch(() => {});
         await page.waitForFunction(() => {
           const path = location.pathname.toLowerCase();
           if (path.includes('/tabellen')) {
@@ -1454,8 +1459,8 @@ async function collectWithBrowser(startUrls) {
             return document.querySelectorAll('img, article, li, [class*="player"], [class*="spieler"], [class*="person"]').length > 8 || document.body.innerText.length > 2000;
           }
           return document.body.innerText.length > 1000;
-        }, { timeout: 20000 }).catch(() => {});
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        }, { timeout: CORE_SYNC ? 8000 : 20000 }).catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, CORE_SYNC ? 700 : 2500));
       } catch (error) {
         navigationError = String(error.message || error);
       }
@@ -1466,44 +1471,48 @@ async function collectWithBrowser(startUrls) {
           const buttons = await page.$$('button');
           for (const button of buttons) {
             const text = await page.evaluate((el) => (el.innerText || "").trim(), button);
-            if (text === label) { await button.click(); await new Promise((r) => setTimeout(r, 1500)); break; }
+            if (text === label) { await button.click(); await new Promise((r) => setTimeout(r, CORE_SYNC ? 350 : 1500)); break; }
           }
         } catch { /* ignore */ }
       }
 
       // Dynamische ÖFB-Inhalte werden häufig erst beim Scrollen nachgeladen.
       try {
-        await page.evaluate(async () => {
+        await page.evaluate(async (scrollDelay) => {
           const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
           for (let y = 0; y < document.body.scrollHeight; y += 700) {
             window.scrollTo(0, y);
-            await delay(120);
+            await delay(scrollDelay);
           }
           window.scrollTo(0, 0);
-        });
-        await new Promise((resolve) => setTimeout(resolve, 1800));
+        }, CORE_SYNC ? 45 : 120);
+        await new Promise((resolve) => setTimeout(resolve, CORE_SYNC ? 450 : 1800));
         // Noch nicht geladene Bilder und responsive Karten ein zweites Mal anstoßen.
-        await page.evaluate(async () => {
+        await page.evaluate(async (delays) => {
           const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
           window.scrollTo(0, document.body.scrollHeight);
-          await delay(800);
+          await delay(delays.bottom);
           window.scrollTo(0, Math.floor(document.body.scrollHeight / 2));
-          await delay(500);
+          await delay(delays.middle);
           window.scrollTo(0, 0);
           for (const image of document.images) {
             const lazy = image.getAttribute('data-src') || image.getAttribute('data-lazy-src');
             if (!image.getAttribute('src') && lazy) image.setAttribute('src', lazy);
           }
-        });
-        await new Promise((resolve) => setTimeout(resolve, 1200));
+        }, { bottom: CORE_SYNC ? 250 : 800, middle: CORE_SYNC ? 180 : 500 });
+        await new Promise((resolve) => setTimeout(resolve, CORE_SYNC ? 350 : 1200));
       } catch { /* ignore */ }
 
       // Mannschafts-Links direkt aus der offiziellen Vereinsseite übernehmen.
       // So funktionieren auch abweichende ÖFB-Slugs wie U12-A oder Challenge.
-      const discoveredTeamUrls = await page.evaluate(() =>
+      const discoveredTeamUrls = await page.evaluate((coreSync) =>
         Array.from(document.querySelectorAll("a[href]"))
           .map((anchor) => anchor.href)
-          .filter((href) => /\/TsuAinet\/Mannschaften\/Saison-2026-27\/[^/]+\/(?:Spiele|Tabellen|Kader)\/?$/i.test(href)),
+          .filter((href) => {
+            const allowed = coreSync ? "(?:Spiele|Tabellen)" : "(?:Spiele|Tabellen|Kader)";
+            return new RegExp(`/TsuAinet/Mannschaften/Saison-2026-27/[^/]+/${allowed}/?$`, "i").test(href);
+          }),
+        CORE_SYNC,
       );
       for (const href of discoveredTeamUrls) {
         try {
@@ -1512,32 +1521,31 @@ async function collectWithBrowser(startUrls) {
         } catch { /* ignore */ }
       }
 
-      // Offizielle Spielberichte werden separat besucht. Dort stehen die
-      // veröffentlichten Aufstellungen, Ersatzspieler und Spielereignisse.
-      const discoveredReportUrls = await page.evaluate(() =>
-        Array.from(document.querySelectorAll("a[href]"))
-          .map((anchor) => anchor.href)
-          .filter((href) => /\/Spielbericht\/|[?&](?::s|s)=\d+/i.test(href)),
-      );
-      for (const href of discoveredReportUrls) {
-        try {
-          const discovered = safeUrl(href, startUrl);
-          if (!processed.has(discovered) && !queue.includes(discovered)) queue.unshift(discovered);
-        } catch { /* ignore */ }
-      }
+      if (!CORE_SYNC) {
+        // Spielberichte und separate Vereinsseiten gehören zum langsamen Voll-Sync.
+        const discoveredReportUrls = await page.evaluate(() =>
+          Array.from(document.querySelectorAll("a[href]"))
+            .map((anchor) => anchor.href)
+            .filter((href) => /\/Spielbericht\/|[?&](?::s|s)=\d+/i.test(href)),
+        );
+        for (const href of discoveredReportUrls) {
+          try {
+            const discovered = safeUrl(href, startUrl);
+            if (!processed.has(discovered) && !queue.includes(discovered)) queue.unshift(discovered);
+          } catch { /* ignore */ }
+        }
 
-      // Vereinsseiten aus Team-/Tabellenlinks erkennen. Auf diesen Seiten liegt das
-      // offizielle Logo oft separat und wird auf den Spielseiten nicht als <img> ausgegeben.
-      const discoveredClubUrls = await page.evaluate(() =>
-        Array.from(document.querySelectorAll("a[href]"))
-          .map((anchor) => ({ href: anchor.href, text: (anchor.textContent || "").replace(/\s+/g, " ").trim() }))
-          .filter((item) => /(?:kfv-fussball\.at\/kfv\/Verein\/\d+|vereine\.oefb\.at\/[^/]+\/?$)/i.test(item.href)),
-      );
-      for (const item of discoveredClubUrls) {
-        try {
-          const discovered = safeUrl(item.href, startUrl);
-          if (!processed.has(discovered) && !queue.includes(discovered)) queue.push(discovered);
-        } catch { /* ignore */ }
+        const discoveredClubUrls = await page.evaluate(() =>
+          Array.from(document.querySelectorAll("a[href]"))
+            .map((anchor) => ({ href: anchor.href, text: (anchor.textContent || "").replace(/\s+/g, " ").trim() }))
+            .filter((item) => /(?:kfv-fussball\.at\/kfv\/Verein\/\d+|vereine\.oefb\.at\/[^/]+\/?$)/i.test(item.href)),
+        );
+        for (const item of discoveredClubUrls) {
+          try {
+            const discovered = safeUrl(item.href, startUrl);
+            if (!processed.has(discovered) && !queue.includes(discovered)) queue.push(discovered);
+          } catch { /* ignore */ }
+        }
       }
 
       // Eingebettete JSON-Zustände (Next/Nuxt/JSON-LD) separat an den Parser geben.
@@ -2451,13 +2459,13 @@ async function main() {
       warnings.push(`${matchesWithReportId} Spiele besitzen einen offiziellen Bericht-Link, aber es wurden noch keine veröffentlichten Berichtsdaten erkannt.`);
     }
 
-    if (uniqueSquad.length === 0) {
+    if (!CORE_SYNC && uniqueSquad.length === 0) {
       const squadWarning = "ÖFB-Kader-Sync: 0 Spieler erkannt. Bestehende Kaderdaten bleiben unverändert.";
       warnings.push(squadWarning);
       console.warn(`⚠ ${squadWarning}`);
       console.warn(`Geprüfte Kader-URLs: ${SQUAD_URLS.join(", ")}`);
       console.warn("Der restliche Sync wird fortgesetzt; kfvSquad wird weder überschrieben noch deaktiviert.");
-    } else {
+    } else if (!CORE_SYNC) {
       console.log(`✅ ÖFB-Kader-Sync: ${uniqueSquad.length} Spieler erkannt.`);
     }
 
@@ -2467,7 +2475,9 @@ async function main() {
     if (uniqueMatches.length === 0) {
       warnings.push("Spielplan-Sync: 0 Spiele erkannt. Bestehende Spieldaten bleiben unverändert; Tabellen, Kader und Logos werden trotzdem verarbeitet.");
     }
-    if (uniqueMatches.length === 0 && uniqueStandings.length === 0 && uniqueSquad.length === 0 && uniqueClubProfiles.length === 0) {
+    if (CORE_SYNC
+      ? uniqueMatches.length === 0 && uniqueStandings.length === 0
+      : uniqueMatches.length === 0 && uniqueStandings.length === 0 && uniqueSquad.length === 0 && uniqueClubProfiles.length === 0) {
       await statusRef.set({
         running: false, success: false,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -2491,9 +2501,9 @@ async function main() {
 
     if (uniqueMatches.length) await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
     if (standingsReliable) await writeCollection(STANDING_COLLECTION, uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
-    if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
-    if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
-    if (uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
+    if (!CORE_SYNC && uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
+    if (!CORE_SYNC && uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
+    if (!CORE_SYNC && uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
     const duplicateDocumentsDeactivated = RUN_DUPLICATE_CLEANUP
@@ -2509,7 +2519,7 @@ async function main() {
     const reliableSquadTeams = new Set(
       ACTIVE_TEAMS.filter((team) => uniqueSquad.some((item) => item.teamKey === team.key)).map((team) => team.key),
     );
-    const deactivatedSquad = reliableSquadTeams.size
+    const deactivatedSquad = !CORE_SYNC && reliableSquadTeams.size
       ? await deactivateMissingForTeams("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), reliableSquadTeams, runId)
       : 0;
     // Spielberichte bleiben erhalten, wenn eine ÖFB-Seite in einem Lauf nicht
@@ -2546,7 +2556,8 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: "v13.4-independent-official-sync",
+      syncArchitecture: CORE_SYNC ? "v14-phase1-core-sync" : "v13.4-independent-official-sync",
+      syncMode: SYNC_MODE,
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
       intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
@@ -2565,7 +2576,9 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 13.4.0 Independent Official Sync =====");
+    console.log(CORE_SYNC
+      ? "===== TSU Ainet V14 Phase 1 Core Sync ====="
+      : "===== TSU Ainet ÖFB-Sync 13.4.0 Independent Official Sync =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);

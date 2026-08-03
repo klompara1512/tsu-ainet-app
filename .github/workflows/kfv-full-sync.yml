@@ -1,0 +1,32 @@
+name: KFV / ÖFB Voll-Sync manuell
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: kfv-oefb-full-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      SYNC_MODE: full
+      RUN_DAILY_TASKS: "true"
+      RUN_DUPLICATE_CLEANUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run sync:check
+      - name: Vollständigen Sync ausführen
+        run: npm run sync:full

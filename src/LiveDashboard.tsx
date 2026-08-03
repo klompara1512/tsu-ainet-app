@@ -425,11 +425,11 @@ function LiveDashboard({
               const resultLabel = result === "W" ? "Sieg" : result === "D" ? "Remis" : "Niederlage";
               return (
                 <button type="button" key={match.id} onClick={() => onOpenMatch(match.id)}>
-                  <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} size="small" />
+                  <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} clubId={match.homeClubId} size="small" />
                   <div><small>{formatDate(match.kickoffAt)}</small><strong>{match.homeTeam}</strong></div>
                   <b className={`v101-score v101-score-${result || "N"}`}>{match.homeScore}:{match.awayScore}</b>
                   <div className="v101-away"><small>{resultLabel}</small><strong>{match.awayTeam}</strong></div>
-                  <TeamLogo url={match.awayLogoUrl} name={match.awayTeam} size="small" />
+                  <TeamLogo url={match.awayLogoUrl} name={match.awayTeam} clubId={match.awayClubId} size="small" />
                 </button>
               );
             }) : <div className="v101-empty">Noch keine Ergebnisse verfügbar.</div>}
@@ -451,7 +451,7 @@ function LiveDashboard({
                 onClick={onOpenKfvLive}
               >
                 <span>{row.position}</span>
-                <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
+                <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
                 <strong>{row.clubName}</strong>
                 <small>{row.played} Sp.</small>
                 <b>{row.points}</b>

@@ -64,7 +64,7 @@ const START_URLS = [
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "12.2.0-official-team-pages";
+const PARSER_VERSION = "13.0.0-club-id-architecture";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -110,7 +110,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "12.2.0";
+const DATASET_VERSION = "13.0.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -193,6 +193,32 @@ function logoFingerprint(value) {
   } catch {
     return String(value).trim().toLowerCase();
   }
+}
+
+function extractClubIdentity(rawUrl, fallbackName = "") {
+  let pageUrl = "";
+  let clubId = "";
+  try {
+    const parsed = new URL(String(rawUrl || ""), DEFAULT_SOURCE);
+    if (parsed.protocol === "https:") pageUrl = parsed.toString();
+    const kfvId = parsed.pathname.match(/\/Verein\/(\d+)/i)?.[1];
+    if (kfvId) clubId = `kfv:${kfvId}`;
+    if (!clubId && /vereine\.oefb\.at$/i.test(parsed.hostname)) {
+      const slugValue = decodeURIComponent(parsed.pathname).split("/").filter(Boolean)[0] || "";
+      if (slugValue && !/^Mannschaften$/i.test(slugValue)) clubId = `oefb:${slug(slugValue)}`;
+    }
+  } catch { /* ignore */ }
+  if (!clubId && fallbackName) clubId = `name:${clubKey(fallbackName) || slug(fallbackName)}`;
+  return { clubId, pageUrl };
+}
+
+function chooseClubProfile(profileMap, profileIdMap, clubName, clubId = "") {
+  if (clubId && profileIdMap.has(clubId)) return profileIdMap.get(clubId);
+  for (const alias of clubAliases(clubName)) {
+    const profile = profileMap.get(alias);
+    if (profile) return profile;
+  }
+  return null;
 }
 
 function sourceDescriptor(sourceUrl) {
@@ -456,6 +482,10 @@ function mergeDuplicateMatches(group) {
 
   for (const item of sorted) {
     best.gameId ||= item.gameId || "";
+    best.homeClubId ||= item.homeClubId || "";
+    best.awayClubId ||= item.awayClubId || "";
+    best.homeClubUrl ||= item.homeClubUrl || "";
+    best.awayClubUrl ||= item.awayClubUrl || "";
     best.venue ||= item.venue || "";
     best.homeLogoUrl ||= item.homeLogoUrl || "";
     best.awayLogoUrl ||= item.awayLogoUrl || "";
@@ -650,6 +680,8 @@ function addMatch(target, data, sourceUrl, context = "") {
     kickoffAt: admin.firestore.Timestamp.fromDate(kickoff),
   };
   const matchUid = buildMatchUid(matchIdentity);
+  const homeIdentity = extractClubIdentity(data.homeClubUrl, homeTeam);
+  const awayIdentity = extractClubIdentity(data.awayClubUrl, awayTeam);
 
   target.push({
     id: matchDocumentId(matchIdentity),
@@ -667,6 +699,10 @@ function addMatch(target, data, sourceUrl, context = "") {
     isHomeGame: /ainet/i.test(homeTeam),
     competitionName,
     homeTeam, awayTeam,
+    homeClubId: oneLine(data.homeClubId) || homeIdentity.clubId,
+    awayClubId: oneLine(data.awayClubId) || awayIdentity.clubId,
+    homeClubUrl: homeIdentity.pageUrl,
+    awayClubUrl: awayIdentity.pageUrl,
     homeLogoUrl: safeImageUrl(data.homeLogoUrl, sourceUrl),
     awayLogoUrl: safeImageUrl(data.awayLogoUrl, sourceUrl),
     homeScore, awayScore,
@@ -695,6 +731,8 @@ function addStanding(target, data, sourceUrl) {
     season: seasonFromUrl(sourceUrl),
     competitionName: cleanCompetitionTitle(data.competitionName, teamName) || "ÖFB",
     position, clubName,
+    clubId: oneLine(data.clubId) || extractClubIdentity(data.clubUrl, clubName).clubId,
+    clubUrl: extractClubIdentity(data.clubUrl, clubName).pageUrl,
     teamLogoUrl: safeImageUrl(data.teamLogoUrl, sourceUrl),
     played: parseNumber(data.played) || 0,
     won: parseNumber(data.won) || 0,
@@ -1308,14 +1346,15 @@ function importClubProfiles(snapshot, profiles, sourceUrl) {
   for (const item of snapshot.clubProfiles || []) {
     const name = oneLine(item.name);
     const logoUrl = safeImageUrl(item.logoUrl, item.pageUrl || sourceUrl);
-    if (!name || !logoUrl) continue;
+    if (!name) continue;
+    const identity = oneLine(item.clubId) || extractClubIdentity(item.pageUrl || sourceUrl, name).clubId;
     profiles.push({
-      id: makeId(["kfv-club", name]),
+      id: makeId(["kfv-club-v13", identity || clubKey(name) || name]),
       name,
       normalizedName: clubKey(name),
       logoUrl,
       pageUrl: item.pageUrl ? safeUrl(item.pageUrl, sourceUrl) : sourceUrl,
-      oefbClubId: oneLine(item.clubId),
+      oefbClubId: identity,
       source: "oefb-public",
       active: true,
     });
@@ -1485,7 +1524,11 @@ async function collectWithBrowser(startUrls) {
             if (/uhr|endstand|spielbericht|tabelle|spiele/i.test(text)) continue;
             if (!teams.some((x) => x.name.toLowerCase() === text.toLowerCase())) {
               const parent = node.closest("[class*='team'], [class*='club'], [class*='verein'], li, tr, article, section, div");
-              teams.push({ name: text, logoUrl: imageUrl(node) || imageUrl(parent) });
+              const anchor = node.closest("a[href]") || parent?.querySelector?.("a[href]");
+              const clubUrl = anchor?.href || "";
+              const kfvId = clubUrl.match(/\/Verein\/(\d+)/i)?.[1] || "";
+              const oefbSlug = (() => { try { const u = new URL(clubUrl); return /vereine\.oefb\.at$/i.test(u.hostname) ? u.pathname.split("/").filter(Boolean)[0] || "" : ""; } catch { return ""; } })();
+              teams.push({ name: text, logoUrl: imageUrl(node) || imageUrl(parent), clubUrl, clubId: kfvId ? `kfv:${kfvId}` : (oefbSlug ? `oefb:${oefbSlug.toLowerCase()}` : "") });
             }
           }
           if (teams.length < 2) continue;
@@ -1510,6 +1553,8 @@ async function collectWithBrowser(startUrls) {
           seen.add(key);
           matches.push({
             homeTeam: teams[0].name, awayTeam: teams[1].name,
+            homeClubId: teams[0].clubId, awayClubId: teams[1].clubId,
+            homeClubUrl: teams[0].clubUrl, awayClubUrl: teams[1].clubUrl,
             homeLogoUrl: teams[0].logoUrl, awayLogoUrl: teams[1].logoUrl,
             kickoff: kickoff.toISOString(),
             score: scoreText, scoreConfirmed: Boolean(scoreText),
@@ -1548,7 +1593,11 @@ async function collectWithBrowser(startUrls) {
             const logoRaw = logo?.currentSrc || logo?.getAttribute("src") || logo?.getAttribute("data-src") || logo?.getAttribute("data-lazy-src") || "";
             let teamLogoUrl = "";
             try { teamLogoUrl = logoRaw ? new URL(logoRaw, location.href).href : ""; } catch { teamLogoUrl = ""; }
-            const standing = { position: Number(cells[0].replace(/\D/g, "")), clubName: cells[clubIndex], teamLogoUrl, played: numbers[0], won: numbers[1], drawn: numbers[2], lost: numbers[3], goalsFor: gm ? Number(gm[1]) : NaN, goalsAgainst: gm ? Number(gm[2]) : NaN, goalDifference: gm ? Number(gm[1]) - Number(gm[2]) : NaN, points: numbers.at(-1), competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB") };
+            const clubAnchor = clubCell?.querySelector("a[href]") || row.querySelector("a[href*='/Verein/'], a[href*='vereine.oefb.at']");
+            const clubUrl = clubAnchor?.href || "";
+            const clubKfvId = clubUrl.match(/\/Verein\/(\d+)/i)?.[1] || "";
+            const clubOefbSlug = (() => { try { const u = new URL(clubUrl); return /vereine\.oefb\.at$/i.test(u.hostname) ? u.pathname.split("/").filter(Boolean)[0] || "" : ""; } catch { return ""; } })();
+            const standing = { position: Number(cells[0].replace(/\D/g, "")), clubName: cells[clubIndex], clubUrl, clubId: clubKfvId ? `kfv:${clubKfvId}` : (clubOefbSlug ? `oefb:${clubOefbSlug.toLowerCase()}` : ""), teamLogoUrl, played: numbers[0], won: numbers[1], drawn: numbers[2], lost: numbers[3], goalsFor: gm ? Number(gm[1]) : NaN, goalsAgainst: gm ? Number(gm[2]) : NaN, goalDifference: gm ? Number(gm[1]) - Number(gm[2]) : NaN, points: numbers.at(-1), competitionName: compact(document.querySelector("h1")?.textContent || document.title || "ÖFB") };
             if (Number.isFinite(standing.played) && standing.played === standing.won + standing.drawn + standing.lost && Number.isFinite(standing.goalsFor) && Number.isFinite(standing.goalsAgainst) && standing.points <= standing.played * 3 + 3 && !(standing.played > 0 && standing.goalsFor === 0 && standing.goalsAgainst === 0)) standings.push(standing);
           }
         }
@@ -1558,7 +1607,8 @@ async function collectWithBrowser(startUrls) {
         const pageText = compact(document.body?.innerText || "");
         const pageTitle = compact(document.querySelector("h1")?.textContent || document.title || "");
         const pageClubMatch = location.pathname.match(/\/Verein\/(\d+)/i);
-        const isClubPage = Boolean(pageClubMatch) || /vereinsdaten|verein|club/i.test(pageTitle + " " + pageText.slice(0, 500));
+        const pageOefbSlug = /vereine\.oefb\.at$/i.test(location.hostname) ? location.pathname.split("/").filter(Boolean)[0] || "" : "";
+        const isClubPage = Boolean(pageClubMatch || pageOefbSlug) || /vereinsdaten|verein|club/i.test(pageTitle + " " + pageText.slice(0, 500));
         const clubProfiles = [];
         if (isClubPage) {
           const candidates = [];
@@ -1583,7 +1633,7 @@ async function collectWithBrowser(startUrls) {
           candidates.sort((a, b) => b.score - a.score);
           const rawName = compact(document.querySelector("h1")?.textContent || document.querySelector('[class*="club-name"], [class*="verein-name"], [class*="team-name"]')?.textContent || document.title);
           const name = rawName.replace(/\s*[|–-]\s*(?:KFV|ÖFB|Fußball.*)$/i, "").trim();
-          if (name && candidates[0]?.url) clubProfiles.push({ name, logoUrl: candidates[0].url, pageUrl: location.href, clubId: pageClubMatch?.[1] || "" });
+          if (name && candidates[0]?.url) clubProfiles.push({ name, logoUrl: candidates[0].url, pageUrl: location.href, clubId: pageClubMatch?.[1] ? `kfv:${pageClubMatch[1]}` : (pageOefbSlug ? `oefb:${pageOefbSlug.toLowerCase()}` : "") });
         }
         const squad = [];
         if (/\/Mannschaften\/Saison-\d{4}-\d{2}\/KM\/Kader\/?$/i.test(location.pathname)) {
@@ -1807,7 +1857,15 @@ async function writeCollection(name, items, runId) {
       const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
       if (existing) {
         if (name === STANDING_COLLECTION) payload.teamLogoUrl = item.teamLogoUrl || existing.teamLogoUrl || "";
-        if (name === "kfvClubs") payload.logoUrl = item.logoUrl || existing.logoUrl || "";
+        if (name === "kfvClubs") {
+          const existingLogo = existing.logoUrl || "";
+          const incomingLogo = item.logoUrl || "";
+          const existingLooksLikeAinet = /tsu[-_ ]?ainet|ainet-logo/i.test(existingLogo);
+          payload.logoUrl = (!isAinetClubName(item.name) && existingLooksLikeAinet) ? incomingLogo : (incomingLogo || existingLogo);
+          payload.oefbClubId = item.oefbClubId || existing.oefbClubId || "";
+          payload.pageUrl = item.pageUrl || existing.pageUrl || "";
+          payload.aliases = item.aliases?.length ? item.aliases : (existing.aliases || []);
+        }
       }
     }
 
@@ -2093,60 +2151,59 @@ async function main() {
     const uniqueSquad = [...new Map(squad.map((item) => [item.id, item])).values()]
       .sort((a, b) => (a.number ?? 999) - (b.number ?? 999) || a.name.localeCompare(b.name, "de-AT"));
 
-    // Logo-Cache aus allen bereits gefundenen Logos und den separat besuchten Vereinsseiten.
+    // Version 13: zentrale Vereinsdatenbank mit eindeutiger Vereins-ID.
+    // Namens-Aliase bleiben nur als Rückfalloption für Quellen ohne Link erhalten.
     const profileMap = new Map();
+    const profileIdMap = new Map();
     const registerProfile = (name, logoUrl, pageUrl = "", clubId = "") => {
+      if (!name) return;
+      const identity = clubId || extractClubIdentity(pageUrl, name).clubId;
       const safeLogo = safeImageUrl(logoUrl, pageUrl || sourceUrl);
-      if (!name || !safeLogo) return;
       const profile = {
-        id: makeId(["kfv-club", clubKey(name) || name]), name: oneLine(name),
-        normalizedName: clubKey(name), logoUrl: safeLogo, pageUrl: pageUrl || "",
-        oefbClubId: clubId || "", source: "oefb-public", active: true,
+        id: makeId(["kfv-club-v13", identity || clubKey(name) || name]), name: oneLine(name),
+        normalizedName: clubKey(name), aliases: clubAliases(name), logoUrl: safeLogo,
+        pageUrl: pageUrl || "", oefbClubId: identity || "", source: "oefb-public", active: true,
       };
+      if (identity) {
+        const previous = profileIdMap.get(identity);
+        if (!previous || (!previous.logoUrl && safeLogo)) profileIdMap.set(identity, { ...previous, ...profile, logoUrl: safeLogo || previous?.logoUrl || "" });
+      }
       for (const alias of clubAliases(name)) {
         const previous = profileMap.get(alias);
-        if (!previous?.logoUrl) profileMap.set(alias, profile);
+        if (!previous || (!previous.logoUrl && safeLogo)) profileMap.set(alias, { ...previous, ...profile, logoUrl: safeLogo || previous?.logoUrl || "" });
       }
     };
     for (const profile of clubProfiles) registerProfile(profile.name, profile.logoUrl, profile.pageUrl, profile.oefbClubId);
     for (const item of uniqueMatches) {
-      registerProfile(item.homeTeam, item.homeLogoUrl, item.sourceUrl);
-      registerProfile(item.awayTeam, item.awayLogoUrl, item.sourceUrl);
+      registerProfile(item.homeTeam, item.homeLogoUrl, item.homeClubUrl || item.sourceUrl, item.homeClubId);
+      registerProfile(item.awayTeam, item.awayLogoUrl, item.awayClubUrl || item.sourceUrl, item.awayClubId);
     }
-    for (const item of uniqueStandings) registerProfile(item.clubName, item.teamLogoUrl, item.sourceUrl);
+    for (const item of uniqueStandings) registerProfile(item.clubName, item.teamLogoUrl, item.clubUrl || item.sourceUrl, item.clubId);
 
-    // Das Seiten-Headerlogo von TSU Ainet wurde bisher teilweise als Gegnerlogo
-    // erkannt. Alle fremden Profile mit demselben Bild werden aus dem Cache entfernt.
+    const allProfiles = [...profileIdMap.values(), ...profileMap.values()];
     const ainetLogoFingerprints = new Set(
-      [...profileMap.values()]
-        .filter((profile) => isAinetClubName(profile.name))
-        .map((profile) => logoFingerprint(profile.logoUrl))
-        .filter(Boolean),
+      allProfiles.filter((profile) => isAinetClubName(profile.name)).map((profile) => logoFingerprint(profile.logoUrl)).filter(Boolean),
     );
-    for (const [alias, profile] of [...profileMap.entries()]) {
-      if (!isAinetClubName(profile.name) && ainetLogoFingerprints.has(logoFingerprint(profile.logoUrl))) {
-        profileMap.delete(alias);
-      }
-    }
+    const isInvalidForeignLogo = (name, logoUrl) => !isAinetClubName(name) && ainetLogoFingerprints.has(logoFingerprint(logoUrl));
+    for (const [key, profile] of [...profileIdMap.entries()]) if (isInvalidForeignLogo(profile.name, profile.logoUrl)) profileIdMap.set(key, { ...profile, logoUrl: "" });
+    for (const [key, profile] of [...profileMap.entries()]) if (isInvalidForeignLogo(profile.name, profile.logoUrl)) profileMap.set(key, { ...profile, logoUrl: "" });
 
     for (const item of uniqueMatches) {
-      const homeFingerprint = logoFingerprint(item.homeLogoUrl);
-      const awayFingerprint = logoFingerprint(item.awayLogoUrl);
-      if (homeFingerprint && homeFingerprint === awayFingerprint && clubKey(item.homeTeam) !== clubKey(item.awayTeam)) {
-        if (isAinetClubName(item.homeTeam) && !isAinetClubName(item.awayTeam)) item.awayLogoUrl = "";
-        else if (isAinetClubName(item.awayTeam) && !isAinetClubName(item.homeTeam)) item.homeLogoUrl = "";
-        else { item.homeLogoUrl = ""; item.awayLogoUrl = ""; }
-      }
-      if (!isAinetClubName(item.homeTeam) && ainetLogoFingerprints.has(logoFingerprint(item.homeLogoUrl))) item.homeLogoUrl = "";
-      if (!isAinetClubName(item.awayTeam) && ainetLogoFingerprints.has(logoFingerprint(item.awayLogoUrl))) item.awayLogoUrl = "";
-      item.homeLogoUrl = item.homeLogoUrl || chooseClubLogo(profileMap, item.homeTeam);
-      item.awayLogoUrl = item.awayLogoUrl || chooseClubLogo(profileMap, item.awayTeam);
+      if (isInvalidForeignLogo(item.homeTeam, item.homeLogoUrl)) item.homeLogoUrl = "";
+      if (isInvalidForeignLogo(item.awayTeam, item.awayLogoUrl)) item.awayLogoUrl = "";
+      const homeProfile = chooseClubProfile(profileMap, profileIdMap, item.homeTeam, item.homeClubId);
+      const awayProfile = chooseClubProfile(profileMap, profileIdMap, item.awayTeam, item.awayClubId);
+      item.homeLogoUrl = item.homeLogoUrl || homeProfile?.logoUrl || "";
+      item.awayLogoUrl = item.awayLogoUrl || awayProfile?.logoUrl || "";
+      item.homeClubId = item.homeClubId || homeProfile?.oefbClubId || "";
+      item.awayClubId = item.awayClubId || awayProfile?.oefbClubId || "";
     }
-    uniqueStandings = uniqueStandings.map((item) => ({
-      ...item,
-      teamLogoUrl: item.teamLogoUrl || chooseClubLogo(profileMap, item.clubName),
-    }));
-    const uniqueClubProfiles = [...new Map([...profileMap.values()].map((item) => [item.id, item])).values()];
+    uniqueStandings = uniqueStandings.map((item) => {
+      const profile = chooseClubProfile(profileMap, profileIdMap, item.clubName, item.clubId);
+      return { ...item, clubId: item.clubId || profile?.oefbClubId || "", teamLogoUrl: item.teamLogoUrl || profile?.logoUrl || "" };
+    });
+    const uniqueClubProfiles = [...new Map([...profileIdMap.values(), ...profileMap.values()].map((item) => [item.id, item])).values()]
+      .map((profile) => isInvalidForeignLogo(profile.name, profile.logoUrl) ? { ...profile, logoUrl: "" } : profile);
 
     const matchByGameId = new Map(uniqueMatches.filter((item) => item.gameId).map((item) => [String(item.gameId), item]));
     const reportMap = new Map();

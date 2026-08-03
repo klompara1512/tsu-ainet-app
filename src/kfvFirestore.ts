@@ -247,6 +247,10 @@ export function subscribeKfvMatches(
               typeof data.competitionName === "string" ? data.competitionName : "",
             homeTeam: typeof data.homeTeam === "string" ? data.homeTeam : "",
             awayTeam: typeof data.awayTeam === "string" ? data.awayTeam : "",
+            homeClubId: typeof data.homeClubId === "string" ? data.homeClubId : "",
+            awayClubId: typeof data.awayClubId === "string" ? data.awayClubId : "",
+            homeClubUrl: typeof data.homeClubUrl === "string" ? data.homeClubUrl : "",
+            awayClubUrl: typeof data.awayClubUrl === "string" ? data.awayClubUrl : "",
             homeLogoUrl: typeof data.homeLogoUrl === "string" ? data.homeLogoUrl : "",
             awayLogoUrl: typeof data.awayLogoUrl === "string" ? data.awayLogoUrl : "",
             homeScore: typeof data.homeScore === "number" ? data.homeScore : null,
@@ -301,6 +305,8 @@ export function subscribeKfvStandings(
               typeof data.competitionName === "string" ? data.competitionName : "",
             position: typeof data.position === "number" ? data.position : 999,
             clubName: typeof data.clubName === "string" ? data.clubName : "",
+            clubId: typeof data.clubId === "string" ? data.clubId : "",
+            clubUrl: typeof data.clubUrl === "string" ? data.clubUrl : "",
             teamLogoUrl: typeof data.teamLogoUrl === "string" ? data.teamLogoUrl : "",
             played: typeof data.played === "number" ? data.played : 0,
             won: typeof data.won === "number" ? data.won : 0,
@@ -428,6 +434,9 @@ export function subscribeKfvClubs(
               typeof data.normalizedName === "string" && data.normalizedName.trim()
                 ? data.normalizedName.trim()
                 : normalizeClubName(name),
+            oefbClubId: typeof data.oefbClubId === "string" ? data.oefbClubId.trim() : "",
+            pageUrl: typeof data.pageUrl === "string" ? data.pageUrl.trim() : "",
+            aliases: Array.isArray(data.aliases) ? data.aliases.filter((value): value is string => typeof value === "string") : [],
             logoUrl: typeof data.logoUrl === "string" ? data.logoUrl.trim() : "",
             primaryColor:
               typeof data.primaryColor === "string" ? data.primaryColor : "",
@@ -450,7 +459,11 @@ export function subscribeKfvClubs(
   );
 }
 
-export function findKfvClub(clubs: KfvClub[], teamName: string) {
+export function findKfvClub(clubs: KfvClub[], teamName: string, clubId = "") {
+  if (clubId) {
+    const byId = clubs.find((club) => club.oefbClubId === clubId);
+    if (byId) return byId;
+  }
   const wantedName = normalizeClubName(teamName);
   if (!wantedName) return null;
 
@@ -510,8 +523,9 @@ export function getKfvClubLogo(
   clubs: KfvClub[],
   teamName: string,
   matchLogoUrl = "",
+  clubId = "",
 ) {
-  const club = findKfvClub(clubs, teamName);
+  const club = findKfvClub(clubs, teamName, clubId);
   const clubLogo = club?.logoUrl?.trim() || "";
   const sourceLogo = matchLogoUrl.trim();
 

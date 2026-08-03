@@ -279,7 +279,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
 
           <div className="match-detail-teams premium-match-teams">
             <div className="match-detail-team">
-              <TeamLogo url={selectedMatch.homeLogoUrl} name={selectedMatch.homeTeam} size="large" />
+              <TeamLogo url={selectedMatch.homeLogoUrl} name={selectedMatch.homeTeam} clubId={selectedMatch.homeClubId} size="large" />
               <span className="match-detail-badge">H</span>
               <h2 className={isTsuAinet(selectedMatch.homeTeam) ? "tsu" : ""}>
                 {selectedMatch.homeTeam}
@@ -293,7 +293,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
             </div>
 
             <div className="match-detail-team">
-              <TeamLogo url={selectedMatch.awayLogoUrl} name={selectedMatch.awayTeam} size="large" />
+              <TeamLogo url={selectedMatch.awayLogoUrl} name={selectedMatch.awayTeam} clubId={selectedMatch.awayClubId} size="large" />
               <span className="match-detail-badge match-detail-badge-away">A</span>
               <h2 className={isTsuAinet(selectedMatch.awayTeam) ? "tsu" : ""}>
                 {selectedMatch.awayTeam}
@@ -380,7 +380,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
                       {teamTable.map((row) => (
                         <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
                           <span>{row.position}.</span>
-                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
+                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
                           <strong>{row.clubName}</strong>
                           <b>{row.points}</b>
                         </div>
@@ -483,7 +483,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
                       {teamTable.map((row) => (
                         <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
                           <span>{row.position}.</span>
-                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
+                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
                           <strong>{row.clubName}</strong>
                           <b>{row.points}</b>
                         </div>
@@ -605,7 +605,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
 
                     <div className="kfv-match-main">
                       <div className={`kfv-team-side ${isTsuAinet(match.homeTeam) ? "tsu" : ""}`}>
-                        <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} />
+                        <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} clubId={match.homeClubId} />
                         <strong>{match.homeTeam}</strong>
                       </div>
 
@@ -618,7 +618,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
                       </div>
 
                       <div className={`kfv-team-side ${isTsuAinet(match.awayTeam) ? "tsu" : ""}`}>
-                        <TeamLogo url={match.awayLogoUrl} name={match.awayTeam} />
+                        <TeamLogo url={match.awayLogoUrl} name={match.awayTeam} clubId={match.awayClubId} />
                         <strong>{match.awayTeam}</strong>
                       </div>
                     </div>
@@ -705,7 +705,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
                             <td><span className={`kfv-position kfv-position-${row.position}`}>{row.position}</span></td>
                             <td>
                               <div className="kfv-table-club">
-                                <TeamLogo url={row.teamLogoUrl} name={row.clubName} size="small" />
+                                <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
                                 <span>{row.clubName}</span>
                               </div>
                             </td>

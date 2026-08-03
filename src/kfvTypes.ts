@@ -7,6 +7,10 @@ export type KfvMatch = {
   competitionName: string;
   homeTeam: string;
   awayTeam: string;
+  homeClubId: string;
+  awayClubId: string;
+  homeClubUrl: string;
+  awayClubUrl: string;
   homeLogoUrl: string;
   awayLogoUrl: string;
   homeScore: number | null;
@@ -29,6 +33,8 @@ export type KfvStandingRow = {
   competitionName: string;
   position: number;
   clubName: string;
+  clubId: string;
+  clubUrl: string;
   teamLogoUrl: string;
   played: number;
   won: number;
@@ -60,6 +66,9 @@ export type KfvClub = {
   id: string;
   name: string;
   normalizedName: string;
+  oefbClubId: string;
+  pageUrl: string;
+  aliases: string[];
   logoUrl: string;
   primaryColor: string;
   secondaryColor: string;

@@ -177,6 +177,7 @@ function buildLogoCandidates(
   clubs: KfvClub[],
   teamName: string,
   matchLogoUrl?: string,
+  clubId = "",
 ) {
   if (isTsuAinet(teamName)) return [TSU_AINET_LOGO];
 
@@ -184,7 +185,7 @@ function buildLogoCandidates(
     localClubLogo(teamName),
     // Match-URL wird zentral validiert. So kann das Ainet-Wappen nicht mehr
     // irrtümlich als Gegnerlogo angezeigt werden.
-    getKfvClubLogo(clubs, teamName, typeof matchLogoUrl === "string" ? matchLogoUrl : ""),
+    getKfvClubLogo(clubs, teamName, typeof matchLogoUrl === "string" ? matchLogoUrl : "", clubId),
     CLUB_FALLBACK_LOGO,
   ];
 
@@ -198,15 +199,17 @@ function TeamLogo({
   name,
   src,
   className = "calendar-club-logo",
+  clubId = "",
 }: {
   clubs: KfvClub[];
   name: string;
   src?: string;
   className?: string;
+  clubId?: string;
 }) {
   const candidates = useMemo(
-    () => buildLogoCandidates(clubs, name, src),
-    [clubs, name, src],
+    () => buildLogoCandidates(clubs, name, src, clubId),
+    [clubs, name, src, clubId],
   );
   const [candidateIndex, setCandidateIndex] = useState(0);
 
@@ -334,9 +337,9 @@ function Kalender() {
         onClick={() => setSelectedMatch(match)}
       >
         <div className="calendar-card-logos">
-          <TeamLogo clubs={clubs} name={match.homeTeam} src={match.homeLogoUrl} />
+          <TeamLogo clubs={clubs} name={match.homeTeam} src={match.homeLogoUrl} clubId={match.homeClubId} />
           <span>{score || "VS"}</span>
-          <TeamLogo clubs={clubs} name={match.awayTeam} src={match.awayLogoUrl} />
+          <TeamLogo clubs={clubs} name={match.awayTeam} src={match.awayLogoUrl} clubId={match.awayClubId} />
         </div>
         <div className="calendar-agenda-content">
           <div className="calendar-agenda-topline">
@@ -485,7 +488,7 @@ function Kalender() {
 
             <section className="match-center-scoreboard">
               <div className="match-center-club">
-                <TeamLogo clubs={clubs} name={selectedMatch.homeTeam} src={selectedMatch.homeLogoUrl} className="match-center-logo" />
+                <TeamLogo clubs={clubs} name={selectedMatch.homeTeam} src={selectedMatch.homeLogoUrl} clubId={selectedMatch.homeClubId} className="match-center-logo" />
                 <strong>{selectedMatch.homeTeam}</strong>
                 <small>Heim</small>
               </div>
@@ -497,7 +500,7 @@ function Kalender() {
               </div>
 
               <div className="match-center-club">
-                <TeamLogo clubs={clubs} name={selectedMatch.awayTeam} src={selectedMatch.awayLogoUrl} className="match-center-logo" />
+                <TeamLogo clubs={clubs} name={selectedMatch.awayTeam} src={selectedMatch.awayLogoUrl} clubId={selectedMatch.awayClubId} className="match-center-logo" />
                 <strong>{selectedMatch.awayTeam}</strong>
                 <small>Auswärts</small>
               </div>

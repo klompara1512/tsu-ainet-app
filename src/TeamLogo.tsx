@@ -14,6 +14,7 @@ type Props = {
   name: string;
   size?: TeamLogoSize;
   className?: string;
+  clubId?: string;
 };
 
 let cachedClubs: KfvClub[] = [];
@@ -63,7 +64,7 @@ function localLogoFor(name: string) {
   return localLogos[normalized] || "";
 }
 
-function TeamLogo({ url = "", name, size = "normal", className = "" }: Props) {
+function TeamLogo({ url = "", name, size = "normal", className = "", clubId = "" }: Props) {
   const clubs = useSyncExternalStore(
     subscribeClubStore,
     getClubSnapshot,
@@ -75,11 +76,11 @@ function TeamLogo({ url = "", name, size = "normal", className = "" }: Props) {
       localLogoFor(name),
       // Die zentrale Funktion prüft zusätzlich, ob bei einem Gegner irrtümlich
       // das TSU-Ainet-Wappen gespeichert wurde.
-      getKfvClubLogo(clubs, name, url),
+      getKfvClubLogo(clubs, name, url, clubId),
     ].filter(Boolean);
 
     return values.filter((value, index) => values.indexOf(value) === index);
-  }, [clubs, name, url]);
+  }, [clubs, name, url, clubId]);
 
   const [candidateIndex, setCandidateIndex] = useState(0);
 

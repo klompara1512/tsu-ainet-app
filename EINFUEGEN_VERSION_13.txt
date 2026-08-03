@@ -1,0 +1,11 @@
+TSU AINET APP – VERSION 13.0.0
+
+1. ZIP entpacken.
+2. Gesamten Inhalt in den bestehenden Projektordner kopieren.
+3. Vorhandene Dateien ersetzen.
+4. In VS Code: npm install
+5. Änderungen committen und mit GitHub synchronisieren.
+6. GitHub > Actions > KFV / ÖFB Daten synchronisieren > Run workflow.
+7. Nach grünem Abschluss App mit Strg+F5 neu laden.
+
+Hinweis: Beim ersten Lauf baut Version 13 die zentrale Vereins-ID-Datenbank neu auf.

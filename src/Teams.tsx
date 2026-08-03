@@ -481,9 +481,9 @@ function Teams() {
             {nextMatch ? (
               <>
                 <div className="team-next-match-clubs">
-                  <div><TeamLogo name={nextMatch.homeTeam} url={nextMatch.homeLogoUrl} size="large" /><strong>{nextMatch.homeTeam}</strong></div>
+                  <div><TeamLogo name={nextMatch.homeTeam} url={nextMatch.homeLogoUrl} clubId={nextMatch.homeClubId} size="large" /><strong>{nextMatch.homeTeam}</strong></div>
                   <span>VS</span>
-                  <div><TeamLogo name={nextMatch.awayTeam} url={nextMatch.awayLogoUrl} size="large" /><strong>{nextMatch.awayTeam}</strong></div>
+                  <div><TeamLogo name={nextMatch.awayTeam} url={nextMatch.awayLogoUrl} clubId={nextMatch.awayClubId} size="large" /><strong>{nextMatch.awayTeam}</strong></div>
                 </div>
                 <p>{nextMatch.venue || (isTsuAinet(nextMatch.homeTeam) ? "Sandgrubenstadion Ainet" : "Auswärtsspiel")}</p>
                 {nextMatch.reportUrl && <a href={nextMatch.reportUrl} target="_blank" rel="noreferrer">Zum Spielcenter</a>}
@@ -557,7 +557,7 @@ function Teams() {
               <div className="team-table-preview">
                 {teamStandings.slice(0, 5).map((row) => (
                   <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
-                    <span>{row.position}</span><TeamLogo name={row.clubName} url={row.teamLogoUrl} size="small" /><strong>{row.clubName}</strong><b>{row.points}</b>
+                    <span>{row.position}</span><TeamLogo name={row.clubName} url={row.teamLogoUrl} clubId={row.clubId} size="small" /><strong>{row.clubName}</strong><b>{row.points}</b>
                   </div>
                 ))}
               </div>

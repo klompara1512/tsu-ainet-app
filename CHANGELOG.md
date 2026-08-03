@@ -172,3 +172,10 @@
 
 ## 11.2.2
 - Smart Sync Optimizer und Tabellenparser-Fix.
+
+## 13.0.0 – Vereins-ID-Architektur
+- Vereinslogos werden primär über KFV-/ÖFB-Vereinskennungen zugeordnet.
+- Spiele und Tabellen speichern Vereins-ID und Vereinsseite.
+- Zentrale `kfvClubs`-Datenbank mit Aliasen und stabilen IDs.
+- Alte falsche Ainet-Logos bei Gegnern werden beim Sync bereinigt.
+- Namensvergleich bleibt nur als Fallback erhalten.

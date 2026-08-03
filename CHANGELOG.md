@@ -1,3 +1,12 @@
+# Changelog
+
+## 11.2.2 Sprint 1 – Sync-Zeitfenster
+
+- Automatischer Sync auf 08:00–22:00 Uhr Europe/Vienna begrenzt.
+- Manueller Sync bleibt rund um die Uhr möglich.
+- Dublettenbereinigung nur noch täglich um 08:00 Uhr oder bei manueller Auswahl.
+- Workflow-Zusammenfassung um lokale Zeit und Dedup-Modus ergänzt.
+
 # 11.2.1 – Spielplan- und Logo-Stabilisierung
 
 - Unvollständig geladene ÖFB-Seiten deaktivieren keine bereits bekannten Spiele mehr.

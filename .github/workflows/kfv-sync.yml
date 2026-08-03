@@ -2,8 +2,16 @@ name: ÖFB-Daten automatisch synchronisieren
 
 on:
   schedule:
+    # GitHub-Cron läuft in UTC. Der Workflow startet weiterhin alle 30 Minuten,
+    # die eigentliche Ausführung wird unten zuverlässig nach Europe/Vienna begrenzt.
     - cron: "*/30 * * * *"
   workflow_dispatch:
+    inputs:
+      run_dedup:
+        description: "Dublettenbereinigung bei diesem manuellen Lauf ausführen"
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,16 +29,66 @@ jobs:
       TZ: Europe/Vienna
 
     steps:
+      - name: Zeitfenster und Laufmodus bestimmen
+        id: schedule_gate
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_DEDUP: ${{ inputs.run_dedup || 'false' }}
+        run: |
+          LOCAL_TIME="$(TZ=Europe/Vienna date +'%H:%M')"
+          LOCAL_DATE="$(TZ=Europe/Vienna date +'%Y-%m-%d')"
+          LOCAL_HOUR="$(TZ=Europe/Vienna date +'%H')"
+          LOCAL_MINUTE="$(TZ=Europe/Vienna date +'%M')"
+
+          SHOULD_RUN="false"
+          RUN_DEDUP="false"
+
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            SHOULD_RUN="true"
+            RUN_DEDUP="$MANUAL_DEDUP"
+          else
+            # Automatische Synchronisierung nur von 08:00 bis einschließlich 22:00 Uhr.
+            if [ "$LOCAL_HOUR" -gt 8 ] && [ "$LOCAL_HOUR" -lt 22 ]; then
+              SHOULD_RUN="true"
+            elif [ "$LOCAL_HOUR" -eq 8 ]; then
+              SHOULD_RUN="true"
+            elif [ "$LOCAL_HOUR" -eq 22 ] && [ "$LOCAL_MINUTE" -eq 00 ]; then
+              SHOULD_RUN="true"
+            fi
+
+            # Die tägliche Dublettenbereinigung läuft nur beim automatischen 08:00-Lauf.
+            if [ "$LOCAL_HOUR" -eq 8 ] && [ "$LOCAL_MINUTE" -eq 00 ]; then
+              RUN_DEDUP="true"
+            fi
+          fi
+
+          echo "local_time=$LOCAL_TIME" >> "$GITHUB_OUTPUT"
+          echo "local_date=$LOCAL_DATE" >> "$GITHUB_OUTPUT"
+          echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
+          echo "run_dedup=$RUN_DEDUP" >> "$GITHUB_OUTPUT"
+
+          echo "Lokale Zeit: $LOCAL_DATE $LOCAL_TIME (Europe/Vienna)"
+          echo "Sync ausführen: $SHOULD_RUN"
+          echo "Dublettenbereinigung: $RUN_DEDUP"
+
+      - name: Außerhalb des Sync-Zeitfensters
+        if: steps.schedule_gate.outputs.should_run != 'true'
+        run: echo "Automatischer Sync außerhalb 08:00–22:00 Uhr übersprungen."
+
       - name: Projekt laden
+        if: steps.schedule_gate.outputs.should_run == 'true'
         uses: actions/checkout@v4
 
       - name: Node.js einrichten
+        if: steps.schedule_gate.outputs.should_run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
       - name: Firebase-Zugang prüfen
+        if: steps.schedule_gate.outputs.should_run == 'true'
         shell: bash
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -41,16 +99,22 @@ jobs:
           fi
 
       - name: Sync-Abhängigkeiten installieren
+        if: steps.schedule_gate.outputs.should_run == 'true'
         run: npm install --no-save --no-audit --no-fund firebase-admin@13.10.0 cheerio@1.2.0 puppeteer@24.43.1
 
       - name: Projekt und Parser prüfen
+        if: steps.schedule_gate.outputs.should_run == 'true'
         run: npm run sync:check
 
       - name: ÖFB-Daten synchronisieren
+        if: steps.schedule_gate.outputs.should_run == 'true'
         id: sync
         env:
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
           NODE_ENV: production
+          RUN_DEDUP: ${{ steps.schedule_gate.outputs.run_dedup }}
+          SYNC_LOCAL_TIME: ${{ steps.schedule_gate.outputs.local_time }}
+          SYNC_LOCAL_DATE: ${{ steps.schedule_gate.outputs.local_date }}
         shell: bash
         run: |
           set -o pipefail
@@ -62,7 +126,12 @@ jobs:
         run: |
           echo "## TSU Ainet ÖFB-Synchronisierung" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
-          if [ -f sync-output.log ]; then
+          echo "Lokale Zeit: ${{ steps.schedule_gate.outputs.local_date }} ${{ steps.schedule_gate.outputs.local_time }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Dublettenbereinigung: ${{ steps.schedule_gate.outputs.run_dedup }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          if [ "${{ steps.schedule_gate.outputs.should_run }}" != "true" ]; then
+            echo "Automatischer Lauf außerhalb 08:00–22:00 Uhr übersprungen." >> "$GITHUB_STEP_SUMMARY"
+          elif [ -f sync-output.log ]; then
             echo '```text' >> "$GITHUB_STEP_SUMMARY"
             tail -n 40 sync-output.log >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -71,7 +140,7 @@ jobs:
           fi
 
       - name: Sync-Protokoll speichern
-        if: always()
+        if: always() && steps.schedule_gate.outputs.should_run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: oefb-sync-log-${{ github.run_number }}

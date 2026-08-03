@@ -53,7 +53,7 @@ const START_URLS = [TEAM_DIRECTORY_URL, ...SQUAD_URLS, ...CLUB_SEED_URLS, ...TEA
 ]))];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 40;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "11.1.3.1-squad-warning-fix";
+const PARSER_VERSION = "11.2.2-sprint1-sync-window";
 
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
@@ -2007,7 +2007,13 @@ async function main() {
     if (uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
-    const duplicateDocumentsDeactivated = await cleanupExistingMatchDuplicates(runId);
+    const runDuplicateCleanup = String(process.env.RUN_DEDUP || "false").toLowerCase() === "true";
+    const duplicateDocumentsDeactivated = runDuplicateCleanup
+      ? await cleanupExistingMatchDuplicates(runId)
+      : 0;
+    if (!runDuplicateCleanup) {
+      console.log("Dublettenbereinigung: heute bereits erledigt bzw. für diesen Lauf übersprungen.");
+    }
     // Spiele werden bei einem teilweise geladenen ÖFB-Spielplan nicht deaktiviert.
     // Echte Dubletten wurden bereits durch cleanupExistingMatchDuplicates bereinigt.
     const deactivatedMatches = 0;
@@ -2035,6 +2041,9 @@ async function main() {
       updatedMatchCount,
       duplicateMatchesRemoved,
       duplicateDocumentsDeactivated,
+      duplicateCleanupExecuted: runDuplicateCleanup,
+      syncLocalTime: process.env.SYNC_LOCAL_TIME || "",
+      syncLocalDate: process.env.SYNC_LOCAL_DATE || "",
       matchIdentityVersion: "11.0.1",
       finishedMatchCount: uniqueMatches.filter((item) => item.status === "finished").length,
       scheduledMatchCount: uniqueMatches.filter((item) => item.status === "scheduled").length,
@@ -2068,11 +2077,12 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 11.2.1 =====");
+    console.log("===== TSU Ainet ÖFB-Sync 11.2.2 Sprint 1 =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);
     console.log(`Aktualisierte Spiele: ${updatedMatchCount}`);
+    console.log(`Dublettenbereinigung ausgeführt: ${runDuplicateCleanup ? "ja" : "nein"}`);
     console.log(`Alte Firestore-Dubletten deaktiviert: ${duplicateDocumentsDeactivated}`);
     console.log(`  Geplant: ${matchStatusCounts.scheduled || 0}`);
     console.log(`  Beendet/Endstand: ${matchStatusCounts.finished || 0}`);

@@ -1,0 +1,42 @@
+name: KFV / ÖFB Vereinsdaten synchronisieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "20 2 * * *"
+
+concurrency:
+  group: kfv-oefb-club-sync
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      CLUB_SYNC_CONCURRENCY: "3"
+      MAX_CLUB_PAGES: "80"
+
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Projekt und Club-Sync prüfen
+        run: npm run sync:check
+
+      - name: Vereinslogos und Vereinsdaten synchronisieren
+        run: npm run sync:clubs

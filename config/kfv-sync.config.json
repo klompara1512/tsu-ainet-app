@@ -107,8 +107,8 @@
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
   ],
-  "syncArchitecture": "v14-phase1-core-sync",
-  "version": "14.0.0",
+  "syncArchitecture": "v14-phase2-club-sync",
+  "version": "14.1.0",
   "requiredTeams": [
     "KM",
     "CHALLENGE",

@@ -45,7 +45,9 @@ const SEASON_SLUG = SYNC_CONFIG.season;
 const ACTIVE_TEAMS = TEAM_PAGES.filter((team) => team.enabled !== false);
 const TEAM_SYNC_SOURCES = ACTIVE_TEAMS.flatMap((team) => [
   { teamKey: team.key, teamName: team.name, kind: "games", url: team.gamesUrl },
-  { teamKey: team.key, teamName: team.name, kind: "table", url: team.tableUrl },
+  ...(Array.isArray(team.tableUrls) && team.tableUrls.length ? team.tableUrls : [team.tableUrl])
+    .filter(Boolean)
+    .map((url, sourcePriority) => ({ teamKey: team.key, teamName: team.name, kind: "table", url, sourcePriority })),
 ]).filter((entry) => entry.url);
 const SQUAD_URLS = ACTIVE_TEAMS.map((team) => team.squadUrl).filter(Boolean);
 const SQUAD_URL = SQUAD_URLS[0] || `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/KM/Kader/`;
@@ -64,7 +66,7 @@ const START_URLS = [
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "13.0.0-club-id-architecture";
+const PARSER_VERSION = "13.2.0-responsive-tables";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -110,7 +112,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "13.0.0";
+const DATASET_VERSION = "13.1.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -1202,9 +1204,13 @@ function parseTables($, matches, standings, sourceUrl, title) {
         const scoreCell = cells.find((cell) => /^\d+\s*:\s*\d+$/.test(cell));
         const [goalsFor, goalsAgainst] = parseScore(scoreCell || "");
         const numeric = cells.slice(clubIndex + 1).map(parseNumber).filter((n) => n !== null);
+        const clubCell = $(cellNodes[clubIndex]);
+        const clubHref = clubCell.find("a[href]").first().attr("href") || $(row).find("a[href*='/Verein/'], a[href*='vereine.oefb.at']").first().attr("href") || "";
         addStanding(standings, {
           position, clubName: cells[clubIndex],
-          teamLogoUrl: $(cellNodes[clubIndex]).find("img").first().attr("src") || $(cellNodes[clubIndex]).find("img").first().attr("data-src") || "",
+          clubUrl: clubHref,
+          clubId: extractClubIdentity(clubHref, cells[clubIndex]).clubId,
+          teamLogoUrl: clubCell.find("img").first().attr("src") || clubCell.find("img").first().attr("data-src") || "",
           played: numeric[0], won: numeric[1], drawn: numeric[2], lost: numeric[3],
           goalsFor, goalsAgainst, goalDifference: goalsFor !== null && goalsAgainst !== null ? goalsFor - goalsAgainst : null,
           points: numeric.at(-1), competitionName: title, teamName: teamFromText(`${title} ${tableText.slice(0, 400)}`),
@@ -1570,7 +1576,7 @@ async function collectWithBrowser(startUrls) {
         }
 
         const standings = [];
-        const isOfficialTablePage = /\/Tabellen\/?$/i.test(location.pathname);
+        const isOfficialTablePage = /\/Tabellen\/?$/i.test(location.pathname) || /kfv-fussball\.at$/i.test(location.hostname);
         for (const table of Array.from(document.querySelectorAll("table"))) {
           if (!isOfficialTablePage) continue;
           const headers = Array.from(table.querySelectorAll("th")).map((x) => compact(x.textContent).toLowerCase());
@@ -1601,6 +1607,90 @@ async function collectWithBrowser(startUrls) {
             if (Number.isFinite(standing.played) && standing.played === standing.won + standing.drawn + standing.lost && Number.isFinite(standing.goalsFor) && Number.isFinite(standing.goalsAgainst) && standing.points <= standing.played * 3 + 3 && !(standing.played > 0 && standing.goalsFor === 0 && standing.goalsAgainst === 0)) standings.push(standing);
           }
         }
+        // Version 13.2: ÖFB/KFV rendert Tabellen je nach Bildschirmbreite und
+        // Plattform auch als responsive DIV-/ARIA-Zeilen statt als echtes <table>.
+        // Diese zweite Stufe liest solche sichtbaren Tabellenzeilen aus.
+        if (isOfficialTablePage && standings.length === 0) {
+          const rowSelectors = [
+            '[role="row"]',
+            '[class*="table-row"]', '[class*="tableRow"]',
+            '[class*="standing-row"]', '[class*="standingRow"]',
+            '[class*="ranking-row"]', '[class*="rankingRow"]',
+            '[class*="table__row"]', '[class*="standings__row"]',
+            'li'
+          ];
+          const rowCandidates = Array.from(document.querySelectorAll(rowSelectors.join(',')));
+          const seenStandingRows = new Set();
+          const parseInteger = (value) => /^-?\d+$/.test(compact(value)) ? Number(compact(value)) : NaN;
+          const isLabel = (value) => /^(?:sp|spiele|gespielt|s|siege|u|unentschieden|n|niederlagen|tore|tv|diff|punkte|pkt|pts)$/i.test(compact(value));
+
+          for (const row of rowCandidates) {
+            const rowText = compact(row.innerText || row.textContent);
+            if (!rowText || rowText.length > 280) continue;
+            const rankMatch = rowText.match(/^\s*(\d{1,2})[.)]?\s+/);
+            if (!rankMatch) continue;
+
+            let values = Array.from(row.querySelectorAll(':scope > *, [role="cell"], [role="gridcell"]'))
+              .map((node) => compact(node.innerText || node.textContent))
+              .filter((value, index, list) => value && !isLabel(value) && list.indexOf(value) === index);
+            if (values.length < 3) values = rowText.split(/\s{2,}|\t+/).map(compact).filter(Boolean);
+
+            const position = Number(rankMatch[1]);
+            let clubName = '';
+            let clubNode = null;
+            for (const node of Array.from(row.querySelectorAll('a, [class*="team"], [class*="club"], [class*="verein"], strong, b, span, div'))) {
+              const value = compact(node.innerText || node.textContent);
+              if (value.length < 2 || value.length > 90 || !/[A-Za-zÄÖÜäöü]/.test(value) || isLabel(value)) continue;
+              if (/^(?:platz|rang|tabelle|gesamt|heim|auswärts|form)$/i.test(value)) continue;
+              clubName = value;
+              clubNode = node;
+              if (/ainet|sv|tsu|askö|union|fc|sg|spg|usc|usv/i.test(value)) break;
+            }
+            if (!clubName) {
+              clubName = values.find((value) => /[A-Za-zÄÖÜäöü]/.test(value) && !/^\d/.test(value) && !isLabel(value)) || '';
+            }
+            clubName = compact(clubName).replace(/^\d{1,2}[.)]?\s*/, '');
+            if (!clubName || clubName.length > 100) continue;
+
+            const goalsMatch = rowText.match(/(?:^|\s)(\d{1,3})\s*[:\-]\s*(\d{1,3})(?:\s|$)/);
+            const allNumbers = rowText.match(/-?\d+/g)?.map(Number) || [];
+            if (allNumbers.length < 5) continue;
+            // Position ist die erste Zahl. Torzahlen werden separat behandelt.
+            const afterRank = allNumbers.slice(1);
+            let played, won, drawn, lost, points;
+            if (afterRank.length >= 7) {
+              played = afterRank[0]; won = afterRank[1]; drawn = afterRank[2]; lost = afterRank[3]; points = afterRank.at(-1);
+            } else if (afterRank.length >= 5) {
+              played = afterRank[0]; won = afterRank[1]; drawn = afterRank[2]; lost = afterRank[3]; points = afterRank.at(-1);
+            } else continue;
+
+            const goalsFor = goalsMatch ? Number(goalsMatch[1]) : 0;
+            const goalsAgainst = goalsMatch ? Number(goalsMatch[2]) : 0;
+            if (![played, won, drawn, lost, points].every(Number.isFinite)) continue;
+            if (played !== won + drawn + lost) continue;
+            if (points < 0 || points > played * 3 + 3) continue;
+
+            const clubAnchor = clubNode?.closest?.('a[href]') || clubNode?.querySelector?.('a[href]') || row.querySelector('a[href*="/Verein/"], a[href*="vereine.oefb.at"]');
+            const clubUrl = clubAnchor?.href || '';
+            const clubKfvId = clubUrl.match(/\/Verein\/(\d+)/i)?.[1] || '';
+            const clubOefbSlug = (() => { try { const u = new URL(clubUrl); return /vereine\.oefb\.at$/i.test(u.hostname) ? u.pathname.split('/').filter(Boolean)[0] || '' : ''; } catch { return ''; } })();
+            const logo = row.querySelector('img');
+            const logoRaw = logo?.currentSrc || logo?.getAttribute('src') || logo?.getAttribute('data-src') || logo?.getAttribute('data-lazy-src') || '';
+            let teamLogoUrl = '';
+            try { teamLogoUrl = logoRaw ? new URL(logoRaw, location.href).href : ''; } catch { teamLogoUrl = ''; }
+            const signature = `${position}|${clubName.toLowerCase()}|${played}|${points}`;
+            if (seenStandingRows.has(signature)) continue;
+            seenStandingRows.add(signature);
+            standings.push({
+              position, clubName, clubUrl,
+              clubId: clubKfvId ? `kfv:${clubKfvId}` : (clubOefbSlug ? `oefb:${clubOefbSlug.toLowerCase()}` : ''),
+              teamLogoUrl, played, won, drawn, lost, goalsFor, goalsAgainst,
+              goalDifference: goalsFor - goalsAgainst, points,
+              competitionName: compact(document.querySelector('h1')?.textContent || document.title || 'ÖFB')
+            });
+          }
+        }
+
         const absoluteImage = (raw) => {
           try { return raw ? new URL(raw, location.href).href : ""; } catch { return ""; }
         };
@@ -2135,7 +2225,8 @@ async function main() {
         const uniquePositions = new Set(positions).size === group.length;
         const containsAinet = group.some((row) => /\bainet\b/i.test(row.clubName));
         const plausibleRange = positions[0] === 1 && positions.at(-1) <= 30;
-        const reliable = group.length >= 4 && uniquePositions && containsAinet && plausibleRange;
+        const contiguousPositions = positions.every((position, index) => position === positions[0] + index);
+        const reliable = group.length >= 2 && uniquePositions && contiguousPositions && containsAinet && plausibleRange;
         if (reliable) reliableStandingTeams.add(group[0].teamKey);
         return reliable;
       })

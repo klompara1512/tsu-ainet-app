@@ -16,8 +16,12 @@
       "enabled": true,
       "primarySlug": "KM",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele",
-      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Tabellen",
-      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Kader/"
+      "tableUrl": "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet#mannschaften",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Kader/",
+      "tableUrls": [
+        "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet#mannschaften",
+        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Tabellen"
+      ]
     },
     {
       "key": "CHALLENGE",
@@ -33,7 +37,10 @@
       "primarySlug": "Res",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Spiele",
       "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Tabellen",
-      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Kader/"
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Kader/",
+      "tableUrls": [
+        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/Res/Tabellen"
+      ]
     },
     {
       "key": "U17",
@@ -46,7 +53,10 @@
       "primarySlug": "U17",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Spiele",
       "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Tabellen",
-      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Kader/"
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Kader/",
+      "tableUrls": [
+        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U17/Tabellen"
+      ]
     },
     {
       "key": "U12",
@@ -59,7 +69,10 @@
       "primarySlug": "U12",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Spiele",
       "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Tabellen",
-      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Kader/"
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Kader/",
+      "tableUrls": [
+        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Tabellen"
+      ]
     },
     {
       "key": "U10",
@@ -72,7 +85,10 @@
       "primarySlug": "U10",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Spiele",
       "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Tabellen",
-      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Kader/"
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Kader/",
+      "tableUrls": [
+        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Tabellen"
+      ]
     },
     {
       "key": "U08",
@@ -89,6 +105,14 @@
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
   ],
-  "syncArchitecture": "v13-club-id-architecture",
-  "version": "13.0.0"
+  "syncArchitecture": "v13.2-responsive-table-parser",
+  "version": "13.2.0",
+  "requiredTeams": [
+    "KM",
+    "CHALLENGE",
+    "U17",
+    "U12",
+    "U10"
+  ],
+  "officialProvider": "KFV / ÖFB Netzwerk"
 }

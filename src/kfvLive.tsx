@@ -111,19 +111,24 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
   }, [selectedMatch?.id]);
 
   const teams = useMemo(() => {
-    const map = new Map<string, string>();
+    const fixedTeams = [
+      { id: "kampfmannschaft", name: "Kampfmannschaft", order: 1 },
+      { id: "challenge", name: "Challenge", order: 2 },
+      { id: "u17", name: "U17", order: 3 },
+      { id: "u12", name: "U12", order: 4 },
+      { id: "u10", name: "U10", order: 5 },
+    ];
+    const map = new Map(fixedTeams.map((team) => [team.id, team]));
 
     matches.forEach((match) => {
-      if (match.teamId) map.set(match.teamId, match.teamName);
+      if (match.teamId) map.set(match.teamId, { id: match.teamId, name: match.teamName, order: map.get(match.teamId)?.order ?? 99 });
     });
 
     standings.forEach((row) => {
-      if (row.teamId) map.set(row.teamId, row.teamName);
+      if (row.teamId) map.set(row.teamId, { id: row.teamId, name: row.teamName, order: map.get(row.teamId)?.order ?? 99 });
     });
 
-    return Array.from(map.entries())
-      .map(([id, name]) => ({ id, name }))
-      .sort((a, b) => a.name.localeCompare(b.name, "de-AT"));
+    return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "de-AT"));
   }, [matches, standings]);
 
   const visibleMatches = useMemo(() => {

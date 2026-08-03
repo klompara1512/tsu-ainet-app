@@ -66,7 +66,7 @@ const START_URLS = [
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "13.3.0-official-squad-pages";
+const PARSER_VERSION = "13.3.2-official-data-recovery";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -112,7 +112,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "13.3.0";
+const DATASET_VERSION = "13.3.2";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -138,7 +138,9 @@ function safeUrl(raw, base = DEFAULT_SOURCE) {
   if (url.protocol !== "https:" || !allowedHost) {
     throw new Error("Nur öffentliche ÖFB-/KFV-HTTPS-URLs sind erlaubt.");
   }
-  url.hash = "";
+  if (!(url.hostname.endsWith("kfv-fussball.at") && /^#mannschaften$/i.test(url.hash))) {
+    url.hash = "";
+  }
   return url.toString();
 }
 
@@ -1343,10 +1345,14 @@ function importBrowserSnapshot(snapshot, matches, standings, squad, sourceUrl) {
     addSquadPlayer(squad, player, sourceUrl);
   }
   for (const row of snapshot.standings || []) {
+    const configuredTeam = teamFromUrl(sourceUrl) || (() => {
+      const descriptor = sourceDescriptor(sourceUrl);
+      return descriptor.teamKey ? { teamKey: descriptor.teamKey, teamName: descriptor.teamName } : null;
+    })() || { teamKey: "KM", teamName: "Kampfmannschaft" };
     addStanding(standings, {
       ...row,
-      teamName: teamFromUrl(sourceUrl).teamName,
-      teamKey: teamFromUrl(sourceUrl).teamKey,
+      teamName: configuredTeam.teamName,
+      teamKey: configuredTeam.teamKey,
     }, sourceUrl);
   }
 }
@@ -1450,6 +1456,19 @@ async function collectWithBrowser(startUrls) {
           }
         } catch { /* ignore */ }
       }
+
+      // Dynamische ÖFB-Inhalte werden häufig erst beim Scrollen nachgeladen.
+      try {
+        await page.evaluate(async () => {
+          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          for (let y = 0; y < document.body.scrollHeight; y += 700) {
+            window.scrollTo(0, y);
+            await delay(120);
+          }
+          window.scrollTo(0, 0);
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1800));
+      } catch { /* ignore */ }
 
       // Mannschafts-Links direkt aus der offiziellen Vereinsseite übernehmen.
       // So funktionieren auch abweichende ÖFB-Slugs wie U12-A oder Challenge.
@@ -1730,7 +1749,7 @@ async function collectWithBrowser(startUrls) {
           if (name && candidates[0]?.url) clubProfiles.push({ name, logoUrl: candidates[0].url, pageUrl: location.href, clubId: pageClubMatch?.[1] ? `kfv:${pageClubMatch[1]}` : (pageOefbSlug ? `oefb:${pageOefbSlug.toLowerCase()}` : "") });
         }
         const squad = [];
-        const isSquadPage = /\/Mannschaften\/Saison-\d{4}-\d{2}\/(?:KM|Res|U17|U12|U10|U08)\/Kader\/?$/i.test(location.pathname);
+        const isSquadPage = /\/Mannschaften\/Saison-\d{4}-\d{2}\/[^/]+\/Kader\/?$/i.test(location.pathname);
         if (isSquadPage) {
           const squadSeen = new Set();
           const compactName = (value) => compact(value)

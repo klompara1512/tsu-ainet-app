@@ -16,11 +16,11 @@
       "enabled": true,
       "primarySlug": "KM",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Spiele",
-      "tableUrl": "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet#mannschaften",
+      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Tabellen",
       "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Kader/",
       "tableUrls": [
-        "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet#mannschaften",
-        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Tabellen"
+        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/KM/Tabellen",
+        "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet#mannschaften"
       ]
     },
     {
@@ -107,8 +107,8 @@
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
   ],
-  "syncArchitecture": "v13.3.1-official-source-sync",
-  "version": "13.3.1",
+  "syncArchitecture": "v13.3.2-official-data-recovery",
+  "version": "13.3.2",
   "requiredTeams": [
     "KM",
     "CHALLENGE",

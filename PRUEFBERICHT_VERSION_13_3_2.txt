@@ -1,0 +1,23 @@
+TSU AINET APP – PRÜFBERICHT VERSION 13.3.2
+
+Gefundene Hauptfehler:
+1. Die Funktion safeUrl entfernte den KFV-Fragmentlink #mannschaften.
+2. importBrowserSnapshot griff bei einer KFV-Seite auf teamFromUrl(...).teamName zu, obwohl teamFromUrl dort null liefert.
+3. Dynamische ÖFB-Inhalte wurden vor vollständigem Lazy-Loading ausgewertet.
+4. Die Kadererkennung war unnötig auf eine feste Liste von Slugs begrenzt.
+5. Die KM-Tabelle nutzte zuerst die weniger stabile KFV-Vereinsseite statt der direkten offiziellen ÖFB-Tabellenseite.
+
+Behoben in:
+- scripts/kfv-sync.cjs
+- config/kfv-sync.config.json
+- package.json
+- package-lock.json
+
+Nach dem Hochladen:
+GitHub > Actions > KFV / ÖFB Daten synchronisieren > Run workflow
+Danach in Firestore settings/kfvSyncStatus prüfen:
+- success = true
+- standingCount > 0
+- squadCount > 0
+- clubCount > 0
+- pageDiagnostics enthält die besuchten Quellen

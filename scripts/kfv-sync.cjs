@@ -62,11 +62,11 @@ const START_URLS = [
   // vieler Gegner zuverlässig verfügbar. In V12.0 waren diese URLs konfiguriert,
   // wurden aber nie besucht.
   ...CLUB_SEED_URLS,
-  ...(RUN_DAILY_TASKS ? SQUAD_URLS : []),
+  ...SQUAD_URLS,
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "13.2.0-responsive-tables";
+const PARSER_VERSION = "13.3.0-official-squad-pages";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -112,7 +112,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "13.1.0";
+const DATASET_VERSION = "13.3.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -585,6 +585,10 @@ function addSquadPlayer(target, data, sourceUrl) {
     position,
     imageUrl: safeImageUrl(data.imageUrl, sourceUrl),
     profileUrl,
+    oefbPlayerId: oneLine(data.oefbPlayerId) || (profileUrl.match(/(?:Spieler|Player|Person)\/?(?:Detail\/?)?(\d{4,})/i)?.[1] || profileUrl.match(/[?&](?::p|p|playerId|personId)=(\d+)/i)?.[1] || ""),
+    birthDate: oneLine(data.birthDate),
+    birthYear: Number.isInteger(parseNumber(data.birthYear)) ? parseNumber(data.birthYear) : null,
+    role: oneLine(data.role) || "Spieler",
     active: true,
     source: "oefb-public",
     sourceUrl,
@@ -1726,30 +1730,75 @@ async function collectWithBrowser(startUrls) {
           if (name && candidates[0]?.url) clubProfiles.push({ name, logoUrl: candidates[0].url, pageUrl: location.href, clubId: pageClubMatch?.[1] ? `kfv:${pageClubMatch[1]}` : (pageOefbSlug ? `oefb:${pageOefbSlug.toLowerCase()}` : "") });
         }
         const squad = [];
-        if (/\/Mannschaften\/Saison-\d{4}-\d{2}\/KM\/Kader\/?$/i.test(location.pathname)) {
-          const playerLinks = Array.from(document.querySelectorAll("a[href]"))
-            .filter((anchor) => /spieler|player|person/i.test(anchor.href));
+        const isSquadPage = /\/Mannschaften\/Saison-\d{4}-\d{2}\/(?:KM|Res|U17|U12|U10|U08)\/Kader\/?$/i.test(location.pathname);
+        if (isSquadPage) {
           const squadSeen = new Set();
-          for (const anchor of playerLinks) {
-            const card = anchor.closest("article, li, [class*='player'], [class*='spieler'], [class*='squad'], [class*='kader'], .card, div") || anchor;
-            const text = compact(card.innerText || card.textContent);
-            const heading = compact(
-              card.querySelector("h2,h3,h4,[class*='name'],[class*='player-name'],[class*='spieler-name']")?.textContent ||
-              anchor.textContent
-            );
-            const name = heading.replace(/^\d{1,2}\s+/, "").trim();
-            if (!name || name.length < 3 || name.length > 90 || squadSeen.has(name.toLowerCase())) continue;
-            const numberMatch = text.match(/(?:^|\s)(\d{1,2})(?:\s|$)/);
-            const positionMatch = text.match(/\b(Tor(?:wart)?|Goalkeeper|Abwehr|Verteidigung|Mittelfeld|Sturm|Angriff)\b/i);
-            const image = card.querySelector("img");
+          const compactName = (value) => compact(value)
+            .replace(/^#?\s*\d{1,2}\s+/, "")
+            .replace(/\s+(?:Torwart|Goalkeeper|Abwehr|Verteidigung|Mittelfeld|Sturm|Angriff|Spieler)\s*$/i, "")
+            .trim();
+          const looksLikeName = (value) => {
+            const name = compactName(value);
+            if (name.length < 3 || name.length > 90) return false;
+            if (!/[A-Za-zÄÖÜäöüß]{2}/.test(name) || /Kader|Trainer|Betreuer|Mannschaft|Spielerprofil|Saison|Geburtsdatum|Position|Rückennummer/i.test(name)) return false;
+            return name.split(/\s+/).length >= 2;
+          };
+          const addPlayer = (node, preferredLink = null) => {
+            if (!node) return;
+            const text = compact(node.innerText || node.textContent || "");
+            const links = Array.from(node.querySelectorAll?.("a[href]") || []);
+            const link = preferredLink || links.find((item) => /spieler|player|person|portrait|profil/i.test(item.href)) || links[0] || null;
+            const nameCandidates = [
+              node.querySelector?.("[class*='player-name'],[class*='spieler-name'],[class*='person-name'],[class*='name']")?.textContent,
+              node.querySelector?.("h2,h3,h4,h5,strong,b")?.textContent,
+              link?.textContent,
+            ].map(compactName).filter(looksLikeName);
+            let name = nameCandidates[0] || "";
+            if (!name) {
+              const lines = String(node.innerText || node.textContent || "").split(/\n+/).map(compactName).filter(looksLikeName);
+              name = lines[0] || "";
+            }
+            const key = name.toLocaleLowerCase("de-AT");
+            if (!name || squadSeen.has(key)) return;
+            const numberMatch = text.match(/(?:Rückennummer|Trikotnummer|Nr\.?|#)\s*:?\s*(\d{1,2})/i) || text.match(/^(?:#\s*)?(\d{1,2})\b/);
+            const positionMatch = text.match(/\b(Tor(?:wart)?|Goalkeeper|Abwehr|Verteidigung|Defensive|Mittelfeld|Sturm|Angriff|Forward)\b/i);
+            const birthMatch = text.match(/(?:Geb(?:oren|urtsdatum)?|Jahrgang)\s*:?\s*(\d{1,2}\.\d{1,2}\.\d{4}|\d{4})/i);
+            const image = node.querySelector?.("img");
+            const profileUrl = link?.href || "";
+            const idMatch = profileUrl.match(/(?:Spieler|Player|Person)\/?(?:Detail\/?)?(\d{4,})/i) || profileUrl.match(/[?&](?::p|p|playerId|personId)=(\d+)/i);
             squad.push({
               name,
               number: numberMatch?.[1] || "",
               position: positionMatch?.[1] || "Spieler",
-              imageUrl: image?.currentSrc || image?.src || image?.getAttribute("data-src") || "",
-              profileUrl: anchor.href,
+              imageUrl: image?.currentSrc || image?.src || image?.getAttribute("data-src") || image?.getAttribute("data-lazy-src") || "",
+              profileUrl,
+              oefbPlayerId: idMatch?.[1] || "",
+              birthDate: birthMatch?.[1]?.includes(".") ? birthMatch[1] : "",
+              birthYear: birthMatch?.[1]?.match(/^\d{4}$/)?.[0] || "",
+              role: "Spieler",
             });
-            squadSeen.add(name.toLowerCase());
+            squadSeen.add(key);
+          };
+
+          const explicitCards = Array.from(document.querySelectorAll(
+            "article, li, tr, [class*='player-card'], [class*='spieler-card'], [class*='squad-player'], [class*='kader-spieler'], [class*='person-card'], [data-player-id], [data-person-id]"
+          ));
+          for (const card of explicitCards) addPlayer(card);
+
+          const playerLinks = Array.from(document.querySelectorAll("a[href]"))
+            .filter((anchor) => /spieler|player|person|portrait|profil/i.test(`${anchor.href} ${anchor.className || ""}`));
+          for (const anchor of playerLinks) {
+            const card = anchor.closest("article, li, tr, [class*='player'], [class*='spieler'], [class*='squad'], [class*='kader'], [class*='person'], .card") || anchor.parentElement || anchor;
+            addPlayer(card, anchor);
+          }
+
+          // Letzter Fallback für die responsive ÖFB-Ansicht: Karten mit Bild und
+          // einem plausiblen vollständigen Namen erfassen, auch ohne Profil-Link.
+          if (squad.length === 0) {
+            for (const image of Array.from(document.images)) {
+              const card = image.closest("article, li, [class*='card'], [class*='player'], [class*='spieler'], [class*='person'], div");
+              addPlayer(card);
+            }
           }
         }
         const reports = [];
@@ -2110,8 +2159,8 @@ async function main() {
     const warnings = [];
     const pageDiagnostics = [];
     const teamSyncStatus = Object.fromEntries(ACTIVE_TEAMS.map((team) => [team.key, {
-      teamKey: team.key, teamName: team.name, gamesUrl: team.gamesUrl, tableUrl: team.tableUrl,
-      gameResources: 0, tableResources: 0, rawMatches: 0, rawStandings: 0, warnings: [],
+      teamKey: team.key, teamName: team.name, gamesUrl: team.gamesUrl || "", tableUrl: team.tableUrl || "", squadUrl: team.squadUrl || "",
+      gameResources: 0, tableResources: 0, squadResources: 0, rawMatches: 0, rawStandings: 0, rawSquad: 0, warnings: [],
     }]));
 
     const browserResult = await collectWithBrowser(startUrls);
@@ -2150,8 +2199,10 @@ async function main() {
           const teamStatus = teamSyncStatus[parsed.teamKey];
           if (parsed.sourceKind === "games") teamStatus.gameResources += 1;
           if (parsed.sourceKind === "table") teamStatus.tableResources += 1;
+          if (parsed.sourceKind === "squad") teamStatus.squadResources += 1;
           teamStatus.rawMatches += parsed.matches.length;
           teamStatus.rawStandings += parsed.standings.length;
+          teamStatus.rawSquad += parsed.squad.length;
         }
         if (resource.origin === "network") {
           pageDiagnostics.push({
@@ -2376,8 +2427,11 @@ async function main() {
     const deactivatedStandings = standingsReliable
       ? await deactivateMissingForTeams(STANDING_COLLECTION, new Set(uniqueStandings.map((item) => item.id)), reliableStandingTeams, runId)
       : 0;
-    const deactivatedSquad = uniqueSquad.length
-      ? await deactivateMissing("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), runId)
+    const reliableSquadTeams = new Set(
+      ACTIVE_TEAMS.filter((team) => uniqueSquad.some((item) => item.teamKey === team.key)).map((team) => team.key),
+    );
+    const deactivatedSquad = reliableSquadTeams.size
+      ? await deactivateMissingForTeams("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), reliableSquadTeams, runId)
       : 0;
     // Spielberichte bleiben erhalten, wenn eine ÖFB-Seite in einem Lauf nicht
     // erreichbar oder noch nicht veröffentlicht ist. Deshalb werden alte
@@ -2413,7 +2467,7 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: "v12-single-source-of-truth",
+      syncArchitecture: "v13.3-official-team-squad-sync",
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
       intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
@@ -2432,7 +2486,7 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 12.2.0 Official Team Pages =====");
+    console.log("===== TSU Ainet ÖFB-Sync 13.3.0 Official Team Squad Sync =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);
@@ -2447,7 +2501,8 @@ async function main() {
       const status = teamSyncStatus[team.key];
       console.log(`${team.name}: ${status.matches || 0} Spiele | ${status.standings || 0} Tabellenzeilen | Tabelle ${status.tableReliable ? "OK" : "beibehalten"}`);
       console.log(`  Spiele: ${team.gamesUrl}`);
-      console.log(`  Tabelle: ${team.tableUrl}`);
+      if (team.tableUrl) console.log(`  Tabelle: ${team.tableUrl}`);
+      if (team.squadUrl) console.log(`  Kader: ${team.squadUrl} | ${squadTeamCounts[team.key] || 0} Spieler`);
     }
     console.log(`Kaderspieler: ${uniqueSquad.length} aus ${Object.keys(squadTeamCounts).length} Mannschaften`);
     console.log(`Vereinslogos: ${uniqueClubProfiles.length}`);

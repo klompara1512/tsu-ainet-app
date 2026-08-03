@@ -98,15 +98,17 @@
         "U8",
         "U08-A"
       ],
-      "enabled": false
+      "enabled": true,
+      "primarySlug": "U08",
+      "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U08/Kader/"
     }
   ],
   "clubSeedUrls": [
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
   ],
-  "syncArchitecture": "v13.2-responsive-table-parser",
-  "version": "13.2.0",
+  "syncArchitecture": "v13.3-official-team-squad-sync",
+  "version": "13.3.0",
   "requiredTeams": [
     "KM",
     "CHALLENGE",
@@ -114,5 +116,14 @@
     "U12",
     "U10"
   ],
-  "officialProvider": "KFV / ÖFB Netzwerk"
+  "officialProvider": "KFV / ÖFB Netzwerk",
+  "officialSquadSync": true,
+  "requiredSquadTeams": [
+    "KM",
+    "CHALLENGE",
+    "U17",
+    "U12",
+    "U10",
+    "U08"
+  ]
 }

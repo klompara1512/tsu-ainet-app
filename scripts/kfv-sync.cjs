@@ -66,7 +66,7 @@ const START_URLS = [
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "13.3.2-official-data-recovery";
+const PARSER_VERSION = "13.4.0-independent-official-sync";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -112,7 +112,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "13.3.2";
+const DATASET_VERSION = "13.4.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -1408,7 +1408,7 @@ function importMatchReports(snapshot, target, sourceUrl) {
 async function collectWithBrowser(startUrls) {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
   });
   const resources = [];
   const diagnostics = [];
@@ -1421,7 +1421,8 @@ async function collectWithBrowser(startUrls) {
       if (!startUrl || processed.has(startUrl)) continue;
       processed.add(startUrl);
       const page = await browser.newPage();
-      await page.setViewport({ width: 1440, height: 1200 });
+      await page.setViewport({ width: 1440, height: 1600, deviceScaleFactor: 1 });
+      page.setDefaultTimeout(45000);
       await page.setExtraHTTPHeaders({ "Accept-Language": "de-AT,de;q=0.9" });
       await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36");
 
@@ -1440,8 +1441,21 @@ async function collectWithBrowser(startUrls) {
 
       let navigationError = "";
       try {
-        await page.goto(startUrl, { waitUntil: "networkidle2", timeout: 90000 });
-        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
+        // ÖFB/KFV laden Tabellen und Kader teilweise nach der ersten Navigation nach.
+        // Daher auf Netzwerkruhe und anschließend auf sichtbare Datenstrukturen warten.
+        await page.waitForNetworkIdle({ idleTime: 1200, timeout: 30000 }).catch(() => {});
+        await page.waitForFunction(() => {
+          const path = location.pathname.toLowerCase();
+          if (path.includes('/tabellen')) {
+            return document.querySelectorAll('table tr, [role="row"], [class*="standing"], [class*="ranking"]').length > 2 || document.body.innerText.length > 2500;
+          }
+          if (path.includes('/kader')) {
+            return document.querySelectorAll('img, article, li, [class*="player"], [class*="spieler"], [class*="person"]').length > 8 || document.body.innerText.length > 2000;
+          }
+          return document.body.innerText.length > 1000;
+        }, { timeout: 20000 }).catch(() => {});
+        await new Promise((resolve) => setTimeout(resolve, 2500));
       } catch (error) {
         navigationError = String(error.message || error);
       }
@@ -1468,6 +1482,20 @@ async function collectWithBrowser(startUrls) {
           window.scrollTo(0, 0);
         });
         await new Promise((resolve) => setTimeout(resolve, 1800));
+        // Noch nicht geladene Bilder und responsive Karten ein zweites Mal anstoßen.
+        await page.evaluate(async () => {
+          const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+          window.scrollTo(0, document.body.scrollHeight);
+          await delay(800);
+          window.scrollTo(0, Math.floor(document.body.scrollHeight / 2));
+          await delay(500);
+          window.scrollTo(0, 0);
+          for (const image of document.images) {
+            const lazy = image.getAttribute('data-src') || image.getAttribute('data-lazy-src');
+            if (!image.getAttribute('src') && lazy) image.setAttribute('src', lazy);
+          }
+        });
+        await new Promise((resolve) => setTimeout(resolve, 1200));
       } catch { /* ignore */ }
 
       // Mannschafts-Links direkt aus der offiziellen Vereinsseite übernehmen.
@@ -1511,6 +1539,21 @@ async function collectWithBrowser(startUrls) {
           if (!processed.has(discovered) && !queue.includes(discovered)) queue.push(discovered);
         } catch { /* ignore */ }
       }
+
+      // Eingebettete JSON-Zustände (Next/Nuxt/JSON-LD) separat an den Parser geben.
+      // Viele ÖFB-Seiten enthalten die Daten vollständig im Script, obwohl sie im DOM
+      // erst später oder nur in einer bestimmten Bildschirmbreite sichtbar werden.
+      try {
+        const embeddedPayloads = await page.evaluate(() =>
+          Array.from(document.querySelectorAll('script'))
+            .map((node) => ({ type: node.type || 'text/javascript', text: node.textContent || '' }))
+            .filter((item) => item.text.trim().length > 20 && item.text.length < 5_000_000)
+            .filter((item) => /json|__next|__nuxt|stand|table|kader|squad|player|spieler|club|verein/i.test(item.type + ' ' + item.text.slice(0, 2000))),
+        );
+        for (const payload of embeddedPayloads) {
+          resources.push({ text: payload.text, contentType: payload.type.includes('json') ? 'application/json' : 'text/javascript', finalUrl: safeUrl(page.url() || startUrl, startUrl), origin: 'embedded-script' });
+        }
+      } catch { /* eingebettete Daten sind optional */ }
 
       const structuredSnapshot = await page.evaluate(() => {
         const compact = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
@@ -1924,7 +1967,18 @@ async function collectWithBrowser(startUrls) {
         networkResponses: resources.filter((r) => r.origin === "network").length,
         navigationError,
         discoveredTeamUrls, discoveredClubUrls,
-        preview: oneLine(renderedText).slice(0, 1500),
+        extractedMatches: structuredSnapshot.matches?.length || 0,
+        extractedStandings: structuredSnapshot.standings?.length || 0,
+        extractedSquad: structuredSnapshot.squad?.length || 0,
+        extractedClubProfiles: structuredSnapshot.clubProfiles?.length || 0,
+        domCounts: await page.evaluate(() => ({
+          tables: document.querySelectorAll('table').length,
+          rows: document.querySelectorAll('table tr, [role="row"]').length,
+          images: document.images.length,
+          links: document.links.length,
+          playerCandidates: document.querySelectorAll('article, li, [class*="player"], [class*="spieler"], [class*="person"]').length,
+        })),
+        preview: oneLine(renderedText).slice(0, 2000),
       });
       await page.close();
     }
@@ -2407,16 +2461,22 @@ async function main() {
       console.log(`✅ ÖFB-Kader-Sync: ${uniqueSquad.length} Spieler erkannt.`);
     }
 
+    // Version 13.4: Datenarten werden unabhängig voneinander synchronisiert.
+    // Ein leerer Spielplan darf nicht mehr verhindern, dass Tabellen, Kader oder
+    // Vereinslogos erfolgreich aktualisiert werden.
     if (uniqueMatches.length === 0) {
+      warnings.push("Spielplan-Sync: 0 Spiele erkannt. Bestehende Spieldaten bleiben unverändert; Tabellen, Kader und Logos werden trotzdem verarbeitet.");
+    }
+    if (uniqueMatches.length === 0 && uniqueStandings.length === 0 && uniqueSquad.length === 0 && uniqueClubProfiles.length === 0) {
       await statusRef.set({
         running: false, success: false,
         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
         sourceUrl, discoveredUrls: [...visited], visitedUrls: [...visited], pageDiagnostics,
         warningCount: warnings.length, warnings: warnings.slice(0, 30),
         parserVersion: PARSER_VERSION,
-        lastError: "ÖFB-Seiten wurden geladen, aber keine Spiele erkannt. Der Lauf wurde absichtlich abgebrochen, damit bestehende Spieldaten nicht fälschlich deaktiviert werden.",
+        lastError: "Keine verwertbaren offiziellen Daten erkannt. Bestehende Firestore-Daten wurden nicht verändert.",
       }, { merge: true });
-      throw new Error("ÖFB-Browser-Sync: 0 Spiele erkannt. Bestehende Spieldaten bleiben unverändert. Bitte settings/kfvSyncStatus → pageDiagnostics prüfen.");
+      throw new Error("Official Sync: Keine Spiele, Tabellen, Kader oder Vereinslogos erkannt. Bitte pageDiagnostics prüfen.");
     }
 
     const standingsReliable = reliableStandingTeams.size > 0;
@@ -2429,7 +2489,7 @@ async function main() {
     const newMatchCount = uniqueMatches.filter((item) => !existingMatchIds.has(item.id)).length;
     const updatedMatchCount = uniqueMatches.length - newMatchCount;
 
-    await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
+    if (uniqueMatches.length) await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
     if (standingsReliable) await writeCollection(STANDING_COLLECTION, uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
     if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
     if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
@@ -2486,7 +2546,7 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: "v13.3-official-team-squad-sync",
+      syncArchitecture: "v13.4-independent-official-sync",
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
       intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
@@ -2505,7 +2565,7 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 13.3.0 Official Team Squad Sync =====");
+    console.log("===== TSU Ainet ÖFB-Sync 13.4.0 Independent Official Sync =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);

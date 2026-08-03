@@ -1,0 +1,12 @@
+TSU Ainet App – Prüfbericht Version 13.4.0
+
+Behoben:
+1. Datenarten waren an einen erfolgreichen Spielplan-Import gekoppelt.
+2. Dynamische Inhalte wurden teilweise vor vollständiger Hydrierung gelesen.
+3. Lazy-Loading wurde nur einmal angestoßen.
+4. Eingebettete JSON-Zustände wurden im Browserlauf nicht separat ausgewertet.
+5. Diagnose zeigte nicht, wie viele Elemente pro Seite tatsächlich erkannt wurden.
+
+Schutz:
+- Keine vorhandenen Spiele, Tabellen, Kader oder Logos werden durch ein leeres Teilergebnis gelöscht.
+- Nur wenn alle vier Datenarten leer sind, wird der Lauf als Fehler beendet.

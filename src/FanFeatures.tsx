@@ -82,7 +82,7 @@ export default function FanFeatures() {
           };
         }).filter((player) => player.name !== "Spieler"));
       }),
-      onSnapshot(collection(db, "kfvMatches"), (snapshot) => {
+      onSnapshot(collection(db, "oefbV12Matches"), (snapshot) => {
         setMatches(snapshot.docs.map((entry) => {
           const data = entry.data();
           return {

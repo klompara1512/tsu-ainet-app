@@ -32,6 +32,7 @@ jobs:
         shell: bash
         run: |
           LOCAL_HOUR=$(TZ=Europe/Vienna date +%H)
+          LOCAL_MINUTE=$(TZ=Europe/Vienna date +%M)
           LOCAL_TIME=$(TZ=Europe/Vienna date '+%d.%m.%Y %H:%M')
           SHOULD_RUN=false
           RUN_CLEANUP=false
@@ -39,7 +40,7 @@ jobs:
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             SHOULD_RUN=true
             if [ "${{ inputs.duplicate_cleanup }}" = "true" ]; then RUN_CLEANUP=true; fi
-          elif [ "$LOCAL_HOUR" -ge 8 ] && [ "$LOCAL_HOUR" -le 22 ]; then
+          elif [ "$LOCAL_HOUR" -ge 8 ] && { [ "$LOCAL_HOUR" -lt 22 ] || { [ "$LOCAL_HOUR" -eq 22 ] && [ "$LOCAL_MINUTE" -eq 00 ]; }; }; then
             SHOULD_RUN=true
             # Nur der erste automatische Lauf ab 08:00 bereinigt Dubletten.
             if [ "$LOCAL_HOUR" -eq 8 ]; then RUN_CLEANUP=true; fi

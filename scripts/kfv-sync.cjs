@@ -59,7 +59,7 @@ const START_URLS = [
 ];
 const MAX_PAGES = Number(SYNC_CONFIG.maxPages) || 80;
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = "11.2.2-team-specific-sources";
+const PARSER_VERSION = "12.0.0-core-reset";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -102,6 +102,10 @@ function isPlausibleStandingRow(row) {
   return true;
 }
 
+
+const MATCH_COLLECTION = "oefbV12Matches";
+const STANDING_COLLECTION = "oefbV12Standings";
+const DATASET_VERSION = "12.0.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -1711,7 +1715,7 @@ async function writeCollection(name, items, runId) {
 
     // Endstände bleiben erhalten, wenn eine unvollständige Quellantwort kurzfristig
     // nur den geplanten Termin liefert. Neue Endstände und Absagen haben Vorrang.
-    if (name === "kfvMatches") {
+    if (name === MATCH_COLLECTION) {
       const existingSnapshot = await reference.get();
       const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
       const incomingHasScore = Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore);
@@ -1773,11 +1777,11 @@ async function writeCollection(name, items, runId) {
 
     // Auch Tabellen- und Vereinslogo-Dokumente behalten ein bereits vorhandenes
     // Logo, falls die Quelle es in einem einzelnen Lauf nicht liefert.
-    if (name === "kfvStandings" || name === "kfvClubs") {
+    if (name === STANDING_COLLECTION || name === "kfvClubs") {
       const existingSnapshot = await reference.get();
       const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
       if (existing) {
-        if (name === "kfvStandings") payload.teamLogoUrl = item.teamLogoUrl || existing.teamLogoUrl || "";
+        if (name === STANDING_COLLECTION) payload.teamLogoUrl = item.teamLogoUrl || existing.teamLogoUrl || "";
         if (name === "kfvClubs") payload.logoUrl = item.logoUrl || existing.logoUrl || "";
       }
     }
@@ -1816,7 +1820,7 @@ async function writeCollection(name, items, runId) {
 }
 
 async function cleanupExistingMatchDuplicates(runId) {
-  const snapshot = await db.collection("kfvMatches").get();
+  const snapshot = await db.collection(MATCH_COLLECTION).get();
   const groups = new Map();
 
   for (const document of snapshot.docs) {
@@ -1838,7 +1842,7 @@ async function cleanupExistingMatchDuplicates(runId) {
     const currentRunItems = group.filter((item) => item.syncRunId === runId);
     const merged = mergeDuplicateMatches(currentRunItems.length ? currentRunItems : group);
     const canonicalId = merged.id;
-    const canonicalRef = db.collection("kfvMatches").doc(canonicalId);
+    const canonicalRef = db.collection(MATCH_COLLECTION).doc(canonicalId);
     writer.set(canonicalRef, removeUndefinedDeep({
       ...merged,
       active: true,
@@ -1950,9 +1954,25 @@ async function main() {
           } catch { /* parseResource reports malformed data below */ }
         }
         const parsed = parseResource(resource.text, resource.contentType, resource.finalUrl);
-        matches.push(...parsed.matches);
-        standings.push(...parsed.standings);
-        squad.push(...parsed.squad);
+        const descriptor = sourceDescriptor(resource.finalUrl);
+        // Version 12 akzeptiert Spiel- und Tabellendaten ausschließlich aus der
+        // fest zugeordneten Mannschaftsquelle. Netzwerkantworten oder allgemeine
+        // Vereinsseiten dürfen keine fremden Daten mehr einmischen.
+        if (descriptor.teamKey && descriptor.kind === "games") {
+          for (const item of parsed.matches) {
+            if (item.teamKey === descriptor.teamKey) matches.push(item);
+          }
+        }
+        if (descriptor.teamKey && descriptor.kind === "table") {
+          for (const item of parsed.standings) {
+            if (item.teamKey === descriptor.teamKey) standings.push(item);
+          }
+        }
+        if (descriptor.teamKey && descriptor.kind === "squad") {
+          for (const item of parsed.squad) {
+            if (item.teamKey === descriptor.teamKey) squad.push(item);
+          }
+        }
         if (parsed.teamKey && teamSyncStatus[parsed.teamKey]) {
           const teamStatus = teamSyncStatus[parsed.teamKey];
           if (parsed.sourceKind === "games") teamStatus.gameResources += 1;
@@ -1988,33 +2008,10 @@ async function main() {
       .map(mergeDuplicateMatches)
       .sort((a, b) => a.kickoffAt.toMillis() - b.kickoffAt.toMillis());
 
-    // Eine teilweise geladene ÖFB-Seite darf keinen bereits bekannten Spielplan
-    // Nur das gewünschte Zeitfenster aktiv von der Quelle aktualisieren.
-    // Historische und weiter entfernte zukünftige Spiele bleiben in Firestore erhalten.
-    uniqueMatches = uniqueMatches.filter((item) => isInActiveSyncWindow(item.kickoffAt));
-
-    // löschen. Vorhandene, nicht als Dublette markierte Spiele der aktuellen Saison
-    // werden deshalb beibehalten, wenn sie im aktuellen Lauf fehlen.
-    const existingMatchesForPreservation = await db.collection("kfvMatches").get();
-    const currentMatchUids = new Set(uniqueMatches.map((item) => buildMatchUid(item)));
-    let preservedExistingMatches = 0;
-    for (const document of existingMatchesForPreservation.docs) {
-      const existing = { id: document.id, ...document.data() };
-      if (existing.source !== "oefb-public" || existing.duplicateOf) continue;
-      if (oneLine(existing.season) !== oneLine(SYNC_CONFIG.seasonLabel || seasonFromUrl(DEFAULT_SOURCE))) continue;
-      const uid = buildMatchUid(existing);
-      if (!uid || currentMatchUids.has(uid)) continue;
-      uniqueMatches.push({
-        ...existing,
-        id: matchDocumentId(existing),
-        matchUid: uid,
-        active: true,
-        preservedFromPreviousSync: true,
-      });
-      currentMatchUids.add(uid);
-      preservedExistingMatches += 1;
-    }
-    uniqueMatches.sort((a, b) => (a.kickoffAt?.toMillis?.() || 0) - (b.kickoffAt?.toMillis?.() || 0));
+    // Core Reset: Die neue V12-Collection startet sauber. Alte V11-Dokumente
+    // werden absichtlich nicht übernommen, damit Kalender, Dashboard und Tabelle
+    // nicht länger mit historischen oder falsch zugeordneten Datensätzen vermischt werden.
+    const preservedExistingMatches = 0;
 
     const duplicateMatchesRemoved = Math.max(0, matches.length - (uniqueMatches.length - preservedExistingMatches));
     if (duplicateMatchesRemoved > 0) {
@@ -2157,13 +2154,13 @@ async function main() {
       warnings.push(`Tabellen-Sync wurde übersprungen: nur ${uniqueStandings.length} plausible Tabellenzeilen erkannt.`);
     }
 
-    const existingMatchesSnapshot = await db.collection("kfvMatches").get();
+    const existingMatchesSnapshot = await db.collection(MATCH_COLLECTION).get();
     const existingMatchIds = new Set(existingMatchesSnapshot.docs.map((document) => document.id));
     const newMatchCount = uniqueMatches.filter((item) => !existingMatchIds.has(item.id)).length;
     const updatedMatchCount = uniqueMatches.length - newMatchCount;
 
-    await writeCollection("kfvMatches", uniqueMatches, runId);
-    if (standingsReliable) await writeCollection("kfvStandings", uniqueStandings, runId);
+    await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
+    if (standingsReliable) await writeCollection(STANDING_COLLECTION, uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
     if (uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
     if (uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
     if (uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
@@ -2177,7 +2174,7 @@ async function main() {
     // Echte Dubletten wurden bereits durch cleanupExistingMatchDuplicates bereinigt.
     const deactivatedMatches = 0;
     const deactivatedStandings = standingsReliable
-      ? await deactivateMissingForTeams("kfvStandings", new Set(uniqueStandings.map((item) => item.id)), reliableStandingTeams, runId)
+      ? await deactivateMissingForTeams(STANDING_COLLECTION, new Set(uniqueStandings.map((item) => item.id)), reliableStandingTeams, runId)
       : 0;
     const deactivatedSquad = uniqueSquad.length
       ? await deactivateMissing("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), runId)
@@ -2216,7 +2213,7 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: "team-specific-v1",
+      syncArchitecture: "v12-single-source-of-truth",
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
       intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
@@ -2235,7 +2232,7 @@ async function main() {
       result[item.status] = (result[item.status] || 0) + 1;
       return result;
     }, {});
-    console.log("===== TSU Ainet ÖFB-Sync 11.2.2 Team-Quellen =====");
+    console.log("===== TSU Ainet ÖFB-Sync 12.0.0 Core Reset =====");
     console.log(`Spiele gesamt: ${uniqueMatches.length} (${duplicateMatchesRemoved} Quell-Dubletten zusammengeführt)`);
     console.log(`Aus früherem Sync erhaltene Spiele: ${preservedExistingMatches}`);
     console.log(`Neue Spiele: ${newMatchCount}`);

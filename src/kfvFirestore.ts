@@ -229,7 +229,7 @@ export function subscribeKfvMatches(
   onError: (message: string) => void,
 ) {
   const matchesQuery = query(
-    collection(db, "kfvMatches"),
+    collection(db, "oefbV12Matches"),
     orderBy("kickoffAt", "asc"),
   );
 
@@ -283,7 +283,7 @@ export function subscribeKfvStandings(
   onError: (message: string) => void,
 ) {
   const standingsQuery = query(
-    collection(db, "kfvStandings"),
+    collection(db, "oefbV12Standings"),
     orderBy("position", "asc"),
   );
 

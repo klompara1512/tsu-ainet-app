@@ -186,8 +186,8 @@ export default function KfvSyncAdmin({ onBack }: Props) {
     try {
       const active = where("active", "==", true);
       const [matches, standings, squad, clubs] = await Promise.all([
-        getCountFromServer(query(collection(db, "kfvMatches"), active)),
-        getCountFromServer(query(collection(db, "kfvStandings"), active)),
+        getCountFromServer(query(collection(db, "oefbV12Matches"), active)),
+        getCountFromServer(query(collection(db, "oefbV12Standings"), active)),
         getCountFromServer(query(collection(db, "kfvSquad"), active)),
         getCountFromServer(query(collection(db, "kfvClubs"), active)),
       ]);
@@ -271,7 +271,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
 
     let firestoreState: DiagnosticItem = { label: "Firestore", state: "success", detail: "Erreichbar" };
     try {
-      await getCountFromServer(query(collection(db, "kfvMatches"), where("active", "==", true)));
+      await getCountFromServer(query(collection(db, "oefbV12Matches"), where("active", "==", true)));
     } catch (error) {
       console.error("Diagnose Firestore:", error);
       firestoreState = { label: "Firestore", state: "error", detail: "Nicht erreichbar oder keine Berechtigung" };

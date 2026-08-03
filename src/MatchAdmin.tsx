@@ -141,7 +141,7 @@ export default function MatchAdmin({ onBack }: Props) {
   useEffect(
     () =>
       onSnapshot(
-        query(collection(db, "kfvMatches"), orderBy("kickoffAt", "asc")),
+        query(collection(db, "oefbV12Matches"), orderBy("kickoffAt", "asc")),
         (snapshot) =>
           setMatches(
             snapshot.docs.map((document) => {
@@ -246,7 +246,7 @@ export default function MatchAdmin({ onBack }: Props) {
       if (editing) {
         await updateDoc(doc(db, "kfvMatches", editing), payload);
       } else {
-        await addDoc(collection(db, "kfvMatches"), {
+        await addDoc(collection(db, "oefbV12Matches"), {
           ...payload,
           createdAt: serverTimestamp(),
         });

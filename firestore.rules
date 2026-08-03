@@ -21,8 +21,10 @@ service cloud.firestore { match /databases/{database}/documents {
  match /tasks/{id}{allow read:if active();allow write:if football()||board();}
  match /services/{id}{allow read:if active();allow write:if football()||board();}
  match /kfvMatches/{d=**}{allow read:if true;allow write:if football();}
+match /oefbV12Matches/{d=**}{allow read:if true;allow write:if football();}
  match /kfvMatchReports/{d=**}{allow read:if true;allow write:if false;}
  match /kfvStandings/{d=**}{allow read:if true;allow write:if football();}
+match /oefbV12Standings/{d=**}{allow read:if true;allow write:if football();}
  match /kfvSquad/{d=**}{allow read:if true;allow write:if football();}
  match /teams/{d=**}{allow read:if active();allow write:if football();}
  match /players/{d=**}{allow read:if active();allow write:if football();}

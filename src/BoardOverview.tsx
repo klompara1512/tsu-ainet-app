@@ -92,7 +92,7 @@ export default function BoardOverview({
     });
 
     const unsubscribeMatches = onSnapshot(
-      collection(db, "kfvMatches"),
+      collection(db, "oefbV12Matches"),
       (snapshot) => {
         setMatches(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },

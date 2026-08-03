@@ -1521,6 +1521,8 @@ async function collectWithBrowser(startUrls) {
         } catch { /* ignore */ }
       }
 
+      let discoveredClubUrls = [];
+
       if (!CORE_SYNC) {
         // Spielberichte und separate Vereinsseiten gehören zum langsamen Voll-Sync.
         const discoveredReportUrls = await page.evaluate(() =>
@@ -1535,7 +1537,7 @@ async function collectWithBrowser(startUrls) {
           } catch { /* ignore */ }
         }
 
-        const discoveredClubUrls = await page.evaluate(() =>
+        discoveredClubUrls = await page.evaluate(() =>
           Array.from(document.querySelectorAll("a[href]"))
             .map((anchor) => ({ href: anchor.href, text: (anchor.textContent || "").replace(/\s+/g, " ").trim() }))
             .filter((item) => /(?:kfv-fussball\.at\/kfv\/Verein\/\d+|vereine\.oefb\.at\/[^/]+\/?$)/i.test(item.href)),

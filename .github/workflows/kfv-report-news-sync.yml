@@ -1,0 +1,44 @@
+name: KFV / ÖFB Spielberichte und News synchronisieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 4 * * *"
+
+concurrency:
+  group: kfv-oefb-report-news-sync
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      REPORT_SYNC_CONCURRENCY: "2"
+      REPORT_NAVIGATION_TIMEOUT: "45000"
+      REPORT_LOOKBACK_DAYS: "45"
+      REPORT_LOOKAHEAD_DAYS: "7"
+
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Projekt und Phase 4 prüfen
+        run: npm run sync:check
+
+      - name: Offizielle Spielberichte und News-Entwürfe synchronisieren
+        run: npm run sync:reports

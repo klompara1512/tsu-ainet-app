@@ -1,0 +1,14 @@
+PHASE 4 EINFÜGEN
+
+1. Alle Dateien dieses Ordners in das bestehende Projekt kopieren.
+2. Vorhandene Dateien ersetzen; den Ordner .github unbedingt mitkopieren.
+3. In VS Code ausführen:
+   npm install
+   npm run sync:check
+   npm run typecheck
+4. Commit-Nachricht:
+   Version 14.3.0 Phase 4 Spielbericht News Sync
+5. Commit und Sync Changes.
+6. GitHub > Actions > KFV / ÖFB Spielberichte und News synchronisieren > Run workflow.
+7. Status in Firestore prüfen: settings/kfvReportNewsSyncStatus
+8. Automatische Beiträge werden als unveröffentlichte Entwürfe in news angelegt und können in der Newsverwaltung geprüft werden.

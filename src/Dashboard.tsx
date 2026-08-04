@@ -21,6 +21,7 @@ import FanFeatures from "./FanFeatures";
 import NotificationsAdmin from "./NotificationsAdmin";
 import { Icon } from "./Icons";
 import BoardOverview from "./BoardOverview";
+import { APP_VERSION } from "./appVersion";
 
 type Page =
   | "start"
@@ -379,7 +380,7 @@ function Dashboard({ user, profile }: DashboardProps) {
         <footer className="dashboard-version" aria-label="App-Version">
           <img src="/tsu-ainet-logo.png" alt="" />
           <span>TSU Ainet App</span>
-          <strong>Version 10.4.1</strong>
+          <strong>Version {APP_VERSION}</strong>
         </footer>
       </main>
 

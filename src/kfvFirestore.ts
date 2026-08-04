@@ -454,6 +454,7 @@ export function subscribeKfvClubs(
 
           return {
             id: clubDocument.id,
+            clubId: typeof data.clubId === "string" ? data.clubId.trim() : "",
             name,
             normalizedName:
               typeof data.normalizedName === "string" && data.normalizedName.trim()
@@ -463,6 +464,8 @@ export function subscribeKfvClubs(
             pageUrl: typeof data.pageUrl === "string" ? data.pageUrl.trim() : "",
             aliases: Array.isArray(data.aliases) ? data.aliases.filter((value): value is string => typeof value === "string") : [],
             logoUrl: typeof data.logoUrl === "string" ? data.logoUrl.trim() : "",
+            logoSource: typeof data.logoSource === "string" ? data.logoSource.trim() : "",
+            logoValidated: data.logoValidated === true,
             primaryColor:
               typeof data.primaryColor === "string" ? data.primaryColor : "",
             secondaryColor:
@@ -486,34 +489,38 @@ export function subscribeKfvClubs(
 
 export function findKfvClub(clubs: KfvClub[], teamName: string, clubId = "") {
   if (clubId) {
-    const byId = clubs.find((club) => club.oefbClubId === clubId);
+    const normalizedId = clubId.trim().toLocaleLowerCase("de-AT");
+    const byId = clubs.find((club) =>
+      [club.clubId, club.oefbClubId, club.id]
+        .filter(Boolean)
+        .some((value) => value.trim().toLocaleLowerCase("de-AT") === normalizedId),
+    );
     if (byId) return byId;
   }
+
   const wantedName = normalizeClubName(teamName);
   if (!wantedName) return null;
 
   const exactClub = clubs.find((club) => {
-    const clubName = club.normalizedName || normalizeClubName(club.name);
-    return clubName === wantedName;
+    const names = [club.normalizedName, club.name, ...club.aliases]
+      .map(normalizeClubName)
+      .filter(Boolean);
+    return names.includes(wantedName);
   });
-
   if (exactClub) return exactClub;
 
-  const wantedWords = wantedName.split(" ").filter(Boolean);
-
-  return (
-    clubs.find((club) => {
-      const clubName = club.normalizedName || normalizeClubName(club.name);
-      if (!clubName) return false;
-
-      const clubWords = clubName.split(" ").filter(Boolean);
-      return (
-        wantedName.includes(clubName) ||
-        clubName.includes(wantedName) ||
-        clubWords.some((word) => word.length >= 4 && wantedWords.includes(word))
-      );
-    }) || null
-  );
+  // Nur noch eine eindeutige beidseitige Übereinstimmung zulassen. Ein einzelnes
+  // gemeinsames Wort reicht nicht mehr, weil dadurch falsche Logos entstanden.
+  const candidates = clubs.filter((club) => {
+    const names = [club.normalizedName, club.name, ...club.aliases]
+      .map(normalizeClubName)
+      .filter(Boolean);
+    return names.some((name) =>
+      (wantedName.includes(name) || name.includes(wantedName)) &&
+      Math.min(name.length, wantedName.length) >= 5,
+    );
+  });
+  return candidates.length === 1 ? candidates[0] : null;
 }
 
 function normalizeLogoUrl(value: string) {
@@ -544,6 +551,10 @@ function isAinetLogoUrl(clubs: KfvClub[], value: string) {
   );
 }
 
+function isTrustedKfvLogoUrl(value: string) {
+  return /^https:\/\/kfv-fussball\.at\/oefb2\/images\//i.test(value.trim());
+}
+
 export function getKfvClubLogo(
   clubs: KfvClub[],
   teamName: string,
@@ -554,15 +565,19 @@ export function getKfvClubLogo(
   const clubLogo = club?.logoUrl?.trim() || "";
   const sourceLogo = matchLogoUrl.trim();
 
-  // Ein häufiger Fehler der ÖFB-Seite ist, dass das Header-/Ainet-Wappen als
-  // Gegnerlogo mitgeparst wird. Für fremde Vereine wird dieses Logo verworfen.
   if (!isTsuAinet(teamName)) {
-    if (clubLogo && !isAinetLogoUrl(clubs, clubLogo)) return clubLogo;
-    if (sourceLogo && !isAinetLogoUrl(clubs, sourceLogo)) return sourceLogo;
+    // Zentrale, validierte Club-Logos haben Vorrang. Ungeprüfte ÖFB-Headerbilder
+    // aus Spielen werden nicht mehr als Gegnerlogo verwendet.
+    if (clubLogo && club?.logoValidated && !isAinetLogoUrl(clubs, clubLogo)) {
+      return clubLogo;
+    }
+    if (sourceLogo && isTrustedKfvLogoUrl(sourceLogo) && !isAinetLogoUrl(clubs, sourceLogo)) {
+      return sourceLogo;
+    }
     return "";
   }
 
-  if (clubLogo) return clubLogo;
-  if (sourceLogo) return sourceLogo;
+  if (clubLogo && club?.logoValidated) return clubLogo;
+  if (sourceLogo && isTrustedKfvLogoUrl(sourceLogo)) return sourceLogo;
   return "/tsu-ainet-logo.png";
 }

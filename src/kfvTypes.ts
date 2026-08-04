@@ -64,12 +64,15 @@ export type KfvSquadPlayer = {
 
 export type KfvClub = {
   id: string;
+  clubId: string;
   name: string;
   normalizedName: string;
   oefbClubId: string;
   pageUrl: string;
   aliases: string[];
   logoUrl: string;
+  logoSource: string;
+  logoValidated: boolean;
   primaryColor: string;
   secondaryColor: string;
   stadium: string;

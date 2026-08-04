@@ -27,7 +27,7 @@ const config = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, "../config/kfv-sync.config.json"), "utf8"),
 );
 
-const VERSION = "14.1.1-phase2-club-sync-clean";
+const VERSION = "14.5.0-smart-logo-engine";
 const STATUS_REF = db.collection("settings").doc("kfvClubSyncStatus");
 const MATCH_COLLECTIONS = ["oefbV12Matches", "kfvMatches"];
 const STANDING_COLLECTIONS = ["oefbV12Standings", "kfvStandings"];
@@ -54,6 +54,22 @@ const makeId = (value) =>
   crypto.createHash("sha1").update(String(value)).digest("hex").slice(0, 24);
 const isHttp = (value) => /^https?:\/\//i.test(String(value || ""));
 const isAinet = (value) => /(?:^|\s)(?:tsu\s+)?ainet(?:\s|$)/i.test(compact(value));
+
+
+const OFFICIAL_LOGO_OVERRIDES = new Map([
+  ["oberlienz", "https://kfv-fussball.at/oefb2/images/1278650591628556536_2a7e449d8e2567d70986-2-200x200-200x200.png"],
+  ["koetschach", "https://kfv-fussball.at/oefb2/images/1278650591628556536_1d8c4339242538787420-2-200x200-200x200.png"],
+]);
+
+function officialLogoOverride(name) {
+  const normalized = normalizeName(name);
+  if (!normalized) return "";
+  if (OFFICIAL_LOGO_OVERRIDES.has(normalized)) return OFFICIAL_LOGO_OVERRIDES.get(normalized);
+  for (const [key, url] of OFFICIAL_LOGO_OVERRIDES) {
+    if (normalized === key || normalized.includes(key) || key.includes(normalized)) return url;
+  }
+  return "";
+}
 
 const INVALID_CLUB_NAME_PATTERNS = [
   /^keine eintr[aä]ge verf[uü]gbar$/i,
@@ -116,33 +132,74 @@ function authorityForClubId(clubId) {
   return 1;
 }
 
+function isTrustedKfvLogoUrl(value) {
+  return /^https:\/\/kfv-fussball\.at\/oefb2\/images\//i.test(compact(value));
+}
+
+function isLikelyGenericLogoUrl(value) {
+  const url = compact(value).toLowerCase();
+  if (!url) return true;
+  return /(?:favicon|apple-touch|placeholder|default|blank|no[-_]?image|social|facebook|instagram|youtube|verband|\/logo(?:\.|\/)|oefb[-_]?logo|kfv[-_]?logo)/i.test(url);
+}
+
+function nameMatchScore(name, ...values) {
+  const wanted = normalizeName(name);
+  if (!wanted) return 0;
+  const hay = normalizeName(values.join(" "));
+  if (!hay) return 0;
+  if (hay === wanted) return 70;
+  if (hay.includes(wanted)) return 55;
+  const words = wanted.split(" ").filter((word) => word.length >= 4 && !/^u\d+$/.test(word));
+  if (!words.length) return 0;
+  const matched = words.filter((word) => hay.includes(word)).length;
+  if (matched === words.length) return 38;
+  if (matched >= Math.ceil(words.length * 0.6)) return 22;
+  if (matched >= 1) return 7;
+  return 0;
+}
+
 function candidateScore(candidate, pageUrl, name) {
-  const { url, alt = "", className = "", id = "", width = 0, height = 0, selector = "" } = candidate;
+  const {
+    url,
+    alt = "",
+    title = "",
+    className = "",
+    id = "",
+    width = 0,
+    height = 0,
+    selector = "",
+    context = "",
+  } = candidate;
   if (!url || !isHttp(url)) return -1000;
 
-  const hay = `${url} ${alt} ${className} ${id} ${selector}`.toLowerCase();
-  if (/favicon|sprite|icon-|apple-touch|banner|header|sponsor|advert|werbung|social|facebook|instagram|youtube|player|spieler|portrait|avatar/.test(hay)) {
+  const hay = `${url} ${alt} ${title} ${className} ${id} ${selector} ${context}`.toLowerCase();
+  if (/favicon|sprite|icon-|apple-touch|banner|header-banner|sponsor|advert|werbung|social|facebook|instagram|youtube|player|spieler|portrait|avatar|cookie|tracking/.test(hay)) {
     return -1000;
   }
 
   let score = 0;
-  if (/vereinslogo|clublogo|teamlogo|club-logo|team-logo|wappen|crest/.test(hay)) score += 30;
-  else if (/logo/.test(hay)) score += 12;
+  const trustedKfv = isTrustedKfvLogoUrl(url);
+  if (trustedKfv) score += 90;
+  if (/-200x200(?:-200x200)?\.(?:png|webp|jpe?g)(?:\?|$)/i.test(url)) score += 18;
+  if (/vereinslogo|clublogo|teamlogo|club-logo|team-logo|wappen|crest/.test(hay)) score += 32;
+  else if (/logo/.test(`${alt} ${title} ${className} ${id} ${selector}`.toLowerCase())) score += 12;
 
-  if (/meta:og:image|meta:twitter:image/.test(selector)) score += 4;
-  if (/\.svg(?:\?|$)|\.png(?:\?|$)|\.webp(?:\?|$)/i.test(url)) score += 3;
+  // Das wichtigste Kriterium: Das Bild muss im DOM-Kontext zum gesuchten Verein gehören.
+  score += nameMatchScore(name, alt, title, context);
 
-  const normalizedClub = normalizeName(name);
-  const keyWords = normalizedClub.split(" ").filter((word) => word.length >= 4);
-  const normalizedHay = normalizeName(`${url} ${alt}`);
-  if (keyWords.length && keyWords.every((word) => normalizedHay.includes(word))) score += 18;
-  else if (keyWords.some((word) => normalizedHay.includes(word))) score += 6;
+  if (/targeted-img|kfv-oefb2-official-image/.test(selector)) score += 8;
+  if (/meta:/.test(selector) && !trustedKfv) score -= 35; // OG-Bilder sind häufig ÖFB-/Seitenlogos.
+  if (/fallback-img/.test(selector)) score -= 10;
+  if (isLikelyGenericLogoUrl(url) && !trustedKfv) score -= 45;
 
+  if (/\.(?:svg|png|webp|jpe?g)(?:\?|$)/i.test(url)) score += 3;
   if (width > 0 && height > 0) {
     const ratio = width / height;
-    if (ratio >= 0.65 && ratio <= 1.5) score += 6;
-    if (width >= 80 && height >= 80) score += 3;
-    if (width > 900 || height > 900) score -= 4;
+    if (ratio >= 0.72 && ratio <= 1.38) score += 10;
+    else score -= 12;
+    if (width >= 70 && height >= 70) score += 5;
+    if (width < 35 || height < 35) score -= 25;
+    if (width > 1000 || height > 1000) score -= 12;
   }
 
   try {
@@ -300,12 +357,15 @@ async function extractClub(browser, seed) {
       const push = (url, alt, selector, node = null) => {
         if (!url) return;
         const rect = node?.getBoundingClientRect?.();
+        const contextNode = node?.closest?.("tr,li,article,section,[class*='club'],[class*='verein'],[class*='team'],[class*='row'],[class*='card']") || node?.parentElement;
         candidates.push({
           url,
           alt: clean(alt),
+          title: clean(node?.title),
           selector,
           className: clean(node?.className),
           id: clean(node?.id),
+          context: clean(contextNode?.textContent).slice(0, 240),
           width: Math.round(rect?.width || node?.naturalWidth || 0),
           height: Math.round(rect?.height || node?.naturalHeight || 0),
         });
@@ -327,6 +387,13 @@ async function extractClub(browser, seed) {
       document.querySelectorAll("meta[property='og:image'],meta[name='twitter:image']").forEach((node) =>
         push(node.content, node.getAttribute("property") || node.getAttribute("name"), `meta:${node.getAttribute("property") || node.getAttribute("name")}`),
       );
+
+      document.querySelectorAll("img").forEach((img) => {
+        const src = img.currentSrc || img.src || img.dataset?.src || img.dataset?.lazySrc || "";
+        if (/\/oefb2\/images\//i.test(src)) {
+          push(src, img.alt || img.title, "kfv-oefb2-official-image", img);
+        }
+      });
 
       // Allgemeine Bilder nur ergänzend, nicht als bevorzugte Quelle.
       document.querySelectorAll("header img,main img").forEach((img) =>
@@ -371,12 +438,18 @@ async function extractClub(browser, seed) {
         const url = absoluteUrl(item.url, data.finalUrl || seed.pageUrl);
         return { ...item, url, score: candidateScore({ ...item, url }, seed.pageUrl, name) };
       })
-      .filter((item) => item.score >= 8)
+      .filter((item) => item.score >= 20)
       .sort((a, b) => b.score - a.score);
 
     const selected = ranked[0] || null;
-    const loadedLogoUrl = selected?.score >= 15 ? selected.url : "";
-    let logoUrl = loadedLogoUrl || seed.logoUrl || "";
+    const overrideLogoUrl = officialLogoOverride(name);
+    const trustedSeedLogo = isTrustedKfvLogoUrl(seed.logoUrl) ? seed.logoUrl : "";
+    const selectedReliable = Boolean(
+      selected &&
+      (isTrustedKfvLogoUrl(selected.url) ? selected.score >= 105 : selected.score >= 70),
+    );
+    const loadedLogoUrl = overrideLogoUrl || trustedSeedLogo || (selectedReliable ? selected.url : "");
+    let logoUrl = loadedLogoUrl;
     if (!isAinet(name) && /tsu[-_ ]?ainet|ainet-logo/i.test(logoUrl)) logoUrl = "";
 
     const identity = officialIdentityFromUrl(seed.pageUrl);
@@ -399,7 +472,15 @@ async function extractClub(browser, seed) {
       ok: true,
       candidateCount: data.candidates.length,
       qualifiedCandidateCount: ranked.length,
-      selectedLogoScore: selected?.score || 0,
+      selectedLogoScore: overrideLogoUrl ? 999 : (selected?.score || 0),
+      selectedLogoContext: selected?.context || "",
+      logoSource: overrideLogoUrl
+        ? "manual-kfv-official-override"
+        : trustedSeedLogo
+          ? "trusted-kfv-source-logo"
+          : loadedLogoUrl
+            ? "validated-official-page-candidate"
+            : "no-reliable-logo",
     };
   } catch (error) {
     return {
@@ -429,6 +510,34 @@ async function mapLimit(items, limit, fn) {
     Array.from({ length: Math.min(limit, Math.max(1, items.length)) }, worker),
   );
   return results;
+}
+
+function rejectSharedOrUntrustedLogos(clubs) {
+  const urlOwners = new Map();
+  for (const club of clubs) {
+    const url = compact(club.logoUrl).toLowerCase();
+    if (!url) continue;
+    const owners = urlOwners.get(url) || new Set();
+    owners.add(normalizeName(club.name));
+    urlOwners.set(url, owners);
+  }
+
+  let rejected = 0;
+  for (const club of clubs) {
+    const url = compact(club.logoUrl);
+    if (!url) continue;
+    const sharedBy = urlOwners.get(url.toLowerCase())?.size || 0;
+    const trusted = isTrustedKfvLogoUrl(url) || club.logoSource === "manual-kfv-official-override";
+    const generic = isLikelyGenericLogoUrl(url);
+    if ((!trusted && sharedBy > 1) || (!trusted && generic)) {
+      club.logoRejectedReason = sharedBy > 1 ? `shared-by-${sharedBy}-clubs` : "generic-federation-or-placeholder-logo";
+      club.logoUrl = "";
+      club.logoLoadedThisRun = false;
+      club.logoSource = "rejected-untrusted-logo";
+      rejected += 1;
+    }
+  }
+  return rejected;
 }
 
 async function cleanupInvalidAndDuplicateClubs(validClubs, runId) {
@@ -492,7 +601,9 @@ async function writeClubs(clubs, runId) {
     const previous = await ref.get();
     const old = previous.exists ? previous.data() : {};
 
-    let logoUrl = club.logoUrl || old.logoUrl || "";
+    const oldLogo = compact(old.logoUrl);
+    const oldLogoTrusted = isTrustedKfvLogoUrl(oldLogo) || old.manualOverride === true;
+    let logoUrl = club.logoUrl || (oldLogoTrusted ? oldLogo : "");
     if (!isAinet(club.name) && /tsu[-_ ]?ainet|ainet-logo/i.test(logoUrl)) logoUrl = "";
 
     batch.set(
@@ -512,6 +623,9 @@ async function writeClubs(clubs, runId) {
         parserVersion: VERSION,
         runId,
         logoLoadedThisRun: club.logoLoadedThisRun === true,
+        logoSource: club.logoSource || "",
+        logoRejectedReason: club.logoRejectedReason || "",
+        logoValidated: Boolean(logoUrl),
         sourceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       },
       { merge: true },
@@ -564,6 +678,7 @@ async function writeClubs(clubs, runId) {
       (club) => club.ok && club.clubId && club.pageUrl && isValidClubName(club.name),
     );
 
+    const rejectedLogoCount = rejectSharedOrUntrustedLogos(usable);
     const logoCount = usable.filter((club) => club.logoUrl).length;
     const logoLoadedThisRunCount = usable.filter((club) => club.logoLoadedThisRun).length;
     const writes = await writeClubs(usable, runId);
@@ -579,6 +694,9 @@ async function writeClubs(clubs, runId) {
       candidateCount: club.candidateCount || 0,
       qualifiedCandidateCount: club.qualifiedCandidateCount || 0,
       selectedLogoScore: club.selectedLogoScore || 0,
+      selectedLogoContext: club.selectedLogoContext || "",
+      logoSource: club.logoSource || "",
+      logoRejectedReason: club.logoRejectedReason || "",
       error: club.error || "",
     }));
 
@@ -592,6 +710,7 @@ async function writeClubs(clubs, runId) {
         clubCount: usable.length,
         clubLogoCount: logoCount,
         logoLoadedThisRunCount,
+        rejectedLogoCount,
         writeCount: writes,
         deactivatedInvalidOrDuplicateCount: deactivatedCount,
         diagnostics: diagnostics.slice(0, 150),

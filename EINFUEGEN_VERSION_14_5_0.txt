@@ -1,0 +1,17 @@
+TSU AINET APP – VERSION 14.5.0 SMART LOGO ENGINE
+
+1. Den Inhalt dieses Ordners in das bestehende Projekt kopieren.
+2. Vorhandene Dateien ersetzen.
+3. In VS Code ausführen:
+   npm install
+   npm run sync:check
+   npm run typecheck
+4. Commit: Version 14.5.0 Smart Logo Engine
+5. Sync Changes.
+6. GitHub Actions: KFV / ÖFB Vereinsdaten synchronisieren starten.
+7. App mit Strg + F5 neu laden.
+
+WICHTIG:
+- Ungeprüfte ÖFB-Headerlogos werden nicht mehr angezeigt.
+- Fehlt ein sicher erkanntes Vereinswappen, erscheint vorübergehend das neutrale Kürzel.
+- Oberlienz und Kötschach besitzen feste offizielle KFV-Zuordnungen.

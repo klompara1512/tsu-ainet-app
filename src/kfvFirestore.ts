@@ -362,10 +362,31 @@ export function getResultForTsuAinet(match: KfvMatch): "W" | "D" | "L" | null {
 }
 
 
+export function normalizeKfvTeamId(value: string) {
+  const normalized = String(value || "")
+    .toLocaleLowerCase("de-AT")
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, "")
+    .trim();
+
+  if (/challenge|reserve|res|kmres|1b/.test(normalized)) return "challenge";
+  if (/u17/.test(normalized)) return "u17";
+  if (/u12/.test(normalized)) return "u12";
+  if (/u10/.test(normalized)) return "u10";
+  if (/u08|u8/.test(normalized)) return "u8";
+  if (/kampfmannschaft|^km$|senioren/.test(normalized)) return "kampfmannschaft";
+  return normalized;
+}
+
 export function subscribeKfvSquad(
+  teamId: string | null,
   onData: (players: KfvSquadPlayer[]) => void,
   onError: (message: string) => void,
 ) {
+  const wantedTeamId = teamId && teamId !== "all" ? normalizeKfvTeamId(teamId) : "";
   const squadQuery = query(collection(db, "kfvSquad"), orderBy("number", "asc"));
   return onSnapshot(
     squadQuery,
@@ -386,7 +407,11 @@ export function subscribeKfvSquad(
             active: typeof data.active === "boolean" ? data.active : true,
           } satisfies KfvSquadPlayer;
         })
-        .filter((player) => player.active && player.name);
+        .filter((player) => {
+          if (!player.active || !player.name) return false;
+          if (!wantedTeamId) return true;
+          return normalizeKfvTeamId(`${player.teamId} ${player.teamName}`) === wantedTeamId;
+        });
       onData(players);
     },
     (error) => {

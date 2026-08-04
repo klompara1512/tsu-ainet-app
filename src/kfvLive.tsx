@@ -55,7 +55,16 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
       },
     );
 
-    const unsubscribeSquad = subscribeKfvSquad(
+    return () => {
+      unsubscribeMatches();
+      unsubscribeStandings();
+    };
+  }, []);
+
+  useEffect(() => {
+    setLoadingSquad(true);
+    return subscribeKfvSquad(
+      selectedTeamId,
       (data) => {
         setSquad(data);
         setLoadingSquad(false);
@@ -65,13 +74,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
         setLoadingSquad(false);
       },
     );
-
-    return () => {
-      unsubscribeMatches();
-      unsubscribeStandings();
-      unsubscribeSquad();
-    };
-  }, []);
+  }, [selectedTeamId]);
 
   useEffect(() => {
     if (!initialMatchId || matches.length === 0) return;
@@ -117,6 +120,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
       { id: "u17", name: "U17", order: 3 },
       { id: "u12", name: "U12", order: 4 },
       { id: "u10", name: "U10", order: 5 },
+      { id: "u8", name: "U8", order: 6 },
     ];
     const map = new Map(fixedTeams.map((team) => [team.id, team]));
 

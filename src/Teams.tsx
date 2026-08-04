@@ -8,6 +8,7 @@ import {
   isTsuAinet,
   subscribeKfvMatches,
   subscribeKfvStandings,
+  normalizeKfvTeamId,
 } from "./kfvFirestore";
 import type { KfvMatch, KfvStandingRow } from "./kfvTypes";
 import "./Teams.css";
@@ -226,12 +227,9 @@ function Teams() {
             const data = document.data();
             const fullName = typeof data.name === "string" ? data.name.trim() : "";
             const nameParts = fullName.split(/\s+/).filter(Boolean);
-            const sourceTeam = normalize(`${data.teamName || ""} ${data.teamId || ""}`);
-            const belongs = selectedKey === "km"
-              ? !/(challenge|reserve|kmres|1b|u17|u12|u10|u8|u08)/.test(sourceTeam)
-              : selectedKey === "challenge"
-                ? /(challenge|reserve|kmres|1b)/.test(sourceTeam)
-                : sourceTeam.includes(selectedKey);
+            const sourceTeam = normalizeKfvTeamId(`${data.teamId || ""} ${data.teamName || ""}`);
+            const selectedOfficialTeam = selectedKey === "km" ? "kampfmannschaft" : selectedKey;
+            const belongs = sourceTeam === selectedOfficialTeam;
             return {
               id: document.id,
               firstName: nameParts.slice(0, -1).join(" ") || fullName,

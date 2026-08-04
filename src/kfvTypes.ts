@@ -124,7 +124,10 @@ export type KfvMatchReport = {
   awayBench: KfvLineupPlayer[];
   homeCoach: string;
   awayCoach: string;
+  venue: string;
+  venueAddress: string;
   referee: string;
+  refereeAssistants: string[];
   attendance: number | null;
   events: KfvMatchEvent[];
   sourceUpdatedAt: Date | null;

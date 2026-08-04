@@ -244,7 +244,7 @@ export default function MatchAdmin({ onBack }: Props) {
 
     try {
       if (editing) {
-        await updateDoc(doc(db, "kfvMatches", editing), payload);
+        await updateDoc(doc(db, "oefbV12Matches", editing), payload);
       } else {
         await addDoc(collection(db, "oefbV12Matches"), {
           ...payload,
@@ -257,6 +257,30 @@ export default function MatchAdmin({ onBack }: Props) {
       setMessage("Speichern fehlgeschlagen. Prüfe die Firestore-Regeln.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function removeMatch(match: Match) {
+    const action = match.source === "manual" ? "löschen" : "ausblenden";
+    if (!window.confirm(`Spiel wirklich ${action}?`)) return;
+
+    setMessage("");
+    try {
+      if (match.source === "manual") {
+        await deleteDoc(doc(db, "oefbV12Matches", match.id));
+        if (editing === match.id) reset();
+        setMessage("Manuell angelegtes Spiel wurde gelöscht.");
+      } else {
+        await updateDoc(doc(db, "oefbV12Matches", match.id), {
+          active: false,
+          manualOverride: true,
+          updatedAt: serverTimestamp(),
+        });
+        setMessage("Synchronisiertes Spiel wurde ausgeblendet.");
+      }
+    } catch (error) {
+      console.error("Spiel konnte nicht entfernt werden:", error);
+      setMessage("Löschen fehlgeschlagen. Prüfe die Firestore-Regeln und versuche es erneut.");
     }
   }
 
@@ -435,13 +459,11 @@ export default function MatchAdmin({ onBack }: Props) {
             </b>
             <button onClick={() => edit(match)}>Bearbeiten</button>
             <button
+              type="button"
               className="danger"
-              onClick={() =>
-                confirm("Spiel wirklich löschen?") &&
-                deleteDoc(doc(db, "kfvMatches", match.id))
-              }
+              onClick={() => void removeMatch(match)}
             >
-              Löschen
+              {match.source === "manual" ? "Löschen" : "Ausblenden"}
             </button>
           </article>
         ))}

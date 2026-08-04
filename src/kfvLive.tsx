@@ -323,7 +323,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
           <div className="match-detail-meta premium-match-meta">
             <span><Icon name="calendar" /> {formatDate(selectedMatch.kickoffAt)}</span>
             <span><Icon name="clock" /> {formatTime(selectedMatch.kickoffAt)} Uhr</span>
-            <span><Icon name="location" /> {selectedMatch.venue || "Spielort noch offen"}</span>
+            <span><Icon name="location" /> {matchReport?.venue || selectedMatch.venue || "Spielort noch offen"}</span>
           </div>
 
           <div className="premium-match-actions">
@@ -368,7 +368,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                   </div>
                 </header>
                 <div className="premium-info-grid">
-                  <article><Icon name="location" /><small>Spielort</small><strong>{selectedMatch.venue || "Noch nicht bekannt"}</strong></article>
+                  <article><Icon name="location" /><small>Spielort</small><strong>{matchReport?.venue || selectedMatch.venue || "Noch nicht bekannt"}</strong></article>
                   <article><Icon name="calendar" /><small>Datum</small><strong>{formatDate(selectedMatch.kickoffAt)}</strong></article>
                   <article><Icon name="clock" /><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></article>
                   <article><Icon name="users" /><small>Schiedsrichter</small><strong>{matchReport?.referee || selectedMatch.referee || "Noch nicht veröffentlicht"}</strong></article>

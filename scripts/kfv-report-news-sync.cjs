@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "15.1.0-official-match-id-resolver";
+const VERSION = "15.2.0-complete-official-match-report";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -607,15 +607,60 @@ async function extractReport(browser, match) {
           }
         }
 
-        const attendance = bodyText.match(
-          /(?:Zuschauer|Besucher)\s*:?\s*(\d{1,6})/i,
-        );
-        const referee = bodyText.match(
-          /(?:Schiedsrichter|Referee)\s*:?\s*([^|]{3,80}?)(?=\s+(?:Assistent|Zuschauer|Spielort|$))/i,
-        );
-        const venue = bodyText.match(
-          /(?:Spielort|Sportplatz|Stadion)\s*:?\s*([^|]{3,100}?)(?=\s+(?:Schiedsrichter|Zuschauer|$))/i,
-        );
+        const labelledValue = (labels, maxLength = 140) => {
+          const normalizedLabels = labels.map((label) => label.toLowerCase());
+          const nodes = [...document.querySelectorAll(
+            "dt,dd,th,td,li,p,span,strong,div,[class*='label'],[class*='value'],[class*='info'],[class*='detail']",
+          )];
+
+          for (const node of nodes) {
+            const labelText = compact(node.textContent);
+            if (!labelText || labelText.length > 80) continue;
+            const lowered = labelText.toLowerCase().replace(/:$/, "");
+            if (!normalizedLabels.some((label) => lowered === label || lowered.startsWith(`${label}:`))) continue;
+
+            const siblingCandidates = [
+              node.nextElementSibling,
+              node.parentElement?.querySelector("dd,[class*='value'],strong,b"),
+            ].filter(Boolean);
+            for (const sibling of siblingCandidates) {
+              const value = compact(sibling.textContent);
+              if (value && value !== labelText && value.length <= maxLength) return value;
+            }
+
+            const inline = labelText.replace(new RegExp(`^(?:${labels.join("|")})\\s*:?\\s*`, "i"), "").trim();
+            if (inline && inline !== labelText && inline.length <= maxLength) return inline;
+          }
+
+          const linePattern = new RegExp(
+            `(?:^|\\|)\\s*(?:${labels.join("|")})\\s*:?\\s*([^|]{1,${maxLength}}?)(?=\\s*\\||$)`,
+            "i",
+          );
+          return compact(bodyText.match(linePattern)?.[1] || "");
+        };
+
+        const attendanceText = labelledValue(["Zuschauer", "Besucher"], 40);
+        const attendanceMatch = attendanceText.match(/(\d{1,6})/);
+        const attendance = attendanceMatch ? Number(attendanceMatch[1]) : null;
+
+        const cleanOfficial = (value) => compact(value)
+          .replace(/\s+(?:Spiele seit|Spiele mit|Erstes Spiel|Letztes Spiel).*$/i, "")
+          .replace(/\s+(?:Assistent(?:en)?|Zuschauer|Besucher|Spielort|Stadion|Adresse).*$/i, "")
+          .trim();
+
+        const referee = cleanOfficial(labelledValue(["Schiedsrichter", "Referee"], 160));
+        const assistantText = labelledValue([
+          "Schiedsrichter-Assistenten",
+          "Schiedsrichterassistenten",
+          "Assistenten",
+          "Linienrichter",
+        ], 220);
+        const refereeAssistants = assistantText
+          ? assistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4)
+          : [];
+
+        const venue = labelledValue(["Spielort", "Stadion", "Sportplatz"], 180);
+        const venueAddress = labelledValue(["Adresse", "Anschrift"], 220);
 
         const invalidPlayerText = /^(?:aufstellung(?:en)?|startelf|ersatzbank|bank|trainer(?:\s*&\s*betreuer)?|betreuer|tore|karten|wechsel|spieler|heim|gast|kader|zu-?\s*&\s*abgänge|keine einträge verfügbar|tsu ainet|eine seite des öfb dachangebotes)$/i;
 
@@ -896,9 +941,11 @@ async function extractReport(browser, match) {
           topText,
           bodyLength: bodyText.length,
           result,
-          attendance: attendance ? Number(attendance[1]) : null,
-          referee: compact(referee?.[1]),
-          venue: compact(venue?.[1]),
+          attendance,
+          referee,
+          refereeAssistants,
+          venue: compact(venue),
+          venueAddress: compact(venueAddress),
           homeLineup,
           awayLineup,
           homeBench,
@@ -948,7 +995,9 @@ async function extractReport(browser, match) {
           match.kickoffDate,
         ),
       venue: raw.venue || compact(match.venue),
-      referee: raw.referee,
+      venueAddress: raw.venueAddress || compact(match.venueAddress),
+      referee: raw.referee || compact(match.referee),
+      refereeAssistants: raw.refereeAssistants || [],
       attendance: raw.attendance,
       homeLineup: raw.homeLineup,
       awayLineup: raw.awayLineup,
@@ -1010,6 +1059,11 @@ async function extractReport(browser, match) {
         playerCandidateCount: raw.playerCandidateCount || 0,
         events: report.eventCount,
         hasResult: Boolean(raw.result),
+        venue: raw.venue || "",
+        venueAddress: raw.venueAddress || "",
+        referee: raw.referee || "",
+        refereeAssistants: raw.refereeAssistants || [],
+        attendance: raw.attendance,
         valid: validation.valid,
         validationErrors: validation.reasons,
         durationSeconds: Math.round(
@@ -1078,6 +1132,27 @@ async function upsertReport(report, runId) {
     },
     { merge: true },
   );
+}
+
+async function updateMatchFromReport(report) {
+  if (!report.matchId) return;
+  const ref = db.collection("kfvMatches").doc(report.matchId);
+  const snapshot = await ref.get();
+  if (!snapshot.exists) return;
+
+  const patch = {
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    reportUrl: report.reportUrl || "",
+    gameId: report.gameId || "",
+    oefbMatchId: report.oefbMatchId || "",
+  };
+
+  if (report.venue) patch.venue = report.venue;
+  if (report.venueAddress) patch.venueAddress = report.venueAddress;
+  if (report.referee) patch.referee = report.referee;
+  if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
+
+  await ref.set(patch, { merge: true });
 }
 
 async function createNewsDraft(
@@ -1333,6 +1408,7 @@ async function main() {
       if (!result.ok || !result.report) continue;
 
       await upsertReport(result.report, runId);
+      await updateMatchFromReport(result.report);
       reportWrites += 1;
 
       const draft = await createNewsDraft(

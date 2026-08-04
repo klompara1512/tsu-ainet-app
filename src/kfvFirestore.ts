@@ -101,7 +101,12 @@ function mapMatchReportDocument(
     awayBench: readLineupPlayers(data.awayBench),
     homeCoach: typeof data.homeCoach === "string" ? data.homeCoach : "",
     awayCoach: typeof data.awayCoach === "string" ? data.awayCoach : "",
+    venue: typeof data.venue === "string" ? data.venue : "",
+    venueAddress: typeof data.venueAddress === "string" ? data.venueAddress : "",
     referee: typeof data.referee === "string" ? data.referee : "",
+    refereeAssistants: Array.isArray(data.refereeAssistants)
+      ? data.refereeAssistants.filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
+      : [],
     attendance: typeof data.attendance === "number" ? data.attendance : null,
     events: readMatchEvents(data.events),
     sourceUpdatedAt:
@@ -599,12 +604,34 @@ function isTrustedOfficialLogoUrl(value: string) {
 }
 
 const OFFICIAL_FRONTEND_LOGOS: Record<string, string> = {
+  feffernitz: "https://vereine.oefb.at/vereine3/images/834733022602002384_3281feb87832ae2f1ace-1,0-200x200.png",
+  lurnfeld: "https://vereine.oefb.at/vereine3/images/834733022602002384_0c2c475d885db85df734-1,0-200x200.png",
   penk: "https://vereine.oefb.at/vereine3/images/834733022602002384_11d66faa2d824d7dfb89-1,0-200x200.png",
+  "admira villach": "https://vereine.oefb.at/vereine3/images/834733022602002384_03d7fdbf44cf98e7b529-1,0-200x200.png",
+  moelltal: "https://vereine.oefb.at/vereine3/images/834733022602002384_c3bfc1ccbe14dd1e04d0-1,0-200x200.png",
+  "dellach dr": "https://vereine.oefb.at/vereine3/images/834733022602002384_9ed648f67cf33b10aaf2-1,0-200x200.png",
+  treffen: "https://vereine.oefb.at/vereine3/images/834733022602002384_65abb3182e8fe0ec308a-1,0-200x200.png",
+  magdalen: "https://vereine.oefb.at/vereine3/images/834733022602002384_51ae2944767ad0110235-1,0-200x200.png",
+  baldramsdorf: "https://vereine.oefb.at/vereine3/images/834733022602002384_2cf1e493aa324631c4ce-1,0-200x200.png",
+  irschen: "https://vereine.oefb.at/vereine3/images/834733022602002384_62990544880f644e7ecc-1,0-200x200.png",
+  tristach: "https://vereine.oefb.at/vereine3/images/834733022602002384_6d230767f0385f9d0c30-1,0-200x200.png",
   gitschtal: "https://vereine.oefb.at/vereine3/images/834733022602002384_6d20905242d81e9fe35c-1,0-200x200.png",
   "nussdorf 1b": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
   "nussdorf debant": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
   "wr nussdorf debant": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
   "nussdorf debant rapid lienz u17 b": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
+  "wsg radenthein bad kleinkirchheim": "https://vereine.oefb.at/vereine3/images/834733022602002384_98a0bcd4e75b85000ef5-1,0-200x200.png",
+  "sv malta fc rennweg": "https://vereine.oefb.at/vereine3/images/834733022602002384_f3a7088e274f04b9db63-1,0-200x200.png",
+  obermillstatt: "https://vereine.oefb.at/vereine3/images/834733022602002384_ff9a6d11cc386daffab0-1,0-200x200.png",
+  "sc landskron toeplitsch u17": "https://vereine.oefb.at/vereine3/images/834733022602002384_2c92ac869ca89f36a1de-1,0-200x200.png",
+  "dsg ledenitzen faakersee": "https://vereine.oefb.at/vereine3/images/834733022602002384_a53f816ebdfd06e23add-1,0-200x200.png",
+  "sv sachsenburg u17": "https://vereine.oefb.at/vereine3/images/834733022602002384_9ca60a461d01a710bf75-1,0-200x200.png",
+  matrei: "https://vereine.oefb.at/vereine3/images/834733022602002384_90d587526b8e3a17d405-1,0-200x200.png",
+  "sillian heinfels urc thal assling u17": "https://vereine.oefb.at/vereine3/images/834733022602002384_7a1c5115aa477996b426-1,0-200x200.png",
+  rothenthurn: "https://vereine.oefb.at/vereine3/images/834733022602002384_7fd15cf6a875c296a040-1,0-200x200.png",
+  "woerthersee atus fliesen koller velden": "https://vereine.oefb.at/vereine3/images/834733022602002384_317b96e5aaf01ac56836-1,0-200x200.png",
+  oberlienz: "https://kfv-fussball.at/oefb2/images/1278650591628556536_2a7e449d8e2567d70986-2-200x200-200x200.png",
+  koetschach: "https://kfv-fussball.at/oefb2/images/1278650591628556536_1d8c4339242538787420-2-200x200-200x200.png",
 };
 
 function officialFrontendLogo(teamName: string) {

@@ -474,7 +474,22 @@ function Kalender() {
       {selectedMatch && (
         <div className="calendar-modal-backdrop" onClick={() => setSelectedMatch(null)}>
           <article className="match-center" onClick={(event) => event.stopPropagation()}>
-            <button type="button" className="calendar-modal-close" onClick={() => setSelectedMatch(null)} aria-label="Schließen">×</button>
+            <button
+              type="button"
+              className="calendar-modal-close"
+              onPointerDown={(event) => {
+                event.stopPropagation();
+              }}
+              onClick={(event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                setSelectedMatch(null);
+              }}
+              aria-label="Spielcenter schließen"
+              title="Schließen"
+            >
+              ×
+            </button>
 
             <header className="match-center-header">
               <div>

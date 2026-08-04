@@ -164,6 +164,7 @@ function Teams() {
   const [playerSearch, setPlayerSearch] = useState("");
   const [positionFilter, setPositionFilter] = useState("all");
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
+  const [fullTableOpen, setFullTableOpen] = useState(false);
 
   useEffect(() => {
     const teamsQuery = query(collection(db, "teams"), orderBy("order", "asc"));
@@ -413,6 +414,7 @@ function Teams() {
     setPlayerSearch("");
     setPositionFilter("all");
     setSelectedPlayer(null);
+    setFullTableOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -423,6 +425,7 @@ function Teams() {
     setPlayerSearch("");
     setPositionFilter("all");
     setSelectedPlayer(null);
+    setFullTableOpen(false);
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
@@ -552,13 +555,18 @@ function Teams() {
           <article className="team-hub-card" id="team-table">
             <div className="team-section-heading"><div><p className="team-card-label">Wettbewerb</p><h3>Top 5 Tabelle</h3></div><Icon name="table" /></div>
             {teamStandings.length ? (
-              <div className="team-table-preview">
-                {teamStandings.slice(0, 5).map((row) => (
-                  <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
-                    <span>{row.position}</span><TeamLogo name={row.clubName} url={row.teamLogoUrl} clubId={row.clubId} size="small" /><strong>{row.clubName}</strong><b>{row.points}</b>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="team-table-preview">
+                  {teamStandings.slice(0, 5).map((row) => (
+                    <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
+                      <span>{row.position}</span><b className="team-table-points">{row.points}</b><TeamLogo name={row.clubName} url={row.teamLogoUrl} clubId={row.clubId} size="small" /><strong>{row.clubName}</strong>
+                    </div>
+                  ))}
+                </div>
+                <button type="button" className="team-open-full-table" onClick={() => setFullTableOpen(true)}>
+                  <Icon name="table" /><span>Komplette Tabelle öffnen</span><b>›</b>
+                </button>
+              </>
             ) : <p className="team-hub-muted">Für diese Mannschaft ist noch keine Tabelle verfügbar.</p>}
           </article>
 
@@ -619,6 +627,31 @@ function Teams() {
             </article>
           </div>
         )}
+        {fullTableOpen && (
+          <div className="team-full-table-backdrop" role="presentation" onClick={() => setFullTableOpen(false)}>
+            <section className="team-full-table-modal" role="dialog" aria-modal="true" aria-label={`Komplette Tabelle ${selectedTeam.name}`} onClick={(event) => event.stopPropagation()}>
+              <header>
+                <div><p className="team-card-label">{selectedTeam.name}</p><h3>{teamStandings[0]?.competitionName || "Tabelle"}</h3></div>
+                <button type="button" aria-label="Tabelle schließen" onClick={() => setFullTableOpen(false)}>×</button>
+              </header>
+              <div className="team-full-table-scroll">
+                <table>
+                  <thead><tr><th>#</th><th>Pkt.</th><th>Verein</th><th>Sp.</th><th>S</th><th>U</th><th>N</th><th>Tore</th><th>Diff.</th></tr></thead>
+                  <tbody>
+                    {teamStandings.map((row) => (
+                      <tr key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
+                        <td><strong>{row.position}</strong></td><td><b>{row.points}</b></td>
+                        <td><div><TeamLogo name={row.clubName} url={row.teamLogoUrl} clubId={row.clubId} size="small" /><span>{row.clubName}</span></div></td>
+                        <td>{row.played}</td><td>{row.won}</td><td>{row.drawn}</td><td>{row.lost}</td><td>{row.goalsFor}:{row.goalsAgainst}</td><td>{row.goalDifference}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          </div>
+        )}
+
         {selectedPlayer && (
           <div className="team-player-modal-backdrop" onClick={() => setSelectedPlayer(null)}>
             <article className="team-player-modal" onClick={(event) => event.stopPropagation()}>

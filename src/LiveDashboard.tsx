@@ -453,10 +453,10 @@ function LiveDashboard({
                 onClick={onOpenStandings}
               >
                 <span>{row.position}</span>
+                <b>{row.points}</b>
                 <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
                 <strong>{row.clubName}</strong>
                 <small>{row.played} Sp.</small>
-                <b>{row.points}</b>
               </button>
             )) : <div className="v101-empty">Noch keine Tabelle verfügbar.</div>}
           </div>

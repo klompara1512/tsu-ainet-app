@@ -533,3 +533,6 @@
 .v104-status.is-live{background:#ef4444;color:#fff;box-shadow:0 0 0 6px rgba(239,68,68,.12);animation:v104pulse 1.5s infinite}
 .v104-data-freshness{display:block;margin-top:10px;text-align:center;color:#94a3b8}
 @keyframes v104pulse{50%{box-shadow:0 0 0 12px rgba(239,68,68,0)}}
+
+/* Version 15.3.1 – Punkte in der mobilen Tabelle vorne */
+.v101-table > button{grid-template-columns:23px 34px 31px 1fr auto}.v101-table > button > b{display:grid;place-items:center;min-width:30px;height:26px;border-radius:8px;background:rgba(246,201,69,.13);color:#f6c945;text-align:center}.v101-table > button > strong{text-align:left}

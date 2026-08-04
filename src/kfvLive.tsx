@@ -703,6 +703,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                       <thead>
                         <tr>
                           <th>#</th>
+                          <th className="kfv-points-first">Pkt.</th>
                           <th>Verein</th>
                           <th>Sp.</th>
                           <th>S</th>
@@ -720,6 +721,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                             className={isTsuAinet(row.clubName) ? "is-tsu" : ""}
                           >
                             <td><span className={`kfv-position kfv-position-${row.position}`}>{row.position}</span></td>
+                            <td className="kfv-points-first"><strong>{row.points}</strong></td>
                             <td>
                               <div className="kfv-table-club">
                                 <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
@@ -734,7 +736,6 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                               {row.goalsFor}:{row.goalsAgainst}
                             </td>
                             <td>{row.goalDifference}</td>
-                            <td><strong>{row.points}</strong></td>
                           </tr>
                         ))}
                       </tbody>

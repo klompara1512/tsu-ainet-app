@@ -4,7 +4,7 @@ const admin = require("firebase-admin");
 const puppeteer = require("puppeteer");
 const crypto = require("crypto");
 
-const VERSION = "14.3.1-phase4-strict-report-validation";
+const VERSION = "15.0.0-official-match-report-engine";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -252,8 +252,12 @@ function validateReportPage(match, raw) {
     reasons.push("Spielberichtseite enthält zu wenig auswertbaren Inhalt");
   }
 
-  if (raw.homeLineup.length > 25 || raw.awayLineup.length > 25) {
-    reasons.push("Aufstellungserkennung enthält unplausibel viele Spieler");
+  if (raw.homeLineup.length > 18 || raw.awayLineup.length > 18) {
+    reasons.push("Startelf-Erkennung enthält unplausibel viele Spieler");
+  }
+
+  if ((raw.homeBench || []).length > 18 || (raw.awayBench || []).length > 18) {
+    reasons.push("Ersatzbank-Erkennung enthält unplausibel viele Spieler");
   }
 
   return {
@@ -314,62 +318,49 @@ async function loadCandidateMatches() {
 async function waitForReport(page) {
   await page
     .waitForFunction(
-      () =>
-        document.body &&
-        document.body.innerText.length > 250,
-      { timeout: 12000 },
+      () => document.body && document.body.innerText.length > 250,
+      { timeout: 15000 },
     )
     .catch(() => {});
 
-  await new Promise((resolve) => setTimeout(resolve, 1200));
+  await new Promise((resolve) => setTimeout(resolve, 1400));
 
+  // Zuerst die Berichtsdaten anstoßen. "Aufstellung" wird absichtlich
+  // zuletzt geöffnet, weil der ÖFB die Tab-Inhalte dynamisch austauscht.
   await page
     .evaluate(async () => {
-      const sleep = (ms) =>
-        new Promise((resolve) => setTimeout(resolve, ms));
-
-      for (const label of [
-        "Spielbericht",
-        "Aufstellung",
-        "Tore",
-        "Karten",
-        "Wechsel",
-        "Statistik",
-      ]) {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const clickTab = async (labels) => {
         const candidates = [
-          ...document.querySelectorAll(
-            "button,a,[role='tab']",
-          ),
+          ...document.querySelectorAll("button,a,[role='tab'],[data-toggle='tab']"),
         ];
+        const target = candidates.find((node) => {
+          const text = String(node.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+          return labels.some((label) => text === label || text.includes(label));
+        });
+        if (!target) return false;
+        target.click();
+        await sleep(650);
+        return true;
+      };
 
-        const target = candidates.find(
-          (node) =>
-            String(node.textContent || "")
-              .trim()
-              .toLowerCase() === label.toLowerCase(),
-        );
-
-        if (target) {
-          target.click();
-          await sleep(250);
-        }
+      for (const labels of [["spielbericht"], ["tore"], ["karten"], ["wechsel"]]) {
+        await clickTab(labels);
       }
 
-      const max = Math.min(
-        document.body?.scrollHeight || 0,
-        8000,
-      );
+      // Aufstellungen zuletzt sichtbar lassen.
+      await clickTab(["aufstellung", "aufstellungen", "lineup"]);
 
-      for (let y = 0; y <= max; y += 650) {
+      const max = Math.min(document.body?.scrollHeight || 0, 10000);
+      for (let y = 0; y <= max; y += 550) {
         window.scrollTo(0, y);
-        await sleep(80);
+        await sleep(90);
       }
-
       window.scrollTo(0, 0);
     })
     .catch(() => {});
 
-  await new Promise((resolve) => setTimeout(resolve, 900));
+  await new Promise((resolve) => setTimeout(resolve, 1400));
 }
 
 async function extractReport(browser, match) {
@@ -397,274 +388,300 @@ async function extractReport(browser, match) {
 
     await waitForReport(page);
 
-    const raw = await page.evaluate(() => {
-      const compact = (value) =>
-        String(value || "")
-          .replace(/\s+/g, " ")
-          .trim();
+    const raw = await page.evaluate(
+      ({ expectedHomeTeam, expectedAwayTeam }) => {
+        const compact = (value) =>
+          String(value || "").replace(/\s+/g, " ").trim();
 
-      const absolute = (value) => {
-        try {
-          return value
-            ? new URL(value, location.href).href
-            : "";
-        } catch {
-          return "";
-        }
-      };
+        const normalize = (value) =>
+          compact(value)
+            .toLocaleLowerCase("de-AT")
+            .replace(/ä/g, "ae")
+            .replace(/ö/g, "oe")
+            .replace(/ü/g, "ue")
+            .replace(/ß/g, "ss")
+            .replace(/[^a-z0-9]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
 
-      const bodyText = compact(
-        document.body?.innerText || "",
-      );
+        const absolute = (value) => {
+          try {
+            return value ? new URL(value, location.href).href : "";
+          } catch {
+            return "";
+          }
+        };
 
-      const textLines = String(
-        document.body?.innerText || "",
-      )
-        .split(/\n+/)
-        .map(compact)
-        .filter(Boolean);
+        const bodyText = compact(document.body?.innerText || "");
+        const textLines = String(document.body?.innerText || "")
+          .split(/\n+/)
+          .map(compact)
+          .filter(Boolean);
+        const topText = textLines.slice(0, 55).join(" | ").slice(0, 3200);
 
-      const topText = textLines
-        .slice(0, 45)
-        .join(" | ")
-        .slice(0, 2500);
+        const resultCandidates = [
+          ...document.querySelectorAll(
+            "[class*='result'],[class*='score'],[class*='ergebnis'],h1,h2,h3,strong",
+          ),
+        ]
+          .map((node) => compact(node.textContent))
+          .filter(Boolean);
 
-      const resultCandidates = [
-        ...document.querySelectorAll(
-          "[class*='result'],[class*='score'],[class*='ergebnis'],h1,h2,h3,strong",
-        ),
-      ]
-        .map((node) => compact(node.textContent))
-        .filter(Boolean);
-
-      let result = null;
-      for (const candidate of resultCandidates) {
-        const scoreMatch = candidate.match(
-          /(?:^|\s)(\d{1,2})\s*:\s*(\d{1,2})(?:\s|$)/,
-        );
-
-        if (scoreMatch) {
-          result = {
-            home: Number(scoreMatch[1]),
-            away: Number(scoreMatch[2]),
-          };
-          break;
-        }
-      }
-
-      const attendance = bodyText.match(
-        /(?:Zuschauer|Besucher)\s*:?\s*(\d{1,6})/i,
-      );
-
-      const referee = bodyText.match(
-        /(?:Schiedsrichter|Referee)\s*:?\s*([^|]{3,80}?)(?=\s+(?:Assistent|Zuschauer|Spielort|$))/i,
-      );
-
-      const venue = bodyText.match(
-        /(?:Spielort|Sportplatz|Stadion)\s*:?\s*([^|]{3,100}?)(?=\s+(?:Schiedsrichter|Zuschauer|$))/i,
-      );
-
-      const playerName = (value) => {
-        const text = compact(value)
-          .replace(/^\d{1,3}[.'’]?\s*/, "")
-          .replace(/\s*\([^)]*\)\s*$/, "")
-          .replace(
-            /\s+(?:GK|TW|Kapitän|Captain)\s*$/i,
-            "",
-          )
-          .trim();
-
-        if (text.length < 3 || text.length > 70) {
-          return "";
-        }
-
-        if (
-          !/^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß .'-]+$/.test(
-            text,
-          )
-        ) {
-          return "";
-        }
-
-        if (
-          /^(?:Aufstellung|Ersatzbank|Trainer|Betreuer|Tore|Karten|Wechsel|Spieler|Heim|Gast)$/i.test(
-            text,
-          )
-        ) {
-          return "";
-        }
-
-        return text;
-      };
-
-      const sectionNodes = (heading) => {
-        const nodes = [];
-        let current = heading.nextElementSibling;
-
-        while (current && nodes.length < 12) {
-          if (/^H[1-6]$/.test(current.tagName)) break;
-
-          const text = compact(current.textContent);
-          if (
-            /^(?:Tore|Karten|Wechsel|Statistik|Schiedsrichter|Spielinfo)$/i.test(
-              text,
-            )
-          ) {
+        let result = null;
+        for (const candidate of resultCandidates) {
+          const scoreMatch = candidate.match(
+            /(?:^|\s)(\d{1,2})\s*:\s*(\d{1,2})(?:\s|$)/,
+          );
+          if (scoreMatch) {
+            result = { home: Number(scoreMatch[1]), away: Number(scoreMatch[2]) };
             break;
           }
-
-          nodes.push(current);
-          current = current.nextElementSibling;
         }
 
-        return nodes;
-      };
-
-      const extractSection = (headingPattern) => {
-        const headings = [
-          ...document.querySelectorAll(
-            "h1,h2,h3,h4,h5,strong,[role='heading']",
-          ),
-        ];
-
-        const heading = headings.find((node) =>
-          headingPattern.test(compact(node.textContent)),
+        const attendance = bodyText.match(
+          /(?:Zuschauer|Besucher)\s*:?\s*(\d{1,6})/i,
+        );
+        const referee = bodyText.match(
+          /(?:Schiedsrichter|Referee)\s*:?\s*([^|]{3,80}?)(?=\s+(?:Assistent|Zuschauer|Spielort|$))/i,
+        );
+        const venue = bodyText.match(
+          /(?:Spielort|Sportplatz|Stadion)\s*:?\s*([^|]{3,100}?)(?=\s+(?:Schiedsrichter|Zuschauer|$))/i,
         );
 
-        if (!heading) return [];
+        const invalidPlayerText = /^(?:aufstellung(?:en)?|startelf|ersatzbank|bank|trainer(?:\s*&\s*betreuer)?|betreuer|tore|karten|wechsel|spieler|heim|gast|kader|zu-?\s*&\s*abgänge|keine einträge verfügbar|tsu ainet|eine seite des öfb dachangebotes)$/i;
 
-        const directNodes = sectionNodes(heading);
-        const fallbackContainer =
-          heading.closest(
-            "section,article,[class*='lineup'],[class*='formation'],[class*='aufstellung']",
-          ) || heading.parentElement;
+        const cleanPlayerName = (value) => {
+          let text = compact(value)
+            .replace(/^#?\s*\d{1,3}\s*/, "")
+            .replace(/^\d{1,3}[.'’]\s*/, "")
+            .replace(/\s*\([^)]*(?:kapitän|captain|tw|gk)[^)]*\)\s*$/i, "")
+            .replace(/\s+(?:GK|TW|Kapitän|Captain|Ersatz)\s*$/i, "")
+            .trim();
 
-        const roots = directNodes.length
-          ? directNodes
-          : fallbackContainer
-            ? [fallbackContainer]
-            : [];
+          // Bei Karten mit mehreren Zeilen nur die wahrscheinlichste Namenszeile nehmen.
+          const lines = String(value || "")
+            .split(/\n+/)
+            .map(compact)
+            .filter(Boolean);
+          const nameLine = lines.find(
+            (line) =>
+              line.length >= 3 &&
+              line.length <= 70 &&
+              /^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß .'-]+$/.test(line) &&
+              !invalidPlayerText.test(line),
+          );
+          if (nameLine) text = nameLine;
 
-        const names = [];
+          if (text.length < 3 || text.length > 70) return "";
+          if (!/^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß .'-]+$/.test(text)) return "";
+          if (invalidPlayerText.test(text)) return "";
+          if (!/\s/.test(text)) return ""; // Vor- und Nachname erforderlich.
+          return text;
+        };
+
+        const extractNumber = (value) => {
+          const text = compact(value);
+          const match = text.match(/(?:^|\s|#)(\d{1,2})(?=\s|$|[.)])/);
+          if (!match) return null;
+          const number = Number(match[1]);
+          return number >= 0 && number <= 99 ? number : null;
+        };
+
+        const contextText = (node, levels = 5) => {
+          const chunks = [];
+          let current = node;
+          for (let i = 0; current && i < levels; i += 1) {
+            const text = compact(current.textContent);
+            if (text && text.length <= 1600) chunks.push(text);
+            current = current.parentElement;
+          }
+          return chunks.join(" | ");
+        };
+
+        const homeNorm = normalize(expectedHomeTeam);
+        const awayNorm = normalize(expectedAwayTeam);
+        const homeTokens = homeNorm.split(" ").filter((token) => token.length >= 3);
+        const awayTokens = awayNorm.split(" ").filter((token) => token.length >= 3);
+        const tokenHits = (text, tokens) => {
+          const normalized = ` ${normalize(text)} `;
+          return tokens.filter((token) => normalized.includes(` ${token} `)).length;
+        };
+
+        const classifySide = (node, context) => {
+          const normalized = normalize(context);
+          const homeHits = tokenHits(normalized, homeTokens);
+          const awayHits = tokenHits(normalized, awayTokens);
+          if (homeHits > awayHits && homeHits > 0) return "home";
+          if (awayHits > homeHits && awayHits > 0) return "away";
+
+          const rect = node.getBoundingClientRect();
+          if (rect.width > 0) return rect.left + rect.width / 2 < window.innerWidth / 2 ? "home" : "away";
+          return "";
+        };
+
+        const classifyRole = (context) => {
+          const normalized = normalize(context);
+          if (/ersatzbank|ersatzspieler|wechselspieler|bank|substitutes/.test(normalized)) return "bench";
+          if (/startelf|startaufstellung|starting eleven|formation/.test(normalized)) return "starter";
+          if (/aufstellung/.test(normalized)) return "starter";
+          return "";
+        };
+
+        const playerSelectors = [
+          "a[href*='Spieler']",
+          "a[href*='spieler']",
+          "a[href*='Person']",
+          "a[href*='person']",
+          "a[href*='Pass']",
+          "[class*='lineup'] a[href]",
+          "[class*='aufstellung'] a[href]",
+          "[class*='formation'] a[href]",
+          "[class*='player']",
+          "[class*='spieler']",
+        ].join(",");
+
+        const candidates = [...document.querySelectorAll(playerSelectors)];
+        const buckets = {
+          homeStarter: [],
+          homeBench: [],
+          awayStarter: [],
+          awayBench: [],
+        };
         const seen = new Set();
 
-        roots.forEach((root) => {
-          root
-            .querySelectorAll(
-              "a[href],li,tr,[class*='player'],[class*='spieler']",
-            )
-            .forEach((node) => {
-              const name = playerName(node.textContent);
-              if (!name) return;
+        for (const node of candidates) {
+          const card = node.closest(
+            "li,tr,[class*='player'],[class*='spieler'],[class*='lineup'],[class*='formation'],[class*='aufstellung'],article,section,div",
+          ) || node;
+          const rawText = compact(card.textContent || node.textContent);
+          const name = cleanPlayerName(node.textContent) || cleanPlayerName(rawText);
+          if (!name) continue;
 
-              const key = name.toLowerCase();
-              if (seen.has(key)) return;
+          const context = contextText(card, 7);
+          const side = classifySide(card, context);
+          const role = classifyRole(context);
+          if (!side || !role) continue;
 
-              seen.add(key);
-              const link = node.closest("a[href]");
+          const linkNode = node.closest("a[href]") || card.querySelector("a[href]");
+          const playerUrl = linkNode ? absolute(linkNode.href) : "";
+          const number = extractNumber(rawText);
+          const captain = /kapitän|captain|\(c\)|\bc\b/i.test(rawText);
+          const goalkeeper = /torwart|goalkeeper|\btw\b|\bgk\b/i.test(rawText);
+          const key = `${side}:${role}:${normalize(name)}:${playerUrl}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
 
-              names.push({
-                name,
-                playerUrl: link
-                  ? absolute(link.href)
-                  : "",
-              });
-            });
-        });
-
-        return names.slice(0, 25);
-      };
-
-      const events = [];
-      const seenEvents = new Set();
-      const eventPattern =
-        /(\d{1,3})[.'’]\s*(.*?)(?=(?:\d{1,3}[.'’])|$)/g;
-
-      let eventMatch;
-      while ((eventMatch = eventPattern.exec(bodyText))) {
-        const minute = Number(eventMatch[1]);
-        const description = compact(
-          eventMatch[2],
-        ).slice(0, 220);
-
-        if (
-          !description ||
-          minute > 130 ||
-          !/(tor|wechsel|gelb|rot|karte|elfmeter|eigentor)/i.test(
-            description,
-          )
-        ) {
-          continue;
+          const item = { name, number, playerUrl, captain, goalkeeper };
+          buckets[`${side}${role === "starter" ? "Starter" : "Bench"}`].push(item);
         }
 
-        const type = /rot/i.test(description)
-          ? "red-card"
-          : /gelb/i.test(description)
-            ? "yellow-card"
-            : /wechsel/i.test(description)
-              ? "substitution"
-              : /tor|elfmeter|eigentor/i.test(
-                    description,
-                  )
-                ? "goal"
-                : "event";
+        // Fallback für ÖFB-Seiten ohne eindeutige Spielerlinks: Abschnitte anhand
+        // ihrer Überschriften auswerten und danach links/rechts zuordnen.
+        const sectionHeadings = [
+          ...document.querySelectorAll("h1,h2,h3,h4,h5,strong,[role='heading'],button,[class*='title']"),
+        ].filter((node) => /startelf|ersatzbank|aufstellung|bank/i.test(compact(node.textContent)));
 
-        const key = `${minute}:${type}:${description.toLowerCase()}`;
-        if (seenEvents.has(key)) continue;
+        for (const heading of sectionHeadings) {
+          const headingText = compact(heading.textContent);
+          const role = /ersatz|bank/i.test(headingText) ? "bench" : "starter";
+          const container = heading.closest("section,article,[class*='lineup'],[class*='formation'],[class*='aufstellung'],div") || heading.parentElement;
+          if (!container) continue;
+          const side = classifySide(container, `${headingText} ${contextText(container, 5)}`);
+          if (!side) continue;
+          const bucket = buckets[`${side}${role === "starter" ? "Starter" : "Bench"}`];
+          const localSeen = new Set(bucket.map((item) => normalize(item.name)));
 
-        seenEvents.add(key);
-        events.push({
-          minute,
-          type,
-          description,
-        });
-      }
+          const rows = [...container.querySelectorAll("a[href],li,tr,[class*='player'],[class*='spieler']")];
+          for (const row of rows) {
+            const rowText = compact(row.textContent);
+            const name = cleanPlayerName(row.textContent) || cleanPlayerName(rowText);
+            if (!name || localSeen.has(normalize(name))) continue;
+            const linkNode = row.closest("a[href]") || row.querySelector("a[href]");
+            bucket.push({
+              name,
+              number: extractNumber(rowText),
+              playerUrl: linkNode ? absolute(linkNode.href) : "",
+              captain: /kapitän|captain|\(c\)/i.test(rowText),
+              goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(rowText),
+            });
+            localSeen.add(normalize(name));
+          }
+        }
 
-      const images = [...document.images]
-        .map((img) =>
-          absolute(
-            img.currentSrc ||
-              img.src ||
-              img.dataset?.src,
-          ),
-        )
-        .filter(Boolean);
+        const dedupeAndLimit = (items, limit) => {
+          const result = [];
+          const keys = new Set();
+          for (const item of items) {
+            const key = `${normalize(item.name)}:${item.playerUrl || ""}`;
+            if (keys.has(key)) continue;
+            keys.add(key);
+            result.push(item);
+            if (result.length >= limit) break;
+          }
+          return result;
+        };
 
-      const heroImage =
-        images.find(
-          (url) =>
-            !/logo|icon|avatar|placeholder/i.test(url),
-        ) || "";
+        const homeLineup = dedupeAndLimit(buckets.homeStarter, 18);
+        const awayLineup = dedupeAndLimit(buckets.awayStarter, 18);
+        const homeBench = dedupeAndLimit(buckets.homeBench, 18);
+        const awayBench = dedupeAndLimit(buckets.awayBench, 18);
 
-      return {
-        finalUrl: location.href,
-        title: compact(document.title),
-        heading: compact(
-          document.querySelector("h1")?.textContent ||
-            "",
-        ),
-        topText,
-        bodyLength: bodyText.length,
-        result,
-        attendance: attendance
-          ? Number(attendance[1])
-          : null,
-        referee: compact(referee?.[1]),
-        venue: compact(venue?.[1]),
-        homeLineup: extractSection(
-          /^(?:Heim.*)?Aufstellung|Startelf.*Heim/i,
-        ),
-        awayLineup: extractSection(
-          /^(?:Gast.*)?Aufstellung|Startelf.*Gast/i,
-        ),
-        events,
-        heroImage,
-        preview: textLines
-          .slice(0, 30)
-          .join(" | ")
-          .slice(0, 1500),
-      };
-    });
+        const events = [];
+        const seenEvents = new Set();
+        const eventPattern = /(\d{1,3})[.'’]\s*(.*?)(?=(?:\d{1,3}[.'’])|$)/g;
+        let eventMatch;
+        while ((eventMatch = eventPattern.exec(bodyText))) {
+          const minute = Number(eventMatch[1]);
+          const description = compact(eventMatch[2]).slice(0, 220);
+          if (
+            !description ||
+            minute > 130 ||
+            !/(tor|wechsel|gelb|rot|karte|elfmeter|eigentor)/i.test(description)
+          ) continue;
+          const type = /rot/i.test(description)
+            ? "red-card"
+            : /gelb/i.test(description)
+              ? "yellow-card"
+              : /wechsel/i.test(description)
+                ? "substitution"
+                : "goal";
+          const key = `${minute}:${type}:${description.toLowerCase()}`;
+          if (seenEvents.has(key)) continue;
+          seenEvents.add(key);
+          events.push({ minute, type, description });
+        }
+
+        const images = [...document.images]
+          .map((img) => absolute(img.currentSrc || img.src || img.dataset?.src))
+          .filter(Boolean);
+        const heroImage =
+          images.find((url) => !/logo|icon|avatar|placeholder/i.test(url)) || "";
+
+        return {
+          finalUrl: location.href,
+          title: compact(document.title),
+          heading: compact(document.querySelector("h1")?.textContent || ""),
+          topText,
+          bodyLength: bodyText.length,
+          result,
+          attendance: attendance ? Number(attendance[1]) : null,
+          referee: compact(referee?.[1]),
+          venue: compact(venue?.[1]),
+          homeLineup,
+          awayLineup,
+          homeBench,
+          awayBench,
+          events,
+          heroImage,
+          playerCandidateCount: candidates.length,
+          preview: textLines.slice(0, 35).join(" | ").slice(0, 1800),
+        };
+      },
+      {
+        expectedHomeTeam: compact(match.homeTeam),
+        expectedAwayTeam: compact(match.awayTeam),
+      },
+    );
 
     const validation = validateReportPage(match, raw);
 
@@ -703,11 +720,15 @@ async function extractReport(browser, match) {
       attendance: raw.attendance,
       homeLineup: raw.homeLineup,
       awayLineup: raw.awayLineup,
+      homeBench: raw.homeBench || [],
+      awayBench: raw.awayBench || [],
       events: raw.events,
       eventCount: raw.events.length,
       lineupPlayerCount:
         raw.homeLineup.length +
-        raw.awayLineup.length,
+        raw.awayLineup.length +
+        (raw.homeBench || []).length +
+        (raw.awayBench || []).length,
       reportUrl: absoluteUrl(
         raw.finalUrl,
         match.reportUrl,
@@ -718,6 +739,8 @@ async function extractReport(browser, match) {
           raw.events.length ||
             raw.homeLineup.length ||
             raw.awayLineup.length ||
+            (raw.homeBench || []).length ||
+            (raw.awayBench || []).length ||
             raw.result,
         ),
       active: true,
@@ -746,6 +769,11 @@ async function extractReport(browser, match) {
         heading: raw.heading,
         bodyLength: raw.bodyLength,
         lineupPlayers: report.lineupPlayerCount,
+        homeStarters: raw.homeLineup.length,
+        awayStarters: raw.awayLineup.length,
+        homeBenchPlayers: (raw.homeBench || []).length,
+        awayBenchPlayers: (raw.awayBench || []).length,
+        playerCandidateCount: raw.playerCandidateCount || 0,
         events: report.eventCount,
         hasResult: Boolean(raw.result),
         valid: validation.valid,
@@ -798,6 +826,12 @@ async function upsertReport(report, runId) {
       awayLineup: report.awayLineup.length
         ? report.awayLineup
         : old.awayLineup || [],
+      homeBench: report.homeBench.length
+        ? report.homeBench
+        : old.homeBench || [],
+      awayBench: report.awayBench.length
+        ? report.awayBench
+        : old.awayBench || [],
       events: report.events.length
         ? report.events
         : old.events || [],

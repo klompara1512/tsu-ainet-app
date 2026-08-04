@@ -12,15 +12,15 @@ import TeamLogo from "./TeamLogo";
 import { Icon } from "./Icons";
 import "./assets/kfvLive.css";
 
-type KfvLiveProps = { initialMatchId?: string };
+type KfvLiveTab = "matches" | "table" | "squad";
+type KfvLiveProps = { initialMatchId?: string; initialTab?: KfvLiveTab };
 
-function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
+function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) {
   const [matches, setMatches] = useState<KfvMatch[]>([]);
   const [standings, setStandings] = useState<KfvStandingRow[]>([]);
   const [squad, setSquad] = useState<KfvSquadPlayer[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("all");
-  const [activeTab, setActiveTab] =
-    useState<"matches" | "table" | "squad">("matches");
+  const [activeTab, setActiveTab] = useState<KfvLiveTab>(initialTab);
   const [loadingMatches, setLoadingMatches] = useState(true);
   const [loadingStandings, setLoadingStandings] = useState(true);
   const [loadingSquad, setLoadingSquad] = useState(true);
@@ -134,6 +134,16 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
 
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "de-AT"));
   }, [matches, standings]);
+
+  useEffect(() => {
+    setActiveTab(initialTab);
+  }, [initialTab]);
+
+  useEffect(() => {
+    if (activeTab === "squad" && selectedTeamId === "all" && teams.length > 0) {
+      setSelectedTeamId(teams[0].id);
+    }
+  }, [activeTab, selectedTeamId, teams]);
 
   const visibleMatches = useMemo(() => {
     return matches.filter(
@@ -273,7 +283,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
           className="match-detail-back"
           onClick={() => setSelectedMatch(null)}
         >
-          ← Zurück zu KFV Live
+          ← Zurück zum Spiel- & Tabellenzentrum
         </button>
 
         <article className="match-detail-hero premium-match-hero">
@@ -520,17 +530,15 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
       <header className="kfv-header">
         <div>
           <p className="kfv-eyebrow">TSU Ainet Fußball</p>
-          <h2>KFV Live</h2>
-          <p>Spiele, Ergebnisse und Tabellen der TSU Ainet direkt aus Firestore.</p>
+          <h2>Spiel- & Tabellenzentrum</h2>
+          <p>Spielpläne, Ergebnisse, Tabellen und Mannschaftskader der TSU Ainet.</p>
         </div>
 
-        <span className="kfv-status kfv-status-live">● Firestore Echtzeit</span>
       </header>
 
-      <div className="kfv-source-switch"><span className="active">Firestore Live-Daten</span></div>
 
       <div className="kfv-toolbar">
-        <div className="kfv-tabs" role="tablist" aria-label="KFV-Live Ansicht">
+        <div className="kfv-tabs" role="tablist" aria-label="Spiel- und Tabellenzentrum">
           <button
             type="button"
             role="tab"
@@ -566,7 +574,7 @@ function KfvLive({ initialMatchId = "" }: KfvLiveProps) {
             value={selectedTeamId}
             onChange={(event) => setSelectedTeamId(event.target.value)}
           >
-            <option value="all">Alle Mannschaften</option>
+            {activeTab !== "squad" && <option value="all">Alle Mannschaften</option>}
             {teams.map((team) => (
               <option key={team.id} value={team.id}>
                 {team.name}

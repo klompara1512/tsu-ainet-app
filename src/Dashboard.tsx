@@ -49,6 +49,7 @@ function Dashboard({ user, profile }: DashboardProps) {
     useState<Page>("start");
   const [profileOpen, setProfileOpen] = useState(false);
   const [selectedMatchId, setSelectedMatchId] = useState("");
+  const [kfvInitialTab, setKfvInitialTab] = useState<"matches" | "table" | "squad">("matches");
   const canManageMatches = hasPermission(role, "manageMatches");
   const canManageStandings = hasPermission(role, "manageStandings");
   const canManagePeople = hasPermission(role, "managePeople");
@@ -80,13 +81,13 @@ function Dashboard({ user, profile }: DashboardProps) {
           <button
             type="button"
             className="quick-card"
-            onClick={() => setActivePage("kfv-live")}
+            onClick={() => { setSelectedMatchId(""); setKfvInitialTab("matches"); setActivePage("kfv-live"); }}
           >
             <span className="quick-icon"><Icon name="live" /></span>
 
             <span className="quick-content">
-              <strong>KFV Live</strong>
-              <small>Spiele, Ergebnisse und Tabellen</small>
+              <strong>Spiel- & Tabellenzentrum</strong>
+              <small>Spielpläne, Ergebnisse, Tabellen und Kader</small>
             </span>
 
             <span className="quick-arrow">›</span>
@@ -209,7 +210,7 @@ function Dashboard({ user, profile }: DashboardProps) {
     }
 
     if (activePage === "kfv-live") {
-      return <KfvLive initialMatchId={selectedMatchId} />;
+      return <KfvLive initialMatchId={selectedMatchId} initialTab={kfvInitialTab} />;
     }
 
     if (activePage === "club-hub") {
@@ -296,10 +297,17 @@ function Dashboard({ user, profile }: DashboardProps) {
           }
           onOpenKfvLive={() => {
             setSelectedMatchId("");
+            setKfvInitialTab("matches");
+            setActivePage("kfv-live");
+          }}
+          onOpenStandings={() => {
+            setSelectedMatchId("");
+            setKfvInitialTab("table");
             setActivePage("kfv-live");
           }}
           onOpenMatch={(matchId) => {
             setSelectedMatchId(matchId);
+            setKfvInitialTab("matches");
             setActivePage("kfv-live");
           }}
         />

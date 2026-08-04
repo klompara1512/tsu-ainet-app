@@ -43,6 +43,7 @@ type Props = {
   onOpenNews: () => void;
   onOpenMore: () => void;
   onOpenKfvLive: () => void;
+  onOpenStandings: () => void;
   onOpenMatch: (matchId: string) => void;
 };
 
@@ -80,6 +81,7 @@ function LiveDashboard({
   onOpenNews,
   onOpenMore,
   onOpenKfvLive,
+  onOpenStandings,
   onOpenMatch,
 }: Props) {
   const [events, setEvents] = useState<ClubEvent[]>([]);
@@ -395,7 +397,7 @@ function LiveDashboard({
           <strong>Spiele</strong>
           <small>{scheduledCount} kommende Spiele</small>
         </button>
-        <button type="button" onClick={onOpenKfvLive}>
+        <button type="button" onClick={onOpenStandings}>
           <span><Icon name="table" /></span>
           <strong>Tabelle</strong>
           <small>{standing ? `${standing.position}. Platz · ${standing.points} Punkte` : "1. Klasse West"}</small>
@@ -439,7 +441,7 @@ function LiveDashboard({
         <section className="v101-card">
           <div className="v101-card-head">
             <div><span className="v101-overline">1. Klasse West</span><h2>Tabelle</h2></div>
-            <button type="button" onClick={onOpenKfvLive}>Komplett</button>
+            <button type="button" onClick={onOpenStandings}>Komplett</button>
           </div>
 
           <div className="v101-table">
@@ -448,7 +450,7 @@ function LiveDashboard({
                 type="button"
                 key={row.id}
                 className={isTsuAinet(row.clubName) ? "is-ainet" : ""}
-                onClick={onOpenKfvLive}
+                onClick={onOpenStandings}
               >
                 <span>{row.position}</span>
                 <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />

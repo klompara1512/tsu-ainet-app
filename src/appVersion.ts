@@ -1,3 +1,1 @@
-export const APP_VERSION = "14.5.3";
-export const APP_BUILD = "2026.08.04";
-export const APP_CODENAME = "Official Team Logos";
+export const APP_VERSION = "14.6.0";

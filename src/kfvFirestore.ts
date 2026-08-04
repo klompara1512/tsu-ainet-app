@@ -590,8 +590,12 @@ function isAinetLogoUrl(clubs: KfvClub[], value: string) {
   );
 }
 
-function isTrustedKfvLogoUrl(value: string) {
-  return /^https:\/\/kfv-fussball\.at\/oefb2\/images\//i.test(value.trim());
+function isTrustedOfficialLogoUrl(value: string) {
+  const url = value.trim();
+  return (
+    /^https:\/\/kfv-fussball\.at\/oefb2\/images\//i.test(url) ||
+    /^https:\/\/vereine\.oefb\.at\/vereine3\/images\/.*(?:200x200|150x150|100x100)\.(?:png|jpe?g|webp)(?:[?#].*)?$/i.test(url)
+  );
 }
 
 const OFFICIAL_FRONTEND_LOGOS: Record<string, string> = {
@@ -632,13 +636,13 @@ export function getKfvClubLogo(
     if (clubLogo && club?.logoValidated && !isAinetLogoUrl(clubs, clubLogo)) {
       return clubLogo;
     }
-    if (sourceLogo && isTrustedKfvLogoUrl(sourceLogo) && !isAinetLogoUrl(clubs, sourceLogo)) {
+    if (sourceLogo && isTrustedOfficialLogoUrl(sourceLogo) && !isAinetLogoUrl(clubs, sourceLogo)) {
       return sourceLogo;
     }
     return "";
   }
 
   if (clubLogo && club?.logoValidated) return clubLogo;
-  if (sourceLogo && isTrustedKfvLogoUrl(sourceLogo)) return sourceLogo;
+  if (sourceLogo && isTrustedOfficialLogoUrl(sourceLogo)) return sourceLogo;
   return "/tsu-ainet-logo.png";
 }

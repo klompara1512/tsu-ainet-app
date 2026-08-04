@@ -4,8 +4,9 @@ import {
   isTsuAinet,
   normalizeClubName,
   subscribeKfvClubs,
+  subscribeKfvStandings,
 } from "./kfvFirestore";
-import type { KfvClub } from "./kfvTypes";
+import type { KfvClub, KfvStandingRow } from "./kfvTypes";
 
 type TeamLogoSize = "small" | "normal" | "large" | "hero";
 
@@ -53,6 +54,72 @@ function getClubSnapshot() {
   return cachedClubs;
 }
 
+
+let cachedStandings: KfvStandingRow[] = [];
+let unsubscribeStandings: (() => void) | null = null;
+const standingListeners = new Set<() => void>();
+
+function emitStandingChange() {
+  standingListeners.forEach((listener) => listener());
+}
+
+function startStandingSubscription() {
+  if (unsubscribeStandings) return;
+
+  unsubscribeStandings = subscribeKfvStandings(
+    (rows) => {
+      cachedStandings = rows;
+      emitStandingChange();
+    },
+    () => {
+      cachedStandings = [];
+      emitStandingChange();
+    },
+  );
+}
+
+function subscribeStandingStore(listener: () => void) {
+  standingListeners.add(listener);
+  startStandingSubscription();
+
+  return () => {
+    standingListeners.delete(listener);
+  };
+}
+
+function getStandingSnapshot() {
+  return cachedStandings;
+}
+
+function standingLogoFor(rows: KfvStandingRow[], name: string, clubId: string) {
+  const normalizedName = normalizeClubName(name);
+  const normalizedId = clubId.trim().toLocaleLowerCase("de-AT");
+
+  const scored = rows
+    .map((row) => {
+      let score = 0;
+      const rowId = row.clubId.trim().toLocaleLowerCase("de-AT");
+      const rowName = normalizeClubName(row.clubName);
+
+      if (normalizedId && rowId && normalizedId === rowId) score += 1000;
+      if (normalizedName && rowName === normalizedName) score += 500;
+      else if (
+        normalizedName &&
+        rowName &&
+        (normalizedName.includes(rowName) || rowName.includes(normalizedName)) &&
+        Math.min(normalizedName.length, rowName.length) >= 5
+      ) {
+        score += 200;
+      }
+      if (row.teamLogoUrl?.trim()) score += 50;
+      return { row, score };
+    })
+    .filter(({ row, score }) => score > 0 && Boolean(row.teamLogoUrl?.trim()))
+    .sort((a, b) => b.score - a.score);
+
+  return scored[0]?.row || null;
+}
+
 function localLogoFor(name: string) {
   if (isTsuAinet(name)) return "/tsu-ainet-logo.png";
 
@@ -71,16 +138,27 @@ function TeamLogo({ url = "", name, size = "normal", className = "", clubId = ""
     getClubSnapshot,
   );
 
+  const standings = useSyncExternalStore(
+    subscribeStandingStore,
+    getStandingSnapshot,
+    getStandingSnapshot,
+  );
+
   const candidates = useMemo(() => {
+    const standing = standingLogoFor(standings, name, clubId);
+    const effectiveClubId = clubId || standing?.clubId || "";
+    const tableLogoUrl = standing?.teamLogoUrl || "";
+
     const values = [
       localLogoFor(name),
-      // Die zentrale Funktion prüft zusätzlich, ob bei einem Gegner irrtümlich
-      // das TSU-Ainet-Wappen gespeichert wurde.
+      // Das Tabellenlogo ist die verlässlichste Quelle für den Spielplan.
+      // Dadurch verwendet jedes Spiel dasselbe Vereinswappen wie die Tabelle.
+      getKfvClubLogo(clubs, name, tableLogoUrl, effectiveClubId),
       getKfvClubLogo(clubs, name, url, clubId),
     ].filter(Boolean);
 
     return values.filter((value, index) => values.indexOf(value) === index);
-  }, [clubs, name, url, clubId]);
+  }, [clubs, standings, name, url, clubId]);
 
   const [candidateIndex, setCandidateIndex] = useState(0);
 

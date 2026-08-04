@@ -1,9 +1,10 @@
 import {
   collection,
-  doc,
   onSnapshot,
   orderBy,
   query,
+  where,
+  limit,
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
@@ -82,6 +83,33 @@ function readMatchEvents(value: unknown): KfvMatchEvent[] {
     .sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999));
 }
 
+function mapMatchReportDocument(
+  id: string,
+  data: Record<string, unknown>,
+): KfvMatchReport {
+  return {
+    id,
+    matchId: typeof data.matchId === "string" ? data.matchId : id,
+    matchUid: typeof data.matchUid === "string" ? data.matchUid : "",
+    oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : "",
+    reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
+    homeTeam: typeof data.homeTeam === "string" ? data.homeTeam : "",
+    awayTeam: typeof data.awayTeam === "string" ? data.awayTeam : "",
+    homeLineup: readLineupPlayers(data.homeLineup),
+    awayLineup: readLineupPlayers(data.awayLineup),
+    homeBench: readLineupPlayers(data.homeBench),
+    awayBench: readLineupPlayers(data.awayBench),
+    homeCoach: typeof data.homeCoach === "string" ? data.homeCoach : "",
+    awayCoach: typeof data.awayCoach === "string" ? data.awayCoach : "",
+    referee: typeof data.referee === "string" ? data.referee : "",
+    attendance: typeof data.attendance === "number" ? data.attendance : null,
+    events: readMatchEvents(data.events),
+    sourceUpdatedAt:
+      readNullableDate(data.sourceUpdatedAt) ?? readNullableDate(data.updatedAt),
+    active: data.active !== false,
+  };
+}
+
 export function subscribeKfvMatchReport(
   matchId: string,
   onData: (report: KfvMatchReport | null) => void,
@@ -91,34 +119,29 @@ export function subscribeKfvMatchReport(
     onData(null);
     return () => undefined;
   }
+
+  // Die Berichtsdokument-ID ist nicht immer identisch mit der Match-ID.
+  // Deshalb wird über das gespeicherte Feld matchId gesucht.
+  const reportQuery = query(
+    collection(db, "kfvMatchReports"),
+    where("matchId", "==", matchId),
+    limit(1),
+  );
+
   return onSnapshot(
-    doc(db, "kfvMatchReports", matchId),
+    reportQuery,
     (snapshot) => {
-      if (!snapshot.exists()) {
+      const reportDocument = snapshot.docs[0];
+      if (!reportDocument) {
         onData(null);
         return;
       }
-      const data = snapshot.data();
-      onData({
-        id: snapshot.id,
-        matchId: typeof data.matchId === "string" ? data.matchId : snapshot.id,
-        matchUid: typeof data.matchUid === "string" ? data.matchUid : "",
-        oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : "",
-        reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
-        homeTeam: typeof data.homeTeam === "string" ? data.homeTeam : "",
-        awayTeam: typeof data.awayTeam === "string" ? data.awayTeam : "",
-        homeLineup: readLineupPlayers(data.homeLineup),
-        awayLineup: readLineupPlayers(data.awayLineup),
-        homeBench: readLineupPlayers(data.homeBench),
-        awayBench: readLineupPlayers(data.awayBench),
-        homeCoach: typeof data.homeCoach === "string" ? data.homeCoach : "",
-        awayCoach: typeof data.awayCoach === "string" ? data.awayCoach : "",
-        referee: typeof data.referee === "string" ? data.referee : "",
-        attendance: typeof data.attendance === "number" ? data.attendance : null,
-        events: readMatchEvents(data.events),
-        sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),
-        active: data.active !== false,
-      });
+
+      const report = mapMatchReportDocument(
+        reportDocument.id,
+        reportDocument.data(),
+      );
+      onData(report.active ? report : null);
     },
     (error) => {
       console.error("Fehler beim Laden des Spielberichts:", error);

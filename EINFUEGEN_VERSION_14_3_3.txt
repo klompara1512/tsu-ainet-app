@@ -1,0 +1,11 @@
+VERSION 14.3.3 – KADER BEREINIGUNG
+
+1. Alle Dateien in den bestehenden Projektordner kopieren.
+2. Vorhandene Dateien ersetzen.
+3. In VS Code: npm install
+4. Danach: node --check scripts/kfv-squad-sync.cjs
+5. Commit und Sync Changes.
+6. GitHub Actions: KFV / ÖFB Kader synchronisieren → Run workflow.
+7. App mit Strg + F5 neu laden.
+
+Der neue Lauf deaktiviert automatisch alte Dubletten und falsche Kader-Einträge.

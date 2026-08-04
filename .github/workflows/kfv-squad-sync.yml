@@ -1,0 +1,42 @@
+name: KFV / ÖFB Kader synchronisieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "40 3 * * *"
+
+concurrency:
+  group: kfv-oefb-squad-sync
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      SQUAD_SYNC_CONCURRENCY: "2"
+      SQUAD_NAVIGATION_TIMEOUT: "50000"
+
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Projekt und Kader-Sync prüfen
+        run: npm run sync:check
+
+      - name: Offizielle Kader synchronisieren
+        run: npm run sync:squad

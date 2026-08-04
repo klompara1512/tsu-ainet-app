@@ -107,8 +107,8 @@
     "https://kfv-fussball.at/kfv/Verein/9209?TSU-Ainet",
     "https://kfv-fussball.at/kfv/Verein/9156?SG-Gitschtal"
   ],
-  "syncArchitecture": "v14-phase2-club-sync",
-  "version": "14.1.0",
+  "syncArchitecture": "v14-phase3-squad-sync",
+  "version": "14.2.0",
   "requiredTeams": [
     "KM",
     "CHALLENGE",
@@ -143,5 +143,24 @@
       "match-reports"
     ],
     "maxPages": 16
+  },
+  "squadSync": {
+    "enabled": true,
+    "schedule": "daily",
+    "includes": [
+      "players",
+      "numbers",
+      "positions",
+      "player-images",
+      "profiles"
+    ],
+    "teams": [
+      "KM",
+      "CHALLENGE",
+      "U17",
+      "U12",
+      "U10",
+      "U08"
+    ]
   }
 }

@@ -1,0 +1,13 @@
+VERSION 14.2.0 – PHASE 3 KADER-SYNC
+
+1. Alle Dateien in das bestehende Projekt kopieren.
+2. Vorhandene Dateien ersetzen.
+3. Auch den Ordner .github übernehmen.
+4. In VS Code ausführen:
+   npm install
+   npm run sync:check
+   npm run typecheck
+5. Commit: Version 14.2.0 Phase 3 Kader Sync
+6. Sync Changes.
+7. GitHub > Actions > KFV / ÖFB Kader synchronisieren > Run workflow.
+8. Status in Firestore unter settings/kfvSquadSyncStatus prüfen.

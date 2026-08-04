@@ -27,7 +27,7 @@ const config = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, "../config/kfv-sync.config.json"), "utf8"),
 );
 
-const VERSION = "14.5.0-smart-logo-engine";
+const VERSION = "14.5.1-official-logo-overrides";
 const STATUS_REF = db.collection("settings").doc("kfvClubSyncStatus");
 const MATCH_COLLECTIONS = ["oefbV12Matches", "kfvMatches"];
 const STANDING_COLLECTIONS = ["oefbV12Standings", "kfvStandings"];
@@ -59,6 +59,22 @@ const isAinet = (value) => /(?:^|\s)(?:tsu\s+)?ainet(?:\s|$)/i.test(compact(valu
 const OFFICIAL_LOGO_OVERRIDES = new Map([
   ["oberlienz", "https://kfv-fussball.at/oefb2/images/1278650591628556536_2a7e449d8e2567d70986-2-200x200-200x200.png"],
   ["koetschach", "https://kfv-fussball.at/oefb2/images/1278650591628556536_1d8c4339242538787420-2-200x200-200x200.png"],
+  ["feffernitz", "https://vereine.oefb.at/vereine3/images/834733022602002384_3281feb87832ae2f1ace-1,0-200x200.png"],
+  ["lurnfeld", "https://vereine.oefb.at/vereine3/images/834733022602002384_0c2c475d885db85df734-1,0-200x200.png"],
+  ["fc lurnfeld", "https://vereine.oefb.at/vereine3/images/834733022602002384_0c2c475d885db85df734-1,0-200x200.png"],
+  ["penk", "https://vereine.oefb.at/vereine3/images/834733022602002384_11d66faa2d824d7dfb89-1,0-200x200.png"],
+  ["admira villach", "https://vereine.oefb.at/vereine3/images/834733022602002384_03d7fdbf44cf98e7b529-1,0-200x200.png"],
+  ["moelltal", "https://vereine.oefb.at/vereine3/images/834733022602002384_c3bfc1ccbe14dd1e04d0-1,0-200x200.png"],
+  ["fc moelltal", "https://vereine.oefb.at/vereine3/images/834733022602002384_c3bfc1ccbe14dd1e04d0-1,0-200x200.png"],
+  ["dellach drau", "https://vereine.oefb.at/vereine3/images/834733022602002384_9ed648f67cf33b10aaf2-1,0-200x200.png"],
+  ["dellach dr", "https://vereine.oefb.at/vereine3/images/834733022602002384_9ed648f67cf33b10aaf2-1,0-200x200.png"],
+  ["treffen", "https://vereine.oefb.at/vereine3/images/834733022602002384_65abb3182e8fe0ec308a-1,0-200x200.png"],
+  ["magdalen", "https://vereine.oefb.at/vereine3/images/834733022602002384_51ae2944767ad0110235-1,0-200x200.png"],
+  ["baldramsdorf", "https://vereine.oefb.at/vereine3/images/834733022602002384_2cf1e493aa324631c4ce-1,0-200x200.png"],
+  ["irschen", "https://vereine.oefb.at/vereine3/images/834733022602002384_62990544880f644e7ecc-1,0-200x200.png"],
+  ["nussdorf debant", "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png"],
+  ["wr nussdorf debant", "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png"],
+  ["tristach", "https://vereine.oefb.at/vereine3/images/834733022602002384_6d230767f0385f9d0c30-1,0-200x200.png"],
 ]);
 
 function officialLogoOverride(name) {

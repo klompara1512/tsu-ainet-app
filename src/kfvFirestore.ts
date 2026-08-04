@@ -487,30 +487,46 @@ export function subscribeKfvClubs(
   );
 }
 
+function clubSelectionScore(club: KfvClub) {
+  let score = 0;
+  if (club.logoUrl?.trim()) score += 100;
+  if (club.logoValidated) score += 200;
+  if (club.logoSource === "manual-kfv-official-override") score += 400;
+  if (/^kfv:/i.test(club.clubId || club.id)) score += 60;
+  else if (/^oefb:/i.test(club.clubId || club.id)) score += 40;
+  if (club.pageUrl?.trim()) score += 20;
+  if (/^name:/i.test(club.clubId || club.id)) score -= 80;
+  return score;
+}
+
+function bestClub(candidates: KfvClub[]) {
+  return [...candidates].sort((a, b) => clubSelectionScore(b) - clubSelectionScore(a))[0] || null;
+}
+
 export function findKfvClub(clubs: KfvClub[], teamName: string, clubId = "") {
   if (clubId) {
     const normalizedId = clubId.trim().toLocaleLowerCase("de-AT");
-    const byId = clubs.find((club) =>
+    const idCandidates = clubs.filter((club) =>
       [club.clubId, club.oefbClubId, club.id]
         .filter(Boolean)
         .some((value) => value.trim().toLocaleLowerCase("de-AT") === normalizedId),
     );
+    const byId = bestClub(idCandidates);
     if (byId) return byId;
   }
 
   const wantedName = normalizeClubName(teamName);
   if (!wantedName) return null;
 
-  const exactClub = clubs.find((club) => {
+  const exactCandidates = clubs.filter((club) => {
     const names = [club.normalizedName, club.name, ...club.aliases]
       .map(normalizeClubName)
       .filter(Boolean);
     return names.includes(wantedName);
   });
+  const exactClub = bestClub(exactCandidates);
   if (exactClub) return exactClub;
 
-  // Nur noch eine eindeutige beidseitige Übereinstimmung zulassen. Ein einzelnes
-  // gemeinsames Wort reicht nicht mehr, weil dadurch falsche Logos entstanden.
   const candidates = clubs.filter((club) => {
     const names = [club.normalizedName, club.name, ...club.aliases]
       .map(normalizeClubName)
@@ -520,7 +536,7 @@ export function findKfvClub(clubs: KfvClub[], teamName: string, clubId = "") {
       Math.min(name.length, wantedName.length) >= 5,
     );
   });
-  return candidates.length === 1 ? candidates[0] : null;
+  return bestClub(candidates);
 }
 
 function normalizeLogoUrl(value: string) {
@@ -555,12 +571,34 @@ function isTrustedKfvLogoUrl(value: string) {
   return /^https:\/\/kfv-fussball\.at\/oefb2\/images\//i.test(value.trim());
 }
 
+const OFFICIAL_FRONTEND_LOGOS: Record<string, string> = {
+  penk: "https://vereine.oefb.at/vereine3/images/834733022602002384_11d66faa2d824d7dfb89-1,0-200x200.png",
+  gitschtal: "https://vereine.oefb.at/vereine3/images/834733022602002384_6d20905242d81e9fe35c-1,0-200x200.png",
+  "nussdorf 1b": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
+  "nussdorf debant": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
+  "wr nussdorf debant": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
+  "nussdorf debant rapid lienz u17 b": "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png",
+};
+
+function officialFrontendLogo(teamName: string) {
+  const normalized = normalizeClubName(teamName);
+  if (!normalized) return "";
+  if (OFFICIAL_FRONTEND_LOGOS[normalized]) return OFFICIAL_FRONTEND_LOGOS[normalized];
+  const entries = Object.entries(OFFICIAL_FRONTEND_LOGOS)
+    .filter(([key]) => normalized.includes(key) || key.includes(normalized))
+    .sort((a, b) => b[0].length - a[0].length);
+  return entries[0]?.[1] || "";
+}
+
 export function getKfvClubLogo(
   clubs: KfvClub[],
   teamName: string,
   matchLogoUrl = "",
   clubId = "",
 ) {
+  const fixedOfficialLogo = officialFrontendLogo(teamName);
+  if (fixedOfficialLogo && !isTsuAinet(teamName)) return fixedOfficialLogo;
+
   const club = findKfvClub(clubs, teamName, clubId);
   const clubLogo = club?.logoUrl?.trim() || "";
   const sourceLogo = matchLogoUrl.trim();

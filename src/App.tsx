@@ -11,6 +11,7 @@ import {
   type UserProfile,
 } from "./permissions";
 import InstallApp from "./InstallApp";
+import UpdateApp from "./UpdateApp";
 import "./App.css";
 
 export type { AppRole, UserProfile } from "./permissions";
@@ -118,6 +119,7 @@ function App() {
     <>
       <AppContent />
       <InstallApp />
+      <UpdateApp />
     </>
   );
 }

@@ -4,7 +4,7 @@ const admin = require("firebase-admin");
 const puppeteer = require("puppeteer");
 const crypto = require("crypto");
 
-const VERSION = "15.0.0-official-match-report-engine";
+const VERSION = "15.0.1-official-lineup-split-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -621,10 +621,73 @@ async function extractReport(browser, match) {
           return result;
         };
 
-        const homeLineup = dedupeAndLimit(buckets.homeStarter, 18);
-        const awayLineup = dedupeAndLimit(buckets.awayStarter, 18);
-        const homeBench = dedupeAndLimit(buckets.homeBench, 18);
-        const awayBench = dedupeAndLimit(buckets.awayBench, 18);
+        const isValidPlayer = (item) => {
+          const name = compact(item?.name);
+          if (!name || name.length < 3 || name.length > 70) return false;
+          if (!/\s/.test(name)) return false;
+          if (/^(?:tor|torwart|goalkeeper|spieler|startelf|ersatzbank|bank|trainer|betreuer|heim|gast|aufstellung)$/i.test(name)) return false;
+          return true;
+        };
+
+        const uniquePlayers = (items, limit = 30) => {
+          const result = [];
+          const keys = new Set();
+          for (const item of items) {
+            if (!isValidPlayer(item)) continue;
+            const profileKey = String(item.playerUrl || "").match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || "";
+            const key = profileKey || normalize(item.name);
+            if (!key || keys.has(key)) continue;
+            keys.add(key);
+            result.push(item);
+            if (result.length >= limit) break;
+          }
+          return result;
+        };
+
+        let homeLineup = uniquePlayers(buckets.homeStarter, 30);
+        let awayLineup = uniquePlayers(buckets.awayStarter, 30);
+        let homeBench = uniquePlayers(buckets.homeBench, 20);
+        let awayBench = uniquePlayers(buckets.awayBench, 20);
+
+        // ÖFB rendert beide Startelf-Spalten teilweise in einem gemeinsamen
+        // DOM-Container. Dann landen beide Mannschaften im selben Bucket.
+        // Eine Startelf hat regulär elf Spieler: Ist nur eine Seite gefüllt
+        // und enthält mindestens 20 eindeutige Namen, wird exakt nach elf
+        // Spielern in Heim und Gast getrennt. Überschriften wie „Tor“ wurden
+        // davor bereits herausgefiltert.
+        if (homeLineup.length >= 20 && awayLineup.length === 0) {
+          awayLineup = homeLineup.slice(11, 22);
+          homeLineup = homeLineup.slice(0, 11);
+        } else if (awayLineup.length >= 20 && homeLineup.length === 0) {
+          homeLineup = awayLineup.slice(0, 11);
+          awayLineup = awayLineup.slice(11, 22);
+        }
+
+        // Bei einer nur teilweise erkannten Gegenseite darf ein Überhang
+        // ebenfalls als zweite Startelf genutzt werden, jedoch nur wenn die
+        // Zielseite noch deutlich unvollständig ist.
+        if (homeLineup.length > 11 && awayLineup.length < 7) {
+          const overflow = homeLineup.slice(11);
+          homeLineup = homeLineup.slice(0, 11);
+          awayLineup = uniquePlayers([...awayLineup, ...overflow], 11);
+        }
+        if (awayLineup.length > 11 && homeLineup.length < 7) {
+          const overflow = awayLineup.slice(11);
+          awayLineup = awayLineup.slice(0, 11);
+          homeLineup = uniquePlayers([...homeLineup, ...overflow], 11);
+        }
+
+        homeLineup = homeLineup.slice(0, 11);
+        awayLineup = awayLineup.slice(0, 11);
+
+        // Ein Spieler darf pro Mannschaft nicht gleichzeitig in Startelf und
+        // Ersatzbank stehen. Profil-ID hat Vorrang, sonst wird der Name genutzt.
+        const playerKey = (item) =>
+          String(item.playerUrl || "").match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalize(item.name);
+        const homeStarterKeys = new Set(homeLineup.map(playerKey));
+        const awayStarterKeys = new Set(awayLineup.map(playerKey));
+        homeBench = homeBench.filter((item) => !homeStarterKeys.has(playerKey(item))).slice(0, 15);
+        awayBench = awayBench.filter((item) => !awayStarterKeys.has(playerKey(item))).slice(0, 15);
 
         const events = [];
         const seenEvents = new Set();

@@ -27,7 +27,7 @@ const config = JSON.parse(
   fs.readFileSync(path.resolve(__dirname, "../config/kfv-sync.config.json"), "utf8"),
 );
 
-const VERSION = "14.5.1-official-logo-overrides";
+const VERSION = "14.5.2-official-logo-overrides";
 const STATUS_REF = db.collection("settings").doc("kfvClubSyncStatus");
 const MATCH_COLLECTIONS = ["oefbV12Matches", "kfvMatches"];
 const STANDING_COLLECTIONS = ["oefbV12Standings", "kfvStandings"];
@@ -75,6 +75,21 @@ const OFFICIAL_LOGO_OVERRIDES = new Map([
   ["nussdorf debant", "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png"],
   ["wr nussdorf debant", "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png"],
   ["tristach", "https://vereine.oefb.at/vereine3/images/834733022602002384_6d230767f0385f9d0c30-1,0-200x200.png"],
+  ["wsg radenthein bad kleinkirchheim", "https://vereine.oefb.at/vereine3/images/834733022602002384_98a0bcd4e75b85000ef5-1,0-200x200.png"],
+  ["radenthein bad kleinkirchheim", "https://vereine.oefb.at/vereine3/images/834733022602002384_98a0bcd4e75b85000ef5-1,0-200x200.png"],
+  ["gitschtal", "https://vereine.oefb.at/vereine3/images/834733022602002384_6d20905242d81e9fe35c-1,0-200x200.png"],
+  ["malta rennweg", "https://vereine.oefb.at/vereine3/images/834733022602002384_f3a7088e274f04b9db63-1,0-200x200.png"],
+  ["obermillstatt", "https://vereine.oefb.at/vereine3/images/834733022602002384_ff9a6d11cc386daffab0-1,0-200x200.png"],
+  ["landskron toeplitsch u17", "https://vereine.oefb.at/vereine3/images/834733022602002384_2c92ac869ca89f36a1de-1,0-200x200.png"],
+  ["landskron toplitsch u17", "https://vereine.oefb.at/vereine3/images/834733022602002384_2c92ac869ca89f36a1de-1,0-200x200.png"],
+  ["ledenitzen faakersee", "https://vereine.oefb.at/vereine3/images/834733022602002384_a53f816ebdfd06e23add-1,0-200x200.png"],
+  ["sachsenburg u17", "https://vereine.oefb.at/vereine3/images/834733022602002384_9ca60a461d01a710bf75-1,0-200x200.png"],
+  ["matrei", "https://vereine.oefb.at/vereine3/images/834733022602002384_90d587526b8e3a17d405-1,0-200x200.png"],
+  ["nussdorf debant rapid lienz u17 b", "https://vereine.oefb.at/vereine3/images/834733022602002384_8818bf255331eea0f5b0-1,0-200x200.png"],
+  ["sillian heinfels thal assling u17", "https://vereine.oefb.at/vereine3/images/834733022602002384_7a1c5115aa477996b426-1,0-200x200.png"],
+  ["rothenthurn", "https://vereine.oefb.at/vereine3/images/834733022602002384_7fd15cf6a875c296a040-1,0-200x200.png"],
+  ["woerthersee fliesen koller velden", "https://vereine.oefb.at/vereine3/images/834733022602002384_317b96e5aaf01ac56836-1,0-200x200.png"],
+  ["woerthersee velden", "https://vereine.oefb.at/vereine3/images/834733022602002384_317b96e5aaf01ac56836-1,0-200x200.png"],
 ]);
 
 function officialLogoOverride(name) {

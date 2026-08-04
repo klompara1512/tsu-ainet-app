@@ -197,3 +197,5 @@
     grid-template-columns: 1fr;
   }
 }
+
+.board-overview__task-actions{display:flex;gap:8px;flex-wrap:wrap}.board-overview__task-actions button{min-height:40px;padding:0 14px;color:#fff;font:inherit;font-size:12px;font-weight:800;background:linear-gradient(135deg,#377fec,#7047ee);border:0;border-radius:12px;cursor:pointer}@media(max-width:620px){.board-overview__task-actions{width:100%}.board-overview__task-actions button{flex:1}}

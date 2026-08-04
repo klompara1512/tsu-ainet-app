@@ -11,6 +11,14 @@ type TaskRow = {
   status?: string;
   priority?: string;
   category?: string;
+  source?: string;
+  matchId?: string;
+  teamName?: string;
+  homeTeam?: string;
+  awayTeam?: string;
+  kickoffAt?: FirestoreDate;
+  paused?: boolean;
+  active?: boolean;
   assignedTo?: string;
   assignedToName?: string;
   dueDate?: FirestoreDate;
@@ -36,6 +44,7 @@ type ServiceRow = {
 type BoardOverviewProps = {
   onOpenTasks: () => void;
   onOpenClubAdmin: () => void;
+  onOpenHomeGameTasks: () => void;
 };
 
 function asDate(value: FirestoreDate): Date | null {
@@ -63,8 +72,12 @@ function startOfToday() {
 }
 
 function isTsuAinet(name?: string) {
-  const normalized = String(name || "").toLowerCase();
-  return normalized.includes("ainet") || normalized.includes("tsu");
+  const normalized = String(name || "")
+    .toLocaleLowerCase("de-AT")
+    .replace(/[^a-z0-9äöüß]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return /(?:^|\s)(?:tsu\s+)?ainet(?:\s|$)/.test(normalized);
 }
 
 function formatDate(date: Date | null, withTime = false) {
@@ -81,6 +94,7 @@ function formatDate(date: Date | null, withTime = false) {
 export default function BoardOverview({
   onOpenTasks,
   onOpenClubAdmin,
+  onOpenHomeGameTasks,
 }: BoardOverviewProps) {
   const [tasks, setTasks] = useState<TaskRow[]>([]);
   const [matches, setMatches] = useState<MatchRow[]>([]);
@@ -92,7 +106,7 @@ export default function BoardOverview({
     });
 
     const unsubscribeMatches = onSnapshot(
-      collection(db, "oefbV12Matches"),
+      collection(db, "kfvMatches"),
       (snapshot) => {
         setMatches(snapshot.docs.map((item) => ({ id: item.id, ...item.data() })));
       },
@@ -162,6 +176,15 @@ export default function BoardOverview({
       .sort((a, b) => a.date!.getTime() - b.date!.getTime())[0];
   }, [matches, today]);
 
+
+  const nextHomeGameTasks = useMemo(() => {
+    if (!nextHomeMatch) return [];
+    return tasks.filter((task) => task.source === "home-game-auto" && task.matchId === nextHomeMatch.id && task.active !== false);
+  }, [tasks, nextHomeMatch]);
+
+  const homeGameDone = nextHomeGameTasks.filter((task) => task.status === "done").length;
+  const homeGameUnassigned = nextHomeGameTasks.filter((task) => !task.assignedToName && !task.assignedTo).length;
+
   const nextService = useMemo(() => {
     return services
       .map((service) => ({ ...service, serviceDate: asDate(service.date) }))
@@ -200,7 +223,7 @@ export default function BoardOverview({
           <span>{overdueTasks.length > 0 ? "Bitte zeitnah erledigen" : "Alles im Zeitplan"}</span>
         </button>
 
-        <article>
+        <button type="button" onClick={onOpenHomeGameTasks}>
           <small>Nächstes Heimspiel</small>
           <strong>
             {nextHomeMatch
@@ -208,7 +231,8 @@ export default function BoardOverview({
               : "Noch nicht gefunden"}
           </strong>
           <span>{formatDate(nextHomeMatch?.date || null, true)}</span>
-        </article>
+          {nextHomeMatch && <span>{nextHomeGameTasks.length ? `${homeGameDone}/${nextHomeGameTasks.length} Aufgaben erledigt${homeGameUnassigned ? ` · ${homeGameUnassigned} ohne Zuständigen` : ""}` : "Aufgaben werden beim nächsten Sync angelegt"}</span>}
+        </button>
 
         <article>
           <small>Nächster Dienst</small>
@@ -233,9 +257,10 @@ export default function BoardOverview({
             <small>Prioritäten</small>
             <h3>Als Nächstes zu erledigen</h3>
           </div>
-          <button type="button" onClick={onOpenTasks}>
-            Alle Aufgaben
-          </button>
+          <div className="board-overview__task-actions">
+            <button type="button" onClick={onOpenHomeGameTasks}>Heimspiel-Manager</button>
+            <button type="button" onClick={onOpenTasks}>Alle Aufgaben</button>
+          </div>
         </div>
 
         {urgentTasks.length === 0 ? (

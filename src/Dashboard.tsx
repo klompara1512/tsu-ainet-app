@@ -21,6 +21,7 @@ import FanFeatures from "./FanFeatures";
 import NotificationsAdmin from "./NotificationsAdmin";
 import { Icon } from "./Icons";
 import BoardOverview from "./BoardOverview";
+import HomeGameTasks from "./HomeGameTasks";
 import { APP_VERSION } from "./appVersion";
 
 type Page =
@@ -39,7 +40,8 @@ type Page =
   | "club-admin"
   | "club-hub"
   | "fan-features"
-  | "notifications-admin";
+  | "notifications-admin"
+  | "home-game-tasks";
 
 type DashboardProps = { user: User; profile: UserProfile };
 
@@ -217,6 +219,10 @@ function Dashboard({ user, profile }: DashboardProps) {
       return <ClubHub />;
     }
 
+    if (activePage === "home-game-tasks") {
+      return <HomeGameTasks onBack={() => setActivePage("start")} />;
+    }
+
     if (activePage === "fan-features") {
       return <FanFeatures />;
     }
@@ -278,6 +284,7 @@ function Dashboard({ user, profile }: DashboardProps) {
           <BoardOverview
             onOpenTasks={() => setActivePage("club-admin")}
             onOpenClubAdmin={() => setActivePage("club-admin")}
+            onOpenHomeGameTasks={() => setActivePage("home-game-tasks")}
           />
         )}
 
@@ -339,7 +346,8 @@ function Dashboard({ user, profile }: DashboardProps) {
     activePage === "club-admin" ||
     activePage === "club-hub" ||
     activePage === "fan-features" ||
-    activePage === "notifications-admin"
+    activePage === "notifications-admin" ||
+    activePage === "home-game-tasks"
       ? "mehr"
       : activePage;
 

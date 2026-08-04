@@ -41,3 +41,6 @@ jobs:
 
       - name: Spielpläne, Ergebnisse und Tabellen synchronisieren
         run: npm run sync:core
+
+      - name: Heimspiel-Aufgaben automatisch aktualisieren
+        run: npm run sync:home-tasks

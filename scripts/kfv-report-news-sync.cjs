@@ -3,8 +3,10 @@ process.env.TZ = "Europe/Vienna";
 const admin = require("firebase-admin");
 const puppeteer = require("puppeteer");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 
-const VERSION = "15.0.1-official-lineup-split-fix";
+const VERSION = "15.1.0-official-match-id-resolver";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -24,6 +26,22 @@ const LOOKAHEAD_DAYS = Math.max(
   0,
   Number(process.env.REPORT_LOOKAHEAD_DAYS || 7),
 );
+const CONFIG_PATH = path.join(process.cwd(), "config", "kfv-sync.config.json");
+const SYNC_CONFIG = fs.existsSync(CONFIG_PATH)
+  ? JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"))
+  : { teams: [] };
+
+// Sichere Korrektur für bereits bekannte offizielle Spielberichte.
+// Weitere Spiele werden automatisch aus den ÖFB-Spielplanseiten ermittelt.
+const REPORT_OVERRIDES = [
+  {
+    date: "2026-08-01",
+    home: "Lurnfeld",
+    away: "TSU Ainet",
+    url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?Lurnfeld-vs-Ainet&:s=4074032",
+  },
+];
+
 
 const rawCredentials = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!rawCredentials) {
@@ -186,7 +204,7 @@ function resultTitle(match) {
 }
 
 function reportIdFor(match) {
-  const gameId = compact(match.gameId || match.oefbMatchId);
+  const gameId = compact(match._resolvedGameId || match.gameId || match.oefbMatchId);
 
   return gameId
     ? `report_oefb_${gameId}`
@@ -208,7 +226,7 @@ function validateReportPage(match, raw) {
 
   const requestedGameId = extractOefbGameId(requestedUrl);
   const finalGameId = extractOefbGameId(finalUrl);
-  const storedGameId = compact(match.gameId || match.oefbMatchId);
+  const storedGameId = compact(match._resolvedGameId || match.gameId || match.oefbMatchId);
 
   if (requestedGameId && finalGameId && requestedGameId !== finalGameId) {
     reasons.push(
@@ -303,7 +321,6 @@ async function loadCandidateMatches() {
       kickoffDate: asDate(match.kickoffAt),
     }))
     .filter((match) => match.active !== false)
-    .filter((match) => isIndividualReportUrl(match.reportUrl))
     .filter((match) => {
       const time = match.kickoffDate.getTime();
       return time > 0 && time >= from && time <= to;
@@ -313,6 +330,158 @@ async function loadCandidateMatches() {
         isAinet(match.homeTeam) || isAinet(match.awayTeam),
     )
     .sort((a, b) => b.kickoffDate - a.kickoffDate);
+}
+
+function localDateKey(date) {
+  const value = asDate(date);
+  if (!value || value.getTime() <= 0) return "";
+  const yyyy = value.getFullYear();
+  const mm = String(value.getMonth() + 1).padStart(2, "0");
+  const dd = String(value.getDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function sameClubName(a, b) {
+  if (!a || !b) return false;
+  const na = normalizeText(a);
+  const nb = normalizeText(b);
+  if (na === nb) return true;
+  const at = clubTokens(a);
+  const bt = clubTokens(b);
+  if (!at.length || !bt.length) return false;
+  const common = at.filter((token) => bt.includes(token));
+  return common.length >= Math.min(2, at.length, bt.length) ||
+    (Math.min(at.length, bt.length) === 1 && common.length === 1);
+}
+
+function matchingOverride(match) {
+  const date = localDateKey(match.kickoffDate || match.kickoffAt);
+  return REPORT_OVERRIDES.find((item) =>
+    item.date === date &&
+    sameClubName(item.home, match.homeTeam) &&
+    sameClubName(item.away, match.awayTeam)
+  ) || null;
+}
+
+async function collectReportCandidates(browser) {
+  const urls = (SYNC_CONFIG.teams || [])
+    .filter((team) => team.enabled !== false && team.gamesUrl)
+    .map((team) => ({ teamKey: team.key, url: team.gamesUrl }));
+  const all = [];
+
+  for (const source of urls) {
+    const page = await browser.newPage();
+    try {
+      await page.setViewport({ width: 1365, height: 1800 });
+      await page.setUserAgent("Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/131 Safari/537.36");
+      await page.setExtraHTTPHeaders({ "Accept-Language": "de-AT,de;q=0.9" });
+      await page.goto(source.url, { waitUntil: "domcontentloaded", timeout: NAVIGATION_TIMEOUT });
+      await page.waitForFunction(() => document.body && document.body.innerText.length > 300, { timeout: 12000 }).catch(() => {});
+      await page.evaluate(async () => {
+        const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+        const max = Math.min(document.body?.scrollHeight || 0, 12000);
+        for (let y = 0; y <= max; y += 600) { window.scrollTo(0, y); await sleep(80); }
+        window.scrollTo(0, 0);
+      }).catch(() => {});
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const found = await page.evaluate((teamKey) => {
+        const compact = (value) => String(value || "").replace(/\s+/g, " ").trim();
+        const absolute = (value) => { try { return value ? new URL(value, location.href).href : ""; } catch { return ""; } };
+        return [...document.querySelectorAll("a[href*='/Spielbericht/']")].map((link) => {
+          const container = link.closest("article,section,li,tr,[class*='match'],[class*='game'],[class*='spiel'],div") || link.parentElement;
+          const text = compact(container?.textContent || link.textContent || "");
+          return { teamKey, url: absolute(link.href), text: text.slice(0, 1200) };
+        });
+      }, source.teamKey);
+      all.push(...found);
+    } catch (error) {
+      console.warn(`Berichtsindex ${source.teamKey} konnte nicht geladen werden: ${error.message}`);
+    } finally {
+      await page.close().catch(() => {});
+    }
+  }
+
+  const unique = new Map();
+  for (const item of all) {
+    const id = extractOefbGameId(item.url);
+    if (id && !unique.has(id)) unique.set(id, { ...item, gameId: id });
+  }
+  return [...unique.values()];
+}
+
+function scoreReportCandidate(match, candidate) {
+  const text = candidate.text || "";
+  let score = 0;
+  if (pageContainsClub(text, match.homeTeam)) score += 45;
+  if (pageContainsClub(text, match.awayTeam)) score += 45;
+  const date = asDate(match.kickoffDate || match.kickoffAt);
+  if (date.getTime() > 0) {
+    const d = String(date.getDate()).padStart(2, "0");
+    const m = String(date.getMonth() + 1).padStart(2, "0");
+    const y = date.getFullYear();
+    if (text.includes(`${d}.${m}.${y}`) || text.includes(`${d}.${m}.`)) score += 20;
+  }
+  const stored = compact(match.gameId || match.oefbMatchId);
+  if (stored && stored === candidate.gameId) score += 10;
+  return score;
+}
+
+async function resolveMatchReports(browser, matches) {
+  const index = await collectReportCandidates(browser);
+  let corrected = 0;
+  const resolved = [];
+
+  for (const match of matches) {
+    const override = matchingOverride(match);
+    let url = override?.url || "";
+    let source = override ? "official-override" : "";
+    let score = override ? 999 : 0;
+
+    if (!url) {
+      const ranked = index
+        .map((candidate) => ({ candidate, score: scoreReportCandidate(match, candidate) }))
+        .sort((a, b) => b.score - a.score);
+      if (ranked[0] && ranked[0].score >= 80) {
+        url = ranked[0].candidate.url;
+        score = ranked[0].score;
+        source = "games-page-index";
+      }
+    }
+
+    if (!url && isIndividualReportUrl(match.reportUrl)) {
+      url = match.reportUrl;
+      score = 1;
+      source = "stored-fallback";
+    }
+    if (!isIndividualReportUrl(url)) continue;
+
+    const gameId = extractOefbGameId(url);
+    const oldUrl = compact(match.reportUrl);
+    const oldId = compact(match.gameId || match.oefbMatchId);
+    const changed = oldUrl !== url || oldId !== gameId;
+    const next = {
+      ...match,
+      reportUrl: url,
+      _resolvedGameId: gameId,
+      _reportResolutionSource: source,
+      _reportResolutionScore: score,
+    };
+    resolved.push(next);
+
+    if (changed) {
+      corrected += 1;
+      await db.collection("kfvMatches").doc(match.id).set({
+        reportUrl: url,
+        gameId,
+        oefbMatchId: gameId,
+        reportResolutionSource: source,
+        reportResolutionVersion: VERSION,
+        reportResolvedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+    }
+  }
+
+  return { matches: resolved, indexCount: index.length, correctedCount: corrected };
 }
 
 async function waitForReport(page) {
@@ -753,9 +922,9 @@ async function extractReport(browser, match) {
       matchId: match.id,
       matchUid: compact(match.matchUid || match.id),
       gameId: validation.finalGameId ||
-        compact(match.gameId || match.oefbMatchId),
+        compact(match._resolvedGameId || match.gameId || match.oefbMatchId),
       oefbMatchId: validation.finalGameId ||
-        compact(match.gameId || match.oefbMatchId),
+        compact(match._resolvedGameId || match.gameId || match.oefbMatchId),
       teamId: compact(match.teamId),
       teamName: compact(match.teamName),
       competitionName: compact(
@@ -824,6 +993,8 @@ async function extractReport(browser, match) {
       diagnostic: {
         matchId: match.id,
         reportUrl: match.reportUrl,
+        resolutionSource: match._reportResolutionSource || "",
+        resolutionScore: match._reportResolutionScore || 0,
         finalUrl: raw.finalUrl,
         requestedGameId:
           validation.requestedGameId,
@@ -858,6 +1029,8 @@ async function extractReport(browser, match) {
       diagnostic: {
         matchId: match.id,
         reportUrl: match.reportUrl,
+        resolutionSource: match._reportResolutionSource || "",
+        resolutionScore: match._reportResolutionScore || 0,
         durationSeconds: Math.round(
           (Date.now() - started) / 1000,
         ),
@@ -1129,11 +1302,7 @@ async function main() {
       deactivateInvalidLegacyReports(),
     ]);
 
-    const matches = await loadCandidateMatches();
-
-    console.log(
-      `Phase 4: ${matches.length} gültige Spiele mit einzelner ÖFB-Spielbericht-URL im Zeitfenster.`,
-    );
+    const candidateMatches = await loadCandidateMatches();
 
     browser = await puppeteer.launch({
       headless: true,
@@ -1143,6 +1312,12 @@ async function main() {
         "--disable-dev-shm-usage",
       ],
     });
+
+    const resolution = await resolveMatchReports(browser, candidateMatches);
+    const matches = resolution.matches;
+
+    console.log(`Phase 4: ${candidateMatches.length} Spiele geprüft, ${matches.length} eindeutige Bericht-URLs aufgelöst.`);
+    console.log(`Offizielle Bericht-Links im Index: ${resolution.indexCount}; korrigierte Spiele: ${resolution.correctedCount}`);
 
     const results = await mapLimit(
       matches,
@@ -1186,7 +1361,10 @@ async function main() {
         running: false,
         runId,
         version: VERSION,
-        candidateMatchCount: matches.length,
+        candidateMatchCount: candidateMatches.length,
+        resolvedMatchCount: matches.length,
+        reportIndexCount: resolution.indexCount,
+        correctedMatchLinks: resolution.correctedCount,
         reportCount: results.filter(
           (result) => result.ok,
         ).length,

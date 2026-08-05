@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addDoc,
   collection,
@@ -100,6 +101,46 @@ function ClubPeopleManager({ kind, onBack }: { kind: PersonKind; onBack: () => v
     setPreview(objectUrl);
     return () => URL.revokeObjectURL(objectUrl);
   }, [selectedFile, form.photoUrl]);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.classList.add("people-editor-open");
+    document.documentElement.classList.add("people-editor-open");
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.classList.remove("people-editor-open");
+      document.documentElement.classList.remove("people-editor-open");
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [editorOpen]);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      const height = viewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--people-viewport-height", `${Math.round(height)}px`);
+    };
+
+    updateViewportHeight();
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+      window.removeEventListener("resize", updateViewportHeight);
+      document.documentElement.style.removeProperty("--people-viewport-height");
+    };
+  }, [editorOpen]);
 
   const kindPeople = useMemo(() => people.filter((person) => person.kind === kind), [people, kind]);
   const filtered = useMemo(() => {
@@ -295,28 +336,48 @@ function ClubPeopleManager({ kind, onBack }: { kind: PersonKind; onBack: () => v
         </div>
       )}
 
-      {editorOpen && (
-        <div className="people-manager-modal" onClick={closeEditor}>
-          <form className="people-manager-editor" onSubmit={savePerson} onClick={(event) => event.stopPropagation()}>
-            <div className="people-manager-editor-head"><h3>{form.id ? "Eintrag bearbeiten" : "Eintrag hinzufügen"}</h3><button type="button" onClick={closeEditor}>×</button></div>
-            <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} autoFocus /></label>
-            <label>Funktion<input value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder={kind === "trainer" ? "z. B. Trainer, Co-Trainer" : "z. B. Obmann, Sektionsleiter"} /></label>
-            {kind === "trainer" && <label>Mannschaft<input value={form.teamName} onChange={(event) => setForm((current) => ({ ...current, teamName: event.target.value }))} placeholder="z. B. Kampfmannschaft, U17" /></label>}
-            <label>Telefon<input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} inputMode="tel" /></label>
-            <label>E-Mail<input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} inputMode="email" /></label>
-            <div className="people-manager-file-field"><span>Foto</span><label className="people-manager-file-button"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0] || null)} />{selectedFile ? "Andere Datei wählen" : form.photoUrl ? "Foto ersetzen" : "Foto auswählen"}</label><small>PNG, JPG oder WebP · wird automatisch verkleinert</small></div>
-            <div className="people-manager-divider"><span>oder</span></div>
-            <label>Foto-URL<input type="url" value={form.photoUrl} onChange={(event) => { setSelectedFile(null); setForm((current) => ({ ...current, photoUrl: event.target.value })); }} placeholder="https://…/foto.jpg" /></label>
-            <div className="people-manager-checkboxes">
-              <label><input type="checkbox" checked={form.publicPhone} onChange={(event) => setForm((current) => ({ ...current, publicPhone: event.target.checked }))} />Telefon öffentlich anzeigen</label>
-              <label><input type="checkbox" checked={form.publicEmail} onChange={(event) => setForm((current) => ({ ...current, publicEmail: event.target.checked }))} />E-Mail öffentlich anzeigen</label>
-              <label><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />In der App anzeigen</label>
+      {editorOpen && createPortal(
+        <div
+          className="people-manager-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={form.id ? "Eintrag bearbeiten" : "Eintrag hinzufügen"}
+        >
+          <form
+            className="people-manager-editor"
+            onSubmit={savePerson}
+          >
+            <div className="people-manager-editor-head">
+              <h3>{form.id ? "Eintrag bearbeiten" : "Eintrag hinzufügen"}</h3>
+              <button type="button" onClick={closeEditor} aria-label="Fenster schließen">×</button>
             </div>
-            <div className="people-manager-preview">{preview ? <img src={preview} alt="Foto-Vorschau" /> : <span>Foto-Vorschau</span>}</div>
-            <div className="people-manager-editor-actions"><button type="button" className="secondary" onClick={closeEditor}>Abbrechen</button><button type="submit" disabled={saving}>{saving ? "Speichern …" : "Speichern"}</button></div>
+
+            <div className="people-manager-editor-scroll">
+              <label>Name<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} autoFocus /></label>
+              <label>Funktion<input value={form.role} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))} placeholder={kind === "trainer" ? "z. B. Trainer, Co-Trainer" : "z. B. Obmann, Sektionsleiter"} /></label>
+              {kind === "trainer" && <label>Mannschaft<input value={form.teamName} onChange={(event) => setForm((current) => ({ ...current, teamName: event.target.value }))} placeholder="z. B. Kampfmannschaft, U17" /></label>}
+              <label>Telefon<input value={form.phone} onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))} inputMode="tel" /></label>
+              <label>E-Mail<input value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} inputMode="email" /></label>
+              <div className="people-manager-file-field"><span>Foto</span><label className="people-manager-file-button"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0] || null)} />{selectedFile ? "Andere Datei wählen" : form.photoUrl ? "Foto ersetzen" : "Foto auswählen"}</label><small>PNG, JPG oder WebP · wird automatisch verkleinert</small></div>
+              <div className="people-manager-divider"><span>oder</span></div>
+              <label>Foto-URL<input type="url" value={form.photoUrl} onChange={(event) => { setSelectedFile(null); setForm((current) => ({ ...current, photoUrl: event.target.value })); }} placeholder="https://…/foto.jpg" /></label>
+              <div className="people-manager-checkboxes">
+                <label><input type="checkbox" checked={form.publicPhone} onChange={(event) => setForm((current) => ({ ...current, publicPhone: event.target.checked }))} />Telefon öffentlich anzeigen</label>
+                <label><input type="checkbox" checked={form.publicEmail} onChange={(event) => setForm((current) => ({ ...current, publicEmail: event.target.checked }))} />E-Mail öffentlich anzeigen</label>
+                <label><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />In der App anzeigen</label>
+              </div>
+              <div className="people-manager-preview">{preview ? <img src={preview} alt="Foto-Vorschau" /> : <span>Foto-Vorschau</span>}</div>
+            </div>
+
+            <div className="people-manager-editor-actions">
+              <button type="button" className="secondary" onClick={closeEditor} disabled={saving}>Abbrechen</button>
+              <button type="submit" disabled={saving}>{saving ? "Speichern …" : "Speichern"}</button>
+            </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       )}
+
     </section>
   );
 }

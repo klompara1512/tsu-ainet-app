@@ -138,7 +138,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               title:
                 typeof data.title === "string"
                   ? data.title
-                  : "Neuigkeit",
+                  : "Ankündigung",
               summary:
                 typeof data.summary === "string"
                   ? data.summary
@@ -178,10 +178,10 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
         setErrorMessage("");
       },
       (error) => {
-        console.error("Fehler beim Laden der News:", error);
+        console.error("Fehler beim Laden der Ankündigungen:", error);
 
         setErrorMessage(
-          "Die News konnten nicht geladen werden.",
+          "Die Ankündigungen konnten nicht geladen werden.",
         );
         setIsLoading(false);
       },
@@ -334,7 +334,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
         );
 
         setSuccessMessage(
-          "Der Newsbeitrag wurde aktualisiert.",
+          "Die Ankündigung wurde aktualisiert.",
         );
       } else {
         await addDoc(collection(db, "news"), {
@@ -343,19 +343,19 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
         });
 
         setSuccessMessage(
-          "Der Newsbeitrag wurde erstellt.",
+          "Die Ankündigung wurde erstellt.",
         );
       }
 
       resetForm();
     } catch (error) {
       console.error(
-        "Fehler beim Speichern des Newsbeitrags:",
+        "Fehler beim Speichern der Ankündigung:",
         error,
       );
 
       setErrorMessage(
-        "Der Newsbeitrag konnte nicht gespeichert werden. Prüfe bitte die Firestore-Regeln.",
+        "Die Ankündigung konnte nicht gespeichert werden. Prüfe bitte die Firestore-Regeln.",
       );
     } finally {
       setIsSaving(false);
@@ -443,16 +443,16 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
       }
 
       setSuccessMessage(
-        "Der Newsbeitrag wurde gelöscht.",
+        "Die Ankündigung wurde gelöscht.",
       );
     } catch (error) {
       console.error(
-        "Fehler beim Löschen des Newsbeitrags:",
+        "Fehler beim Löschen der Ankündigung:",
         error,
       );
 
       setErrorMessage(
-        "Der Newsbeitrag konnte nicht gelöscht werden.",
+        "Die Ankündigung konnte nicht gelöscht werden.",
       );
     }
   }
@@ -474,10 +474,10 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
             TSU Ainet Fußball
           </p>
 
-          <h2>Newsverwaltung</h2>
+          <h2>Ankündigungen verwalten</h2>
 
           <p>
-            Vereinsnews erstellen, bearbeiten und
+            Ankündigungen erstellen, bearbeiten und
             veröffentlichen.
           </p>
         </div>
@@ -535,7 +535,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
                   : "Neuer Beitrag"}
               </p>
 
-              <h3>Newsbeitrag</h3>
+              <h3>Ankündigung</h3>
             </div>
 
             {editingArticleId && (
@@ -556,7 +556,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <input
                 type="text"
                 value={formData.title}
-                placeholder="Titel des Newsbeitrags"
+                placeholder="Titel der Ankündigung"
                 onChange={(event) =>
                   setFormData((current) => ({
                     ...current,
@@ -616,7 +616,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <textarea
                 className="news-admin-summary-input"
                 value={formData.summary}
-                placeholder="Kurze Vorschau für die Newsübersicht"
+                placeholder="Kurze Vorschau für die Ankündigungsübersicht"
                 onChange={(event) =>
                   setFormData((current) => ({
                     ...current,
@@ -632,7 +632,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <textarea
                 className="news-admin-content-input"
                 value={formData.content}
-                placeholder="Vollständiger Text des Newsbeitrags"
+                placeholder="Vollständiger Text der Ankündigung"
                 onChange={(event) =>
                   setFormData((current) => ({
                     ...current,
@@ -718,7 +718,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <span>
                 <strong>Topmeldung</strong>
                 <small>
-                  Auf der Newsseite hervorheben
+                  Bei den Ankündigungen hervorheben
                 </small>
               </span>
             </label>
@@ -733,7 +733,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               ? "Wird gespeichert …"
               : editingArticleId
                 ? "Änderungen speichern"
-                : "Newsbeitrag erstellen"}
+                : "Ankündigung erstellen"}
           </button>
         </form>
 
@@ -760,11 +760,11 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
 
           {!isLoading && articles.length === 0 && (
             <div className="news-admin-empty">
-              <strong>Noch keine News</strong>
+              <strong>Noch keine Ankündigungen</strong>
 
               <p>
                 Erstelle über das Formular den ersten
-                Newsbeitrag.
+                Ankündigung.
               </p>
             </div>
           )}

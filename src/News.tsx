@@ -57,7 +57,7 @@ function News() {
               title:
                 typeof data.title === "string"
                   ? data.title
-                  : "Neuigkeit",
+                  : "Ankündigung",
 
               summary:
                 typeof data.summary === "string"
@@ -111,12 +111,12 @@ function News() {
       },
       (error) => {
         console.error(
-          "Fehler beim Laden der Vereinsnews:",
+          "Fehler beim Laden der Ankündigungen:",
           error,
         );
 
         setErrorMessage(
-          "Die Vereinsnews konnten nicht geladen werden.",
+          "Die Ankündigungen konnten nicht geladen werden.",
         );
 
         setIsLoading(false);
@@ -196,7 +196,7 @@ function News() {
           onClick={() => setSelectedArticle(null)}
         >
           <span aria-hidden="true">‹</span>
-          Zurück zu den News
+          Zurück zu den Ankündigungen
         </button>
 
         <article className="news-detail">
@@ -212,6 +212,7 @@ function News() {
 
           <div className="news-detail-content">
             <div className="news-detail-meta">
+
               <span
                 className={`news-category news-category-${selectedArticle.category}`}
               >
@@ -270,7 +271,7 @@ function News() {
     <section className="news-page">
       <header className="news-header">
         <div>
-          <h1>Vereinsnews</h1>
+          <h1>Ankündigungen</h1>
 
         </div>
 
@@ -278,7 +279,7 @@ function News() {
 
       <nav
         className="news-filter"
-        aria-label="News-Kategorien"
+        aria-label="Ankündigungs-Kategorien"
       >
         <button
           type="button"
@@ -374,7 +375,7 @@ function News() {
         <div className="news-loading">
           <span className="news-spinner" />
 
-          <strong>News werden geladen</strong>
+          <strong>Ankündigungen werden geladen</strong>
 
           <p>
             Die neuesten Vereinsmeldungen werden
@@ -387,7 +388,7 @@ function News() {
 
           <div>
             <strong>
-              Noch keine News veröffentlicht
+              Noch keine Ankündigungen veröffentlicht
             </strong>
 
             <p>

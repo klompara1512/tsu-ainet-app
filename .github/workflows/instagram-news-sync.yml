@@ -1,0 +1,40 @@
+name: Instagram News synchronisieren
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "7,37 * * * *"
+
+concurrency:
+  group: instagram-news-sync
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Instagram-Beiträge in News übernehmen
+        run: node scripts/instagram-news-sync.cjs
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          INSTAGRAM_USER_ID: ${{ secrets.INSTAGRAM_USER_ID }}
+          INSTAGRAM_API_VERSION: v23.0
+          INSTAGRAM_API_BASE: https://graph.instagram.com
+          INSTAGRAM_IMPORT_LIMIT: "200"

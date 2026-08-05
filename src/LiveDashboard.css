@@ -669,3 +669,62 @@
     min-height: 44px;
   }
 }
+
+
+/* Version 18.2.1 – offizieller TSU-Ainet-Clubshop */
+.v182-shop-card {
+  display: grid;
+  grid-template-columns: auto minmax(0,1fr) auto;
+  align-items: center;
+  gap: 18px;
+  padding: 22px 24px;
+  border: 1px solid rgba(246,201,69,.24);
+  border-radius: 24px;
+  background:
+    radial-gradient(circle at 8% 15%, rgba(246,201,69,.16), transparent 32%),
+    linear-gradient(135deg, rgba(24,34,55,.98), rgba(13,20,35,.98));
+  box-shadow: 0 16px 44px rgba(0,0,0,.2);
+}
+.v182-shop-icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  color: #171717;
+  background: linear-gradient(135deg,#f4c638,#ffe27d);
+  border-radius: 19px;
+  box-shadow: 0 12px 28px rgba(246,201,69,.2);
+}
+.v182-shop-icon svg { width: 31px; height: 31px; }
+.v182-shop-copy { min-width: 0; }
+.v182-shop-copy h2 { margin: 3px 0 5px; font-size: clamp(20px,3vw,27px); }
+.v182-shop-copy p { margin: 0; color: rgba(255,255,255,.58); line-height: 1.45; }
+.v182-shop-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  padding: 0 18px;
+  color: #151515;
+  font-weight: 900;
+  text-decoration: none;
+  white-space: nowrap;
+  background: linear-gradient(110deg,#f4c638,#ffe27d);
+  border-radius: 14px;
+  box-shadow: 0 12px 28px rgba(246,201,69,.16);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.v182-shop-button:hover,.v182-shop-button:focus-visible {
+  transform: translateY(-2px);
+  box-shadow: 0 16px 32px rgba(246,201,69,.22);
+  outline: none;
+}
+@media (max-width: 640px) {
+  .v182-shop-card { grid-template-columns: auto 1fr; gap: 14px; padding: 18px 17px; border-radius: 21px; }
+  .v182-shop-icon { width: 54px; height: 54px; border-radius: 16px; }
+  .v182-shop-icon svg { width: 27px; height: 27px; }
+  .v182-shop-copy h2 { font-size: 20px; }
+  .v182-shop-copy p { font-size: 12px; }
+  .v182-shop-button { grid-column: 1 / -1; width: 100%; box-sizing: border-box; }
+}

@@ -469,6 +469,29 @@ function LiveDashboard({
         </section>
       )}
 
+      <section className="v182-shop-card" aria-labelledby="dashboard-shop-title">
+        <div className="v182-shop-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6 8h12l1 13H5L6 8Z" />
+            <path d="M9 9V6a3 3 0 0 1 6 0v3" />
+            <path d="M9 13h.01M15 13h.01" />
+          </svg>
+        </div>
+        <div className="v182-shop-copy">
+          <span className="v101-overline">Offizieller Clubshop</span>
+          <h2 id="dashboard-shop-title">TSU Ainet Shop</h2>
+          <p>Vereinsbekleidung und Ausstattung direkt bei 11teamsports.</p>
+        </div>
+        <a
+          className="v182-shop-button"
+          href="https://www.11teamsports.com/at-de/clubshop/tsu-ainet/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          Shop öffnen <span aria-hidden="true">↗</span>
+        </a>
+      </section>
+
       <nav className="v101-shortcuts" aria-label="Schnellzugriffe">
         <button type="button" onClick={onOpenCalendar}>
           <span><Icon name="calendar" /></span>
@@ -487,8 +510,8 @@ function LiveDashboard({
         </button>
         <button type="button" onClick={onOpenNews}>
           <span><Icon name="news" /></span>
-          <strong>News</strong>
-          <small>Neuigkeiten & Termine</small>
+          <strong>Ankündigungen</strong>
+          <small>Wichtige Vereinsinfos</small>
         </button>
       </nav>
 

@@ -223,3 +223,6 @@
   .calendar-agenda-content h3{font-size:14px}
   .calendar-day-event b{font-size:8px}
 }
+
+/* Version 17.1.2 – Seitenköpfe ohne Untertitel */
+.calendar-eyebrow,.teams-label,.news-eyebrow,.news-header-mark,.kfv-header .kfv-eyebrow,.dashboard-page>.home-eyebrow{display:none!important}

@@ -127,3 +127,6 @@
   .teams-header h2,.news-header h1,.kfv-header h2{font-size:32px!important}
   .teams-header,.news-header,.kfv-header{margin-bottom:14px!important}
 }
+
+/* Version 17.1.2 – Seitenköpfe ohne Untertitel */
+.calendar-eyebrow,.teams-label,.news-eyebrow,.news-header-mark,.kfv-header .kfv-eyebrow,.dashboard-page>.home-eyebrow{display:none!important}

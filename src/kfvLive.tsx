@@ -287,9 +287,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
         </button>
 
         <article className="match-detail-hero premium-match-hero">
-          <div className="match-detail-competition">
-            <span>{selectedMatch.teamName}</span>
-            <strong>{selectedMatch.competitionName || "KFV-Bewerb"}</strong>
+          <div className="match-detail-competition" aria-label="Spielart">
+            <strong>{[selectedMatch.teamName, selectedMatch.competitionName || "KFV-Bewerb"].filter(Boolean).join(" · ")}</strong>
           </div>
 
           <div className={`premium-match-status status-${selectedMatch.status} ${liveWindow ? "is-live" : ""}`}>
@@ -363,8 +362,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
               <section className="premium-match-section">
                 <header>
                   <div>
-                    <p className="kfv-eyebrow">Spielinformation</p>
-                    <h3>Alles auf einen Blick</h3>
+<h3>Alles auf einen Blick</h3>
                   </div>
                 </header>
                 <div className="premium-info-grid">
@@ -380,7 +378,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
 
               <div className="premium-match-columns">
                 <section className="premium-match-section">
-                  <header><div><p className="kfv-eyebrow">Aktuelle Form</p><h3>Letzte fünf Spiele</h3></div></header>
+                  <header><div>
+<h3>Letzte fünf Spiele</h3></div></header>
                   {recentForm.length > 0 ? (
                     <div className="match-detail-form premium-form-row">
                       {recentForm.map((result, index) => (
@@ -393,7 +392,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                 </section>
 
                 <section className="premium-match-section">
-                  <header><div><p className="kfv-eyebrow">Tabelle</p><h3>Top 5</h3></div></header>
+                  <header><div>
+<h3>Top 5</h3></div></header>
                   {teamTable.length > 0 ? (
                     <div className="premium-mini-table">
                       {teamTable.map((row) => (
@@ -414,7 +414,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
           {matchDetailTab === "live" && (
             <section className="premium-match-section premium-tab-feature">
               <header>
-                <div><p className="kfv-eyebrow">Offizieller Spielbericht</p><h3>{liveWindow ? "Liveticker" : "Spielverlauf"}</h3></div>
+                <div>
+<h3>{liveWindow ? "Liveticker" : "Spielverlauf"}</h3></div>
                 {liveWindow && <span className="premium-live-pill">LIVE</span>}
               </header>
               {loadingMatchReport ? (
@@ -445,7 +446,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
           {matchDetailTab === "lineups" && (
             <section className="premium-match-section premium-tab-feature">
               <header>
-                <div><p className="kfv-eyebrow">Offizieller Spielbericht</p><h3>Aufstellungen</h3></div>
+                <div>
+<h3>Aufstellungen</h3></div>
                 {matchReport?.sourceUpdatedAt && <span className="report-updated">Stand {formatDate(matchReport.sourceUpdatedAt)} · {formatTime(matchReport.sourceUpdatedAt)}</span>}
               </header>
               {loadingMatchReport ? (
@@ -470,7 +472,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
           {matchDetailTab === "stats" && (
             <>
               <section className="premium-match-section premium-tab-feature">
-                <header><div><p className="kfv-eyebrow">Saisonbilanz</p><h3>{selectedMatch.teamName}</h3></div></header>
+                <header><div>
+<h3>{selectedMatch.teamName}</h3></div></header>
                 <div className="premium-stat-grid">
                   <article><small>Spiele</small><strong>{finishedTeamMatches.length}</strong></article>
                   <article><small>Siege</small><strong>{wins}</strong></article>
@@ -483,7 +486,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
 
               <div className="premium-match-columns">
                 <section className="premium-match-section">
-                  <header><div><p className="kfv-eyebrow">Form</p><h3>Letzte fünf Spiele</h3></div></header>
+                  <header><div>
+<h3>Letzte fünf Spiele</h3></div></header>
                   {recentForm.length > 0 ? (
                     <div className="match-detail-form premium-form-row">
                       {recentForm.map((result, index) => (
@@ -496,7 +500,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                 </section>
 
                 <section className="premium-match-section">
-                  <header><div><p className="kfv-eyebrow">Tabelle</p><h3>Top 5</h3></div></header>
+                  <header><div>
+<h3>Top 5</h3></div></header>
                   {teamTable.length > 0 ? (
                     <div className="premium-mini-table">
                       {teamTable.map((row) => (
@@ -529,7 +534,6 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
     <section className="kfv-page">
       <header className="kfv-header">
         <div>
-          <p className="kfv-eyebrow">TSU Ainet Fußball</p>
           <h2>Spiel- & Tabellenzentrum</h2>
         </div>
 

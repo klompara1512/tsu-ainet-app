@@ -710,3 +710,5 @@
     animation-iteration-count: 1 !important;
   }
 }
+/* Version 17.1.2 – Seitenköpfe ohne Untertitel */
+.calendar-eyebrow,.teams-label,.news-eyebrow,.news-header-mark,.kfv-header .kfv-eyebrow,.dashboard-page>.home-eyebrow{display:none!important}

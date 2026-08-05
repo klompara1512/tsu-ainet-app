@@ -629,3 +629,45 @@
 
 /* Version 15.3.1 – Punkte auf Mobilgeräten direkt vorne */
 .kfv-table-card th.kfv-points-first,.kfv-table-card td.kfv-points-first{position:sticky;left:50px;z-index:3;background:#10192a;color:#ffe17a;font-weight:950}.kfv-table-card th:first-child,.kfv-table-card td:first-child{position:sticky;left:0;z-index:4;background:#10192a}.kfv-table-card tr.is-tsu td.kfv-points-first,.kfv-table-card tr.is-tsu td:first-child{background:#2a271e}
+
+
+/* Version 17.1.2 – Clean Club UI & Matchcenter Header */
+.match-detail-competition{
+  display:flex;
+  justify-content:center;
+  align-items:center;
+  min-height:38px;
+  padding:0 110px;
+  text-align:center;
+}
+.match-detail-competition strong{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  max-width:100%;
+  padding:8px 14px;
+  overflow:hidden;
+  color:#dce9ff;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  line-height:1.25;
+  text-overflow:ellipsis;
+  text-transform:uppercase;
+  white-space:nowrap;
+  background:rgba(67,127,226,.16);
+  border:1px solid rgba(124,173,255,.18);
+  border-radius:999px;
+}
+.premium-match-status{z-index:2}
+@media(max-width:760px){
+  .match-detail-competition{padding:0 88px;min-height:40px}
+  .match-detail-competition strong{font-size:10px}
+}
+@media(max-width:480px){
+  .premium-match-hero{padding-top:14px}
+  .match-detail-competition{padding:0 64px 0 0;min-height:42px}
+  .match-detail-competition strong{max-width:100%;font-size:9px;white-space:normal;border-radius:14px}
+  .premium-match-status{position:absolute;top:14px;right:14px;margin:0}
+  .premium-match-teams{padding-top:12px}
+}

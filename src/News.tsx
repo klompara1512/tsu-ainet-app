@@ -270,17 +270,10 @@ function News() {
     <section className="news-page">
       <header className="news-header">
         <div>
-          <p className="news-eyebrow">
-            TSU Ainet Fußball
-          </p>
-
           <h1>Vereinsnews</h1>
 
         </div>
 
-        <div className="news-header-mark">
-          NEWS
-        </div>
       </header>
 
       <nav

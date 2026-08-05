@@ -380,7 +380,6 @@ function Kalender() {
     <section className="calendar-page">
       <div className="calendar-header">
         <div>
-          <p className="calendar-eyebrow">TSU Ainet Fußball</p>
           <h2>Spielkalender</h2>
         </div>
       </div>
@@ -399,7 +398,6 @@ function Kalender() {
           <button type="button" onClick={() => changeMonth(-1)} aria-label="Vorheriger Monat">‹</button>
           <div>
             <strong>{formatMonthTitle(visibleMonth)}</strong>
-            <small>{monthMatchCount} Spiele in diesem Monat</small>
           </div>
           <button type="button" onClick={() => changeMonth(1)} aria-label="Nächster Monat">›</button>
           <button type="button" className="calendar-today" onClick={goToToday}>Heute</button>

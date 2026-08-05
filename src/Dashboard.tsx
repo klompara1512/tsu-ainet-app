@@ -65,9 +65,7 @@ function Dashboard({ user, profile }: DashboardProps) {
   function renderMorePage() {
     return (
       <section className="dashboard-page clear-more-page">
-        <p className="home-eyebrow">TSU Ainet Fußball</p>
         <h2>Mehr</h2>
-        <p>Verein, Organisation und persönliche Einstellungen.</p>
         <h3 className="clear-group-title">Verein</h3>
 
         <div
@@ -83,7 +81,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
             <span className="quick-content">
               <strong>Spiel- & Tabellenzentrum</strong>
-              <small>Spielpläne, Ergebnisse, Tabellen und Kader</small>
+              
             </span>
 
             <span className="quick-arrow">›</span>
@@ -92,32 +90,32 @@ function Dashboard({ user, profile }: DashboardProps) {
 
           <div className="clear-grid-break"><h3>Organisation</h3></div>
           <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
-            <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong><small>Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong></span><span className="quick-arrow">›</span>
           </button>
 
           <button type="button" className="quick-card" onClick={() => setActivePage("fan-features")}>
-            <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Fanbereich</strong><small>Statistik, Favoriten, Live, Medien, Kalender und Spieltag</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Fanbereich</strong></span><span className="quick-arrow">›</span>
           </button>
 
-          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong><small>Nachrichten an Fans und Mannschaften</small></span><span className="quick-arrow">›</span></button>}
+          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong></span><span className="quick-arrow">›</span></button>}
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}>
-            <span className="quick-icon"><Icon name="settings" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong><small>Benutzer, Einladungen, Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="settings" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong></span><span className="quick-arrow">›</span>
           </button>}
 
-          {hasPermission(role, "manageTasks") && <button type="button" className="quick-card" onClick={() => setActivePage("home-game-tasks")}><span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Heimspiel-Aufgaben</strong><small>Vorbereitung, Zuständige und Fortschritt</small></span><span className="quick-arrow">›</span></button>}
+          {hasPermission(role, "manageTasks") && <button type="button" className="quick-card" onClick={() => setActivePage("home-game-tasks")}><span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Heimspiel-Aufgaben</strong></span><span className="quick-arrow">›</span></button>}
 
           {canManageAnything && (<><div className="clear-grid-break"><h3>Verwaltung</h3></div>
           {canManageMatches && <button type="button" className="quick-card" onClick={() => setActivePage("match-admin")}>
-            <span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong><small>Spielplan, Ergebnisse und Status in Firestore</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManageSync && <button type="button" className="quick-card" onClick={() => setActivePage("kfv-sync-admin")}>
-            <span className="quick-icon"><Icon name="sync" /></span><span className="quick-content"><strong>KFV-Synchronisierung</strong><small>Öffentliche Daten automatisch alle 30 Minuten</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="sync" /></span><span className="quick-content"><strong>KFV-Synchronisierung</strong></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManageStandings && <button type="button" className="quick-card" onClick={() => setActivePage("standings-admin")}>
-            <span className="quick-icon"><Icon name="table" /></span><span className="quick-content"><strong>Tabellen verwalten</strong><small>Tabellenzeilen und Punkte in Firestore</small></span><span className="quick-arrow">›</span>
+            <span className="quick-icon"><Icon name="table" /></span><span className="quick-content"><strong>Tabellen verwalten</strong></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManagePeople && <button
@@ -129,9 +127,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
             <span className="quick-content">
               <strong>Personenverwaltung</strong>
-              <small>
-                Spieler und Trainer verwalten
-              </small>
+              
             </span>
 
             <span className="quick-arrow">›</span>
@@ -148,9 +144,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
             <span className="quick-content">
               <strong>Terminverwaltung</strong>
-              <small>
-                Trainings und Spiele anlegen
-              </small>
+              
             </span>
 
             <span className="quick-arrow">›</span>
@@ -167,9 +161,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
             <span className="quick-content">
               <strong>Newsverwaltung</strong>
-              <small>
-                Beiträge erstellen und veröffentlichen
-              </small>
+              
             </span>
 
             <span className="quick-arrow">›</span>
@@ -185,7 +177,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
             <span className="quick-content">
               <strong>Dokumente</strong>
-              <small>Wird später ergänzt</small>
+              
             </span>
 
             <span className="quick-arrow">›</span>
@@ -356,7 +348,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
           <span>
             <strong>TSU Ainet</strong>
-            <small>Vereins-App</small>
+            
           </span>
         </button>
 
@@ -373,7 +365,7 @@ function Dashboard({ user, profile }: DashboardProps) {
             <div className="profile-menu">
               <strong>{profile.name}</strong>
               <span>{profile.email || user.email}</span>
-              <small>Rolle: {roleLabel(role)}</small>
+              
               <button type="button" onClick={() => signOut(auth)}>Abmelden</button>
             </div>
           )}

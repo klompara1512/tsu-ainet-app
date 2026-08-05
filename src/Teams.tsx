@@ -445,8 +445,7 @@ function Teams() {
           <div className="team-hub-brand">
             <TeamLogo name="TSU Ainet" size="hero" className="team-hub-logo" />
             <div>
-              <p className="teams-label">TSU Ainet Fußball</p>
-              <h2>{selectedTeam.name}</h2>
+<h2>{selectedTeam.name}</h2>
               <p className="team-hub-league">{leagueLabel(selectedTeam)}</p>
             </div>
           </div>
@@ -681,7 +680,7 @@ function Teams() {
 
   return (
     <section className="teams-page">
-      <div className="teams-header"><div><p className="teams-label">TSU Ainet Fußball</p><h2>Mannschaften</h2></div></div>
+      <div className="teams-header"><div><h2>Mannschaften</h2></div></div>
       {teamsError && <div className="teams-message teams-error-message"><strong>Firebase-Fehler</strong><p>{teamsError}</p></div>}
       {isLoadingTeams && <div className="teams-loading"><span className="teams-loading-spinner" /><p>Mannschaften werden geladen …</p></div>}
       {!isLoadingTeams && teams.length > 0 && !teamsError && <div className="teams-grid">{teams.map((team) => {

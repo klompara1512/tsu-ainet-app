@@ -742,3 +742,68 @@
   .quick-card { min-height: 80px; }
   .dashboard-page { padding: 20px 16px; border-radius: 23px; }
 }
+
+/* Version 18.1.0 – Public First: Login dezent rechts oben */
+.dashboard-login-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 42px;
+  padding: 0 15px;
+  color: rgba(255, 255, 255, 0.94);
+  font-size: 13px;
+  font-weight: 820;
+  letter-spacing: -0.01em;
+  background: rgba(66, 124, 220, 0.13);
+  border: 1px solid rgba(126, 174, 255, 0.24);
+  border-radius: 13px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.dashboard-login-button svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.dashboard-login-button:hover {
+  background: rgba(75, 139, 244, 0.22);
+  border-color: rgba(146, 190, 255, 0.42);
+}
+
+.dashboard-login-button:active {
+  transform: scale(0.97);
+}
+
+.profile-menu small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.48);
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@media (max-width: 480px) {
+  .dashboard-header {
+    min-height: 68px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .dashboard-login-button {
+    min-height: 40px;
+    padding: 0 12px;
+  }
+
+  .dashboard-login-button span {
+    font-size: 12px;
+  }
+}

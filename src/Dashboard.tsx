@@ -47,9 +47,9 @@ type Page =
   | "logo-manager"
   | "sponsor-manager";
 
-type DashboardProps = { user: User; profile: UserProfile };
+type DashboardProps = { user: User | null; profile: UserProfile; onLogin?: () => void };
 
-function Dashboard({ user, profile }: DashboardProps) {
+function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const role = profile.role;
   const [activePage, setActivePage] =
     useState<Page>("start");
@@ -94,9 +94,11 @@ function Dashboard({ user, profile }: DashboardProps) {
 
 
           <div className="clear-grid-break"><h3>Organisation</h3></div>
-          <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
-            <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong></span><span className="quick-arrow">›</span>
-          </button>
+          {user && (
+            <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
+              <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong></span><span className="quick-arrow">›</span>
+            </button>
+          )}
 
           <button type="button" className="quick-card" onClick={() => setActivePage("fan-features")}>
             <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Fanbereich</strong></span><span className="quick-arrow">›</span>
@@ -182,19 +184,16 @@ function Dashboard({ user, profile }: DashboardProps) {
 
           </>)}
 
-          <button
-            type="button"
-            className="quick-card"
-          >
-            <span className="quick-icon"><Icon name="document" /></span>
-
-            <span className="quick-content">
-              <strong>Dokumente</strong>
-              
-            </span>
-
-            <span className="quick-arrow">›</span>
-          </button>
+          {user && (
+            <button
+              type="button"
+              className="quick-card"
+            >
+              <span className="quick-icon"><Icon name="document" /></span>
+              <span className="quick-content"><strong>Dokumente</strong></span>
+              <span className="quick-arrow">›</span>
+            </button>
+          )}
         </div>
       </section>
     );
@@ -226,7 +225,7 @@ function Dashboard({ user, profile }: DashboardProps) {
     }
 
     if (activePage === "logo-manager") {
-      return canManageClub ? <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} /> : renderMorePage();
+      return canManageClub && user ? <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} /> : renderMorePage();
     }
 
     if (activePage === "sponsor-manager") {
@@ -376,21 +375,45 @@ function Dashboard({ user, profile }: DashboardProps) {
         </button>
 
         <div className="profile-wrap">
-          <button
-            type="button"
-            className="profile-button"
-            aria-label="Profil öffnen"
-            onClick={() => setProfileOpen((value) => !value)}
-          >
-            {(user.displayName || user.email || "TSU").split(/\s|@/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("")}
-          </button>
-          {profileOpen && (
-            <div className="profile-menu">
-              <strong>{profile.name}</strong>
-              <span>{profile.email || user.email}</span>
-              
-              <button type="button" onClick={() => signOut(auth)}>Abmelden</button>
-            </div>
+          {user ? (
+            <>
+              <button
+                type="button"
+                className="profile-button"
+                aria-label="Profil öffnen"
+                aria-expanded={profileOpen}
+                onClick={() => setProfileOpen((value) => !value)}
+              >
+                {(user.displayName || user.email || "TSU")
+                  .split(/\s|@/)
+                  .filter(Boolean)
+                  .slice(0, 2)
+                  .map((part) => part[0]?.toUpperCase())
+                  .join("")}
+              </button>
+              {profileOpen && (
+                <div className="profile-menu">
+                  <strong>{profile.name}</strong>
+                  <span>{profile.email || user.email}</span>
+                  <small>Interner Vereinsbereich</small>
+                  <button type="button" onClick={() => signOut(auth)}>Abmelden</button>
+                </div>
+              )}
+            </>
+          ) : (
+            <button
+              type="button"
+              className="dashboard-login-button"
+              onClick={onLogin}
+              aria-label="Zum internen Vereinsbereich anmelden"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" />
+                <path d="m10 17 5-5-5-5" />
+                <path d="M15 12H3" />
+              </svg>
+              <span>Anmelden</span>
+            </button>
           )}
         </div>
       </header>

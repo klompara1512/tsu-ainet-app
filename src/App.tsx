@@ -3,7 +3,6 @@ import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 import Login from "./Login";
-import PublicGames from "./PublicGames";
 import Dashboard from "./Dashboard";
 import {
   normalizeRole,
@@ -30,7 +29,7 @@ function AppContent() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile>(() => fallbackProfile(null));
   const [authReady, setAuthReady] = useState(false);
-  const [publicMode, setPublicMode] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
 
   useEffect(() => {
     let unsubscribeProfile: (() => void) | undefined;
@@ -92,8 +91,17 @@ function AppContent() {
   }
 
   if (!user) {
-    if (publicMode) return <PublicGames onLogin={() => setPublicMode(false)} />;
-    return <Login onPublicGames={() => setPublicMode(true)} />;
+    if (loginOpen) {
+      return <Login onPublicGames={() => setLoginOpen(false)} />;
+    }
+
+    return (
+      <Dashboard
+        user={null}
+        profile={profile}
+        onLogin={() => setLoginOpen(true)}
+      />
+    );
   }
 
   if (!profile.active || !profile.approved || profile.role === "pending") {

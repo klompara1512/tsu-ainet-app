@@ -1,12 +1,12 @@
-name: KFV / ÖFB Core-Daten synchronisieren
+name: KFV / ÖFB Spielpläne und Ergebnisse synchronisieren
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "7,37 * * * *"
+    - cron: "17 */3 * * *"
 
 concurrency:
-  group: kfv-oefb-core-sync
+  group: kfv-oefb-games-sync
   cancel-in-progress: true
 
 permissions:
@@ -19,9 +19,6 @@ jobs:
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      SYNC_MODE: core
-      RUN_DAILY_TASKS: "false"
-      RUN_DUPLICATE_CLEANUP: "false"
 
     steps:
       - name: Projekt laden
@@ -36,11 +33,11 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Projekt und Core-Sync prüfen
+      - name: Projekt und Spiele-Sync prüfen
         run: npm run sync:check
 
-      - name: Spielpläne, Ergebnisse und Tabellen synchronisieren
-        run: npm run sync:core
+      - name: Spielpläne und Ergebnisse synchronisieren
+        run: npm run sync:games
 
       - name: Heimspiel-Aufgaben automatisch aktualisieren
         run: npm run sync:home-tasks

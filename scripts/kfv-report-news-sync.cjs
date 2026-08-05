@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "15.2.0-complete-official-match-report";
+const VERSION = "16.1.0-spark-report-window";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -18,13 +18,13 @@ const NAVIGATION_TIMEOUT = Math.max(
   20000,
   Number(process.env.REPORT_NAVIGATION_TIMEOUT || 45000),
 );
-const LOOKBACK_DAYS = Math.max(
-  1,
-  Number(process.env.REPORT_LOOKBACK_DAYS || 45),
-);
-const LOOKAHEAD_DAYS = Math.max(
+const PRE_KICKOFF_MINUTES = Math.max(
   0,
-  Number(process.env.REPORT_LOOKAHEAD_DAYS || 7),
+  Number(process.env.REPORT_PRE_KICKOFF_MINUTES || 60),
+);
+const POST_KICKOFF_MINUTES = Math.max(
+  120,
+  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 300),
 );
 const CONFIG_PATH = path.join(process.cwd(), "config", "kfv-sync.config.json");
 const SYNC_CONFIG = fs.existsSync(CONFIG_PATH)
@@ -309,10 +309,15 @@ async function mapLimit(items, limit, fn) {
 }
 
 async function loadCandidateMatches() {
-  const snapshot = await db.collection("kfvMatches").get();
   const now = Date.now();
-  const from = now - LOOKBACK_DAYS * 86400000;
-  const to = now + LOOKAHEAD_DAYS * 86400000;
+  const fromDate = new Date(now - POST_KICKOFF_MINUTES * 60000);
+  const toDate = new Date(now + PRE_KICKOFF_MINUTES * 60000);
+
+  const snapshot = await db
+    .collection("kfvMatches")
+    .where("kickoffAt", ">=", admin.firestore.Timestamp.fromDate(fromDate))
+    .where("kickoffAt", "<=", admin.firestore.Timestamp.fromDate(toDate))
+    .get();
 
   return snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
@@ -323,7 +328,7 @@ async function loadCandidateMatches() {
     .filter((match) => match.active !== false)
     .filter((match) => {
       const time = match.kickoffDate.getTime();
-      return time > 0 && time >= from && time <= to;
+      return time > 0 && now >= time - PRE_KICKOFF_MINUTES * 60000 && now <= time + POST_KICKOFF_MINUTES * 60000;
     })
     .filter(
       (match) =>

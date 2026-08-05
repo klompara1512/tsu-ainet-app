@@ -1,9 +1,9 @@
-name: KFV / ÖFB Spielberichte und News synchronisieren
+name: KFV / ÖFB Spielberichte im Spielzeitfenster synchronisieren
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "15 4 * * *"
+    - cron: "10,40 * * * *"
 
 concurrency:
   group: kfv-oefb-report-news-sync
@@ -21,8 +21,8 @@ jobs:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-      REPORT_LOOKBACK_DAYS: "45"
-      REPORT_LOOKAHEAD_DAYS: "7"
+      REPORT_PRE_KICKOFF_MINUTES: "60"
+      REPORT_POST_KICKOFF_MINUTES: "300"
 
     steps:
       - name: Projekt laden
@@ -37,8 +37,8 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Projekt und Phase 4 prüfen
+      - name: Projekt und Spielbericht-Sync prüfen
         run: npm run sync:check
 
-      - name: Offizielle Spielberichte und News-Entwürfe synchronisieren
+      - name: Berichte nur eine Stunde vor bis fünf Stunden nach Anstoß synchronisieren
         run: npm run sync:reports

@@ -53,14 +53,21 @@ const SQUAD_URLS = ACTIVE_TEAMS.map((team) => team.squadUrl).filter(Boolean);
 const SQUAD_URL = SQUAD_URLS[0] || `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/KM/Kader/`;
 const RUN_DAILY_TASKS = process.env.RUN_DAILY_TASKS === "true";
 const SYNC_MODE = String(process.env.SYNC_MODE || "full").toLowerCase();
-const CORE_SYNC = SYNC_MODE === "core";
+const GAMES_ONLY = SYNC_MODE === "games";
+const TABLES_ONLY = SYNC_MODE === "tables";
+const CORE_SYNC = SYNC_MODE === "core" || GAMES_ONLY || TABLES_ONLY;
+const LEAN_SYNC = CORE_SYNC;
 // Produktiv werden ausschließlich die offiziellen Spiele-/Tabellenseiten jeder
 // einzelnen Mannschaft besucht. Allgemeine Vereinsseiten dürfen keine Tabellen
 // oder Spielpläne mehr in den Sync einmischen.
 const CLUB_SEED_URLS = Array.isArray(SYNC_CONFIG.clubSeedUrls) ? SYNC_CONFIG.clubSeedUrls.filter(Boolean) : [];
-const START_URLS = CORE_SYNC
-  ? TEAM_SYNC_SOURCES.map((entry) => entry.url)
-  : [
+const START_URLS = TABLES_ONLY
+  ? TEAM_SYNC_SOURCES.filter((entry) => entry.kind === "table").map((entry) => entry.url)
+  : GAMES_ONLY
+    ? TEAM_SYNC_SOURCES.filter((entry) => entry.kind === "games").map((entry) => entry.url)
+    : CORE_SYNC
+      ? TEAM_SYNC_SOURCES.map((entry) => entry.url)
+      : [
       ...TEAM_SYNC_SOURCES.map((entry) => entry.url),
       ...CLUB_SEED_URLS,
       ...SQUAD_URLS,
@@ -69,9 +76,13 @@ const MAX_PAGES = CORE_SYNC
   ? Math.max(12, START_URLS.length + 4)
   : (Number(SYNC_CONFIG.maxPages) || 80);
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
-const PARSER_VERSION = CORE_SYNC
-  ? "14.0.0-phase1-core-sync"
-  : "13.4.0-independent-official-sync";
+const PARSER_VERSION = TABLES_ONLY
+  ? "16.1.0-spark-table-sync"
+  : GAMES_ONLY
+    ? "16.1.0-spark-games-sync"
+    : CORE_SYNC
+      ? "16.1.0-spark-core-sync"
+      : "13.4.0-independent-official-sync";
 
 
 const SYNC_WINDOW_PAST_DAYS = 14;
@@ -2461,13 +2472,13 @@ async function main() {
       warnings.push(`${matchesWithReportId} Spiele besitzen einen offiziellen Bericht-Link, aber es wurden noch keine veröffentlichten Berichtsdaten erkannt.`);
     }
 
-    if (!CORE_SYNC && uniqueSquad.length === 0) {
+    if (!LEAN_SYNC && uniqueSquad.length === 0) {
       const squadWarning = "ÖFB-Kader-Sync: 0 Spieler erkannt. Bestehende Kaderdaten bleiben unverändert.";
       warnings.push(squadWarning);
       console.warn(`⚠ ${squadWarning}`);
       console.warn(`Geprüfte Kader-URLs: ${SQUAD_URLS.join(", ")}`);
       console.warn("Der restliche Sync wird fortgesetzt; kfvSquad wird weder überschrieben noch deaktiviert.");
-    } else if (!CORE_SYNC) {
+    } else if (!LEAN_SYNC) {
       console.log(`✅ ÖFB-Kader-Sync: ${uniqueSquad.length} Spieler erkannt.`);
     }
 
@@ -2477,8 +2488,12 @@ async function main() {
     if (uniqueMatches.length === 0) {
       warnings.push("Spielplan-Sync: 0 Spiele erkannt. Bestehende Spieldaten bleiben unverändert; Tabellen, Kader und Logos werden trotzdem verarbeitet.");
     }
-    if (CORE_SYNC
-      ? uniqueMatches.length === 0 && uniqueStandings.length === 0
+    if (TABLES_ONLY
+      ? uniqueStandings.length === 0
+      : GAMES_ONLY
+        ? uniqueMatches.length === 0
+        : CORE_SYNC
+          ? uniqueMatches.length === 0 && uniqueStandings.length === 0
       : uniqueMatches.length === 0 && uniqueStandings.length === 0 && uniqueSquad.length === 0 && uniqueClubProfiles.length === 0) {
       await statusRef.set({
         running: false, success: false,
@@ -2496,16 +2511,19 @@ async function main() {
       warnings.push(`Tabellen-Sync wurde übersprungen: nur ${uniqueStandings.length} plausible Tabellenzeilen erkannt.`);
     }
 
-    const existingMatchesSnapshot = await db.collection(MATCH_COLLECTION).get();
-    const existingMatchIds = new Set(existingMatchesSnapshot.docs.map((document) => document.id));
-    const newMatchCount = uniqueMatches.filter((item) => !existingMatchIds.has(item.id)).length;
-    const updatedMatchCount = uniqueMatches.length - newMatchCount;
-
-    if (uniqueMatches.length) await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
-    if (standingsReliable) await writeCollection(STANDING_COLLECTION, uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
-    if (!CORE_SYNC && uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
-    if (!CORE_SYNC && uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
-    if (!CORE_SYNC && uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
+    let newMatchCount = 0;
+    let updatedMatchCount = 0;
+    if (!TABLES_ONLY && uniqueMatches.length) {
+      const existingMatchesSnapshot = await db.collection(MATCH_COLLECTION).select().get();
+      const existingMatchIds = new Set(existingMatchesSnapshot.docs.map((document) => document.id));
+      newMatchCount = uniqueMatches.filter((item) => !existingMatchIds.has(item.id)).length;
+      updatedMatchCount = uniqueMatches.length - newMatchCount;
+      await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
+    }
+    if (!GAMES_ONLY && standingsReliable) await writeCollection(STANDING_COLLECTION, uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
+    if (!LEAN_SYNC && uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
+    if (!LEAN_SYNC && uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
+    if (!LEAN_SYNC && uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
     const duplicateDocumentsDeactivated = RUN_DUPLICATE_CLEANUP
@@ -2515,13 +2533,13 @@ async function main() {
     // Spiele werden bei einem teilweise geladenen ÖFB-Spielplan nicht deaktiviert.
     // Echte Dubletten wurden bereits durch cleanupExistingMatchDuplicates bereinigt.
     const deactivatedMatches = 0;
-    const deactivatedStandings = standingsReliable
+    const deactivatedStandings = !GAMES_ONLY && standingsReliable
       ? await deactivateMissingForTeams(STANDING_COLLECTION, new Set(uniqueStandings.map((item) => item.id)), reliableStandingTeams, runId)
       : 0;
     const reliableSquadTeams = new Set(
       ACTIVE_TEAMS.filter((team) => uniqueSquad.some((item) => item.teamKey === team.key)).map((team) => team.key),
     );
-    const deactivatedSquad = !CORE_SYNC && reliableSquadTeams.size
+    const deactivatedSquad = !LEAN_SYNC && reliableSquadTeams.size
       ? await deactivateMissingForTeams("kfvSquad", new Set(uniqueSquad.map((item) => item.id)), reliableSquadTeams, runId)
       : 0;
     // Spielberichte bleiben erhalten, wenn eine ÖFB-Seite in einem Lauf nicht
@@ -2558,7 +2576,7 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: CORE_SYNC ? "v14-phase1-core-sync" : "v13.4-independent-official-sync",
+      syncArchitecture: TABLES_ONLY ? "v16.1-spark-table-sync" : GAMES_ONLY ? "v16.1-spark-games-sync" : CORE_SYNC ? "v16.1-spark-core-sync" : "v13.4-independent-official-sync",
       syncMode: SYNC_MODE,
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),

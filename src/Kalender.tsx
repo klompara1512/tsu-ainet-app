@@ -162,11 +162,15 @@ function localClubLogo(teamName: string) {
     .replace(/\s+/g, " ")
     .trim();
 
-  const localLogos: Record<string, string> = {
-    doelsach: "/logos/clubs/doelsach.png",
-  };
+  const directMappings: Array<[RegExp, string]> = [
+    [/virgen.*praegraten.*u12|praegraten.*virgen.*u12/i, "https://vereine.oefb.at/vereine3/images/834733022602002384_39c0029ab72b9ba10c4c-1,0-200x200.png"],
+    [/doelsach/i, "https://vereine.oefb.at/vereine3/images/834733022602002384_df1894b3bfd9affa4feb-1,0-200x200.png"],
+    [/oberes.*moelltal/i, "https://vereine.oefb.at/vereine3/images/834733022602002384_e92261af7940f6131d0e-1,0-200x200.png"],
+    [/thal.*assling|assling.*thal/i, "https://vereine.oefb.at/vereine3/images/834733022602002384_2fc84806a5c34bccf96a-1,0-200x200.png"],
+    [/(?:^| )lienz(?: |$)/i, "https://vereine.oefb.at/vereine3/images/834733022602002384_b19bf14e13c0c11671ed-1,0-200x200.png"],
+  ];
 
-  return localLogos[normalized] || "";
+  return directMappings.find(([pattern]) => pattern.test(normalized))?.[1] || "";
 }
 
 function buildLogoCandidates(

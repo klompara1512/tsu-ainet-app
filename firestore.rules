@@ -34,6 +34,19 @@ match /oefbV12Standings/{d=**}{allow read:if true;allow write:if football();}
  match /sponsors/{d=**}{allow read:if active();allow write:if editors();}
  match /settings/{d=**}{allow read:if active();allow write:if leaders();}
  match /kfvClubs/{d=**}{allow read:if true;allow write:if football();}
+ match /clubLogos/{id}{
+  allow read: if true;
+  allow create,update: if leaders()
+    && request.resource.data.clubName is string
+    && request.resource.data.normalizedName is string
+    && request.resource.data.aliases is list
+    && request.resource.data.normalizedAliases is list
+    && request.resource.data.logoUrl is string
+    && request.resource.data.storagePath is string
+    && request.resource.data.active is bool
+    && request.resource.data.schemaVersion == 1;
+  allow delete: if leaders();
+ }
  match /syncStatus/{d=**}{allow read:if true;allow write:if football();}
  match /kfvSyncRuns/{d=**}{allow read:if leaders();allow write:if false;}
  match /fcmTokens/{id}{allow read:if leaders();allow create,update,delete:if active() && request.resource.data.uid==request.auth.uid;}

@@ -2301,9 +2301,29 @@ async function main() {
   const runId = String(startedAt.toMillis());
   const runRef = db.collection("kfvSyncRuns").doc(runId);
   const trigger = process.env.GITHUB_ACTIONS ? "github-actions" : "local";
+  const githubRunId = String(process.env.GITHUB_RUN_ID || "");
+  const githubRepository = String(process.env.GITHUB_REPOSITORY || "");
+  const githubServerUrl = String(process.env.GITHUB_SERVER_URL || "https://github.com");
+  const githubRunUrl = githubRunId && githubRepository
+    ? `${githubServerUrl}/${githubRepository}/actions/runs/${githubRunId}`
+    : "";
+  const githubMetadata = {
+    githubRunId,
+    githubRunNumber: Number(process.env.GITHUB_RUN_NUMBER || 0),
+    githubRunAttempt: Number(process.env.GITHUB_RUN_ATTEMPT || 0),
+    githubRunUrl,
+    githubWorkflow: String(process.env.GITHUB_WORKFLOW || ""),
+    githubJob: String(process.env.GITHUB_JOB || ""),
+    githubRepository,
+    githubActor: String(process.env.GITHUB_ACTOR || ""),
+    githubEventName: String(process.env.GITHUB_EVENT_NAME || ""),
+    githubRefName: String(process.env.GITHUB_REF_NAME || ""),
+    githubSha: String(process.env.GITHUB_SHA || ""),
+  };
   const initialRunData = {
     runId, status: "running", running: true, success: null,
     trigger, startedAt, intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
+    ...githubMetadata,
   };
   await Promise.all([
     statusRef.set(initialRunData, { merge: true }),
@@ -2659,6 +2679,7 @@ async function main() {
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
       intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
+      ...githubMetadata,
       lastError: admin.firestore.FieldValue.delete(),
     };
     await Promise.all([
@@ -2709,6 +2730,7 @@ async function main() {
       startedAt, finishedAt, durationMs,
       lastError: String(error.message || error),
       intervalMinutes: SYNC_INTERVAL_MINUTES, provider: "github-actions", parserVersion: PARSER_VERSION,
+      ...githubMetadata,
     };
     await Promise.all([
       statusRef.set(errorRunData, { merge: true }),

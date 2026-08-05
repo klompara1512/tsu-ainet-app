@@ -188,6 +188,19 @@ export async function permanentlyDeleteClubLogo(id: string) {
   await deleteDoc(doc(db, CLUB_LOGO_COLLECTION, id));
 }
 
+function strictClubNamePartialMatch(first: string, second: string) {
+  if (!first || !second || first === second) return false;
+
+  const firstTokens = first.split(" ").filter(Boolean);
+  const secondTokens = second.split(" ").filter(Boolean);
+  const shorter = firstTokens.length <= secondTokens.length ? firstTokens : secondTokens;
+  const longer = new Set(firstTokens.length <= secondTokens.length ? secondTokens : firstTokens);
+
+  // Ein einzelnes Wort darf nie als unscharfer Treffer verwendet werden.
+  // Dadurch wird z. B. "Lienz" nicht mehr "Lienzer Talboden" zugeordnet.
+  return shorter.length >= 2 && shorter.every((token) => longer.has(token));
+}
+
 export function resolveManagedClubLogo(
   entries: ClubLogoEntry[],
   teamName: string,
@@ -211,8 +224,8 @@ export function resolveManagedClubLogo(
       const score = Math.max(
         ...names.map((name) => {
           if (name === normalized) return 100;
-          if (normalized.includes(name) || name.includes(normalized)) {
-            return Math.min(name.length, normalized.length);
+          if (strictClubNamePartialMatch(normalized, name)) {
+            return 50 + Math.min(name.split(" ").length, normalized.split(" ").length);
           }
           return 0;
         }),

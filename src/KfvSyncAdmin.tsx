@@ -14,6 +14,7 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { Icon } from "./Icons";
+import { APP_VERSION } from "./appVersion";
 import "./KfvSyncAdmin.css";
 
 type Props = { onBack: () => void };
@@ -46,6 +47,17 @@ type SyncStatus = {
   teamCounts?: Record<string, number>;
   standingTeamCounts?: Record<string, number>;
   squadTeamCounts?: Record<string, number>;
+  githubRunId?: string;
+  githubRunNumber?: number;
+  githubRunAttempt?: number;
+  githubRunUrl?: string;
+  githubWorkflow?: string;
+  githubJob?: string;
+  githubRepository?: string;
+  githubActor?: string;
+  githubEventName?: string;
+  githubRefName?: string;
+  githubSha?: string;
 };
 
 type SyncRun = SyncStatus & {
@@ -106,6 +118,19 @@ function runStatus(run: SyncRun) {
 function countChanges(run: SyncRun) {
   return (run.newMatchCount || 0) + (run.updatedMatchCount || 0) +
     (run.duplicateDocumentsDeactivated || 0) + (run.deactivatedMatches || 0);
+}
+
+function githubStatusInfo(status: SyncStatus, stale: boolean, waiting: boolean) {
+  if (status.running) return { label: "Läuft gerade", tone: "running" as const };
+  if (waiting) return { label: "Start ausständig", tone: "warning" as const };
+  if (status.success === false) return { label: "Fehlgeschlagen", tone: "error" as const };
+  if (status.success === true && stale) return { label: "Überfällig", tone: "warning" as const };
+  if (status.success === true) return { label: "Online", tone: "success" as const };
+  return { label: "Noch kein Lauf", tone: "neutral" as const };
+}
+
+function shortSha(value?: string) {
+  return value ? value.slice(0, 7) : "–";
 }
 
 function progressPercent(status: SyncStatus, waiting: boolean) {
@@ -229,6 +254,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
 
   const currentStatus = statusInfo(status);
   const waiting = Boolean(waitingSince) && !status.running;
+  const githubStatus = githubStatusInfo(status, stale, waiting);
   const progress = progressPercent(status, waiting);
 
   async function saveSourceUrl() {
@@ -264,7 +290,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
     setDiagnostics([
       { label: "Internetverbindung", state: navigator.onLine ? "success" : "error", detail: navigator.onLine ? "Online" : "Offline" },
       { label: "Firestore", state: "checking", detail: "Verbindung wird geprüft …" },
-      { label: "GitHub-Workflow", state: "success", detail: "Workflow-Adresse ist konfiguriert" },
+      { label: "GitHub-Workflow", state: githubStatus.tone === "error" ? "error" : githubStatus.tone === "warning" ? "warning" : "success", detail: status.githubWorkflow ? `${status.githubWorkflow} · ${githubStatus.label}` : "Workflow-Adresse ist konfiguriert" },
       { label: "Synchronisationshistorie", state: "checking", detail: "Status wird geprüft …" },
       { label: "Match-ID-Schema", state: status.matchIdentityVersion ? "success" : "warning", detail: status.matchIdentityVersion || "Noch nicht gemeldet" },
     ]);
@@ -405,9 +431,35 @@ export default function KfvSyncAdmin({ onBack }: Props) {
         <div className="sync-section-heading sync-section-heading--compact"><div><small>Überwachung</small><h2>Systemstatus</h2></div></div>
         <div className="sync-system-list">
           <div><span className="sync-dot sync-dot--success" /><span>Firestore erreichbar</span><strong>Online</strong></div>
-          <div><span className={`sync-dot ${stale ? "sync-dot--warning" : "sync-dot--success"}`} /><span>GitHub-Synchronisierung</span><strong>{stale ? "Prüfen" : "Aktiv"}</strong></div>
-          <div><span className="sync-dot sync-dot--success" /><span>App-Version</span><strong>11.0.3</strong></div>
+          <div>
+            <span className={`sync-dot sync-dot--${githubStatus.tone === "running" ? "warning" : githubStatus.tone}`} />
+            <span>GitHub-Synchronisierung</span>
+            <strong>{githubStatus.label}</strong>
+          </div>
+          <div><span className="sync-dot sync-dot--success" /><span>App-Version</span><strong>{APP_VERSION}</strong></div>
           <div><span className="sync-dot sync-dot--success" /><span>Match-ID-Schema</span><strong>{status.matchIdentityVersion || "11.0.1"}</strong></div>
+        </div>
+      </section>
+
+      <section className="sync-github-card">
+        <div className="sync-section-heading sync-section-heading--compact">
+          <div><small>GitHub Actions</small><h2>Workflow-Status</h2></div>
+          <span className={`sync-status-badge sync-status-badge--${githubStatus.tone}`}>{githubStatus.label}</span>
+        </div>
+        <div className="sync-github-grid">
+          <div><span>Workflow</span><strong>{status.githubWorkflow || "KFV / ÖFB Synchronisierung"}</strong></div>
+          <div><span>Letzter Lauf</span><strong>{formatDate(status.startedAt)}</strong></div>
+          <div><span>Laufnummer</span><strong>{status.githubRunNumber ? `#${status.githubRunNumber}` : "–"}</strong></div>
+          <div><span>Versuch</span><strong>{status.githubRunAttempt || "–"}</strong></div>
+          <div><span>Auslöser</span><strong>{status.githubEventName || status.trigger || "–"}</strong></div>
+          <div><span>Commit</span><strong>{shortSha(status.githubSha)}</strong></div>
+        </div>
+        {status.lastError && <div className="sync-github-error"><strong>Letzter Fehler</strong><span>{status.lastError}</span></div>}
+        <div className="sync-github-actions">
+          <button type="button" className="primary" onClick={() => window.open(status.githubRunUrl || GITHUB_WORKFLOW_URL, "_blank", "noopener,noreferrer")}>
+            GitHub-Lauf öffnen
+          </button>
+          <button type="button" className="secondary" onClick={() => void runDiagnostics()}>Status prüfen</button>
         </div>
       </section>
 
@@ -463,6 +515,12 @@ export default function KfvSyncAdmin({ onBack }: Props) {
               <div><span>Tabellenzeilen</span><strong>{selectedRun.standingCount || 0}</strong></div>
               <div><span>Vereinslogos</span><strong>{selectedRun.clubLogoCount || 0}</strong></div>
             </div>
+            {(selectedRun.githubRunUrl || selectedRun.githubRunNumber) && (
+              <div className="sync-dialog__github">
+                <span>GitHub Actions {selectedRun.githubRunNumber ? `#${selectedRun.githubRunNumber}` : ""}</span>
+                <button type="button" onClick={() => window.open(selectedRun.githubRunUrl || GITHUB_WORKFLOW_URL, "_blank", "noopener,noreferrer")}>Lauf öffnen</button>
+              </div>
+            )}
             {selectedRun.lastError && <div className="sync-dialog__error"><strong>Fehler</strong><span>{selectedRun.lastError}</span></div>}
             {selectedRun.warnings && selectedRun.warnings.length > 0 && <div className="sync-dialog__warnings"><strong>Warnungen</strong><ul>{selectedRun.warnings.slice(0, 10).map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul></div>}
           </article>

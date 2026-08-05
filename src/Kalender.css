@@ -81,3 +81,145 @@
   .calendar-month-layout{grid-template-columns:1fr}
   .calendar-day-panel{position:static;top:auto}
 }
+
+/* Version 17.1.1 – Mobile Spielliste und Kalender-Uhrzeit */
+@media(max-width:760px){
+  /* Jede Spielkarte bekommt klar getrennte Bereiche: Logos oben, Text unten. */
+  .calendar-agenda-event,
+  .calendar-agenda-event.compact{
+    display:grid;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:11px;
+    padding:13px 14px 14px;
+    overflow:hidden;
+  }
+  .calendar-card-logos,
+  .calendar-agenda-event.compact .calendar-card-logos{
+    display:grid;
+    grid-template-columns:46px minmax(52px,1fr) 46px;
+    align-items:center;
+    justify-self:stretch;
+    width:100%;
+    min-width:0;
+    gap:10px;
+    padding-bottom:10px;
+    border-bottom:1px solid rgba(255,255,255,.07);
+  }
+  .calendar-club-logo,
+  .calendar-agenda-event.compact .calendar-club-logo{
+    width:46px;
+    height:46px;
+    padding:4px;
+    border-radius:13px;
+  }
+  .calendar-card-logos>span{
+    min-width:0;
+    text-align:center;
+    font-size:15px;
+    letter-spacing:-.02em;
+  }
+  .calendar-agenda-content{
+    min-width:0;
+    width:100%;
+  }
+  .calendar-agenda-topline{
+    justify-content:space-between;
+    gap:6px 10px;
+  }
+  .calendar-agenda-topline span,
+  .calendar-agenda-topline small{
+    min-width:0;
+  }
+  .calendar-agenda-content h3{
+    margin-top:7px;
+    overflow-wrap:anywhere;
+    font-size:15px;
+    line-height:1.35;
+  }
+  .calendar-match-statusline{
+    margin-top:10px;
+    font-size:12px;
+  }
+  .calendar-match-statusline>span{
+    color:#fff;
+    font-size:15px;
+    font-weight:900;
+  }
+  .calendar-agenda-meta{
+    margin-top:10px;
+  }
+
+  /* Datum als kompakte Zeile statt eigener hoher Seitenkarte. */
+  .calendar-list-date{
+    min-height:0;
+    padding:7px 4px 2px;
+    color:rgba(255,255,255,.68);
+    background:transparent;
+    border:0;
+    border-radius:0;
+  }
+  .calendar-list-date strong{
+    font-size:12px;
+    font-weight:800;
+  }
+}
+
+@media(max-width:620px){
+  /* Im Monatskalender bleibt die Anstoßzeit sichtbar und lesbar. */
+  .calendar-day{
+    min-height:76px;
+  }
+  .calendar-day-events{
+    display:flex;
+    flex-direction:column;
+    flex-wrap:nowrap;
+    width:100%;
+    gap:3px;
+  }
+  .calendar-day-event,
+  .calendar-day-event.calendar-team-challenge,
+  .calendar-day-event.calendar-team-u17,
+  .calendar-day-event.calendar-team-u12,
+  .calendar-day-event.calendar-team-u10,
+  .calendar-day-event.calendar-team-u8{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
+    height:auto;
+    min-height:16px;
+    padding:2px 1px;
+    overflow:hidden;
+    color:transparent;
+    font-size:0;
+    line-height:1;
+    white-space:nowrap;
+    background:rgba(255,255,255,.055);
+    border-left-width:2px;
+    border-radius:4px;
+  }
+  .calendar-day-event b{
+    color:#fff;
+    font-size:9px;
+    font-weight:900;
+    letter-spacing:-.02em;
+  }
+  .calendar-day-events small{
+    font-size:8px;
+  }
+}
+
+@media(max-width:390px){
+  .calendar-card-logos,
+  .calendar-agenda-event.compact .calendar-card-logos{
+    grid-template-columns:42px minmax(46px,1fr) 42px;
+    gap:8px;
+  }
+  .calendar-club-logo,
+  .calendar-agenda-event.compact .calendar-club-logo{
+    width:42px;
+    height:42px;
+  }
+  .calendar-agenda-content h3{font-size:14px}
+  .calendar-day-event b{font-size:8px}
+}

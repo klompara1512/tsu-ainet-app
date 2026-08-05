@@ -23,6 +23,7 @@ import NotificationsAdmin from "./NotificationsAdmin";
 import { Icon } from "./Icons";
 import HomeGameTasks from "./HomeGameTasks";
 import LogoManager from "./LogoManager";
+import SponsorManager from "./SponsorManager";
 import { APP_VERSION } from "./appVersion";
 
 type Page =
@@ -43,7 +44,8 @@ type Page =
   | "fan-features"
   | "notifications-admin"
   | "home-game-tasks"
-  | "logo-manager";
+  | "logo-manager"
+  | "sponsor-manager";
 
 type DashboardProps = { user: User; profile: UserProfile };
 
@@ -61,6 +63,7 @@ function Dashboard({ user, profile }: DashboardProps) {
   const canManageNews = hasPermission(role, "manageNews");
   const canManageSync = role === "admin";
   const canManageClub = role === "admin" || role === "section";
+  const canManageSponsors = hasPermission(role, "manageSponsors");
   const canManageAnything =
     canManageMatches || canManageStandings || canManagePeople || canManageEvents || canManageNews;
 
@@ -103,6 +106,10 @@ function Dashboard({ user, profile }: DashboardProps) {
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}>
             <span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span>
+          </button>}
+
+          {canManageSponsors && <button type="button" className="quick-card" onClick={() => setActivePage("sponsor-manager")}>
+            <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Sponsor Manager</strong></span><span className="quick-arrow">›</span>
           </button>}
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}>
@@ -219,7 +226,11 @@ function Dashboard({ user, profile }: DashboardProps) {
     }
 
     if (activePage === "logo-manager") {
-      return <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} />;
+      return canManageClub ? <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} /> : renderMorePage();
+    }
+
+    if (activePage === "sponsor-manager") {
+      return canManageSponsors ? <SponsorManager onBack={() => setActivePage("mehr")} /> : renderMorePage();
     }
 
     if (activePage === "fan-features") {
@@ -339,7 +350,8 @@ function Dashboard({ user, profile }: DashboardProps) {
     activePage === "fan-features" ||
     activePage === "notifications-admin" ||
     activePage === "home-game-tasks" ||
-    activePage === "logo-manager"
+    activePage === "logo-manager" ||
+    activePage === "sponsor-manager"
       ? "mehr"
       : activePage;
 

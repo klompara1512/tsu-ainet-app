@@ -17,7 +17,7 @@ const db = admin.firestore();
 db.settings({ ignoreUndefinedProperties: true });
 
 const config = JSON.parse(fs.readFileSync(path.resolve(__dirname, "../config/kfv-sync.config.json"), "utf8"));
-const VERSION = "14.2.1-phase3-squad-cleanup";
+const VERSION = "16.1.1-spark-delta-squad-sync";
 const STATUS_REF = db.collection("settings").doc("kfvSquadSyncStatus");
 const COLLECTION = "kfvSquad";
 const CONCURRENCY = Math.max(1, Math.min(3, Number(process.env.SQUAD_SYNC_CONCURRENCY || 2)));
@@ -340,21 +340,62 @@ async function mapLimit(items, limit, fn) {
   return results;
 }
 
-async function loadExistingByTeam(team) {
-  // Der gesamte Bestand wird gelesen, damit auch alte Dokumente ohne teamKey
-  // oder mit früheren teamId-Werten sicher bereinigt werden können.
+let existingSquadCache = null;
+
+async function loadExistingSquadOnce() {
+  if (existingSquadCache) return existingSquadCache;
   const snapshot = await db.collection(COLLECTION).get();
-  return snapshot.docs.filter((doc) => belongsToTeam(doc.data(), team));
+  existingSquadCache = snapshot.docs;
+  return existingSquadCache;
+}
+
+async function loadExistingByTeam(team) {
+  const docs = await loadExistingSquadOnce();
+  return docs.filter((doc) => belongsToTeam(doc.data(), team));
+}
+
+function timestampKey(value) {
+  if (!value) return "";
+  if (typeof value.toMillis === "function") return String(value.toMillis());
+  if (value instanceof Date) return String(value.getTime());
+  return String(value);
+}
+
+function squadComparable(value) {
+  const player = value || {};
+  return {
+    playerId: String(player.playerId || ""),
+    oefbPlayerId: String(player.oefbPlayerId || ""),
+    teamKey: String(player.teamKey || ""),
+    teamId: String(player.teamId || ""),
+    teamName: String(player.teamName || ""),
+    canonicalName: String(player.canonicalName || ""),
+    name: String(player.name || ""),
+    number: Number.isFinite(player.number) ? player.number : null,
+    position: String(player.position || ""),
+    imageUrl: String(player.imageUrl || ""),
+    profileUrl: String(player.profileUrl || ""),
+    birthday: timestampKey(player.birthday),
+    birthYear: Number.isFinite(player.birthYear) ? player.birthYear : null,
+    role: String(player.role || ""),
+    order: Number.isFinite(player.order) ? player.order : null,
+    active: player.active !== false,
+    source: String(player.source || ""),
+    sourceUrl: String(player.sourceUrl || ""),
+    parserVersion: String(player.parserVersion || ""),
+    manualOverride: player.manualOverride === true,
+  };
 }
 
 async function writeTeamSquad(result, runId) {
-  if (!result.ok || !result.players.length) return { writes: 0, deactivated: 0, invalidDeactivated: 0, duplicateDeactivated: 0, skipped: true };
+  if (!result.ok || !result.players.length) return { writes: 0, unchanged: 0, deactivated: 0, invalidDeactivated: 0, duplicateDeactivated: 0, skipped: true };
   const existingDocs = await loadExistingByTeam(result.team);
   const incomingIds = new Set(result.players.map((player) => player.id));
   const incomingNames = new Map(result.players.map((player) => [player.canonicalName, player.id]));
   let batch = db.batch();
   let operations = 0;
   let writes = 0;
+  let unchanged = 0;
   let deactivated = 0;
   let invalidDeactivated = 0;
   let duplicateDeactivated = 0;
@@ -388,6 +429,10 @@ async function writeTeamSquad(result, runId) {
       active: true,
       manualOverride: false,
     };
+    if (previous && JSON.stringify(squadComparable(previous)) === JSON.stringify(squadComparable(payload))) {
+      unchanged++;
+      continue;
+    }
     batch.set(db.collection(COLLECTION).doc(player.id), {
       ...payload,
       syncRunId: runId,
@@ -406,10 +451,16 @@ async function writeTeamSquad(result, runId) {
     const oldNameKey = canonicalName(oldName);
     const invalid = !isPlausiblePlayerName(oldName);
     const duplicate = Boolean(oldNameKey && incomingNames.has(oldNameKey));
+    const deactivationReason = invalid ? "invalid-player-record" : duplicate ? "duplicate-player-record" : "not-in-current-official-squad";
+    const duplicateOf = duplicate ? incomingNames.get(oldNameKey) : "";
+    if (old.active === false && old.deactivationReason === deactivationReason && String(old.duplicateOf || "") === duplicateOf) {
+      unchanged++;
+      continue;
+    }
     batch.set(doc.ref, {
       active: false,
-      deactivationReason: invalid ? "invalid-player-record" : duplicate ? "duplicate-player-record" : "not-in-current-official-squad",
-      duplicateOf: duplicate ? incomingNames.get(oldNameKey) : "",
+      deactivationReason,
+      duplicateOf,
       syncRunId: runId,
       sourceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -420,7 +471,7 @@ async function writeTeamSquad(result, runId) {
     if (operations >= 400) await flush();
   }
   await flush();
-  return { writes, deactivated, invalidDeactivated, duplicateDeactivated, skipped: false };
+  return { writes, unchanged, deactivated, invalidDeactivated, duplicateDeactivated, skipped: false };
 }
 
 (async () => {
@@ -443,6 +494,7 @@ async function writeTeamSquad(result, runId) {
     });
     const results = await mapLimit(teams, CONCURRENCY, (team) => extractTeamSquad(browser, team));
     let writeCount = 0;
+    let unchangedCount = 0;
     let deactivatedCount = 0;
     let invalidDeactivatedCount = 0;
     let duplicateDeactivatedCount = 0;
@@ -452,6 +504,7 @@ async function writeTeamSquad(result, runId) {
     for (const result of results) {
       const writeResult = await writeTeamSquad(result, runId);
       writeCount += writeResult.writes;
+      unchangedCount += writeResult.unchanged || 0;
       deactivatedCount += writeResult.deactivated;
       invalidDeactivatedCount += writeResult.invalidDeactivated;
       duplicateDeactivatedCount += writeResult.duplicateDeactivated;
@@ -472,6 +525,7 @@ async function writeTeamSquad(result, runId) {
         imageCount: result.imageCount || 0,
         linkCount: result.linkCount || 0,
         writes: writeResult.writes,
+        unchanged: writeResult.unchanged || 0,
         deactivated: writeResult.deactivated,
         invalidDeactivated: writeResult.invalidDeactivated,
         duplicateDeactivated: writeResult.duplicateDeactivated,
@@ -495,6 +549,7 @@ async function writeTeamSquad(result, runId) {
       failedTeamCount: teams.length - successfulTeams,
       squadCount: totalPlayers,
       writeCount,
+      unchangedCount,
       deactivatedCount,
       invalidDeactivatedCount,
       duplicateDeactivatedCount,
@@ -505,6 +560,7 @@ async function writeTeamSquad(result, runId) {
       lastError: "",
     }, { merge: true });
     console.log(`Kader-Sync erfolgreich: ${totalPlayers} gültige Spieler aus ${successfulTeams}/${teams.length} Mannschaften.`);
+    console.log(`Kader Delta: ${writeCount} geändert/neu, ${unchangedCount} unverändert übersprungen.`);
     console.log(`Bereinigt: ${duplicateDeactivatedCount} Dubletten, ${invalidDeactivatedCount} ungültige Einträge.`);
   } catch (error) {
     await STATUS_REF.set({

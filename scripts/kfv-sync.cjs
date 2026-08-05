@@ -77,7 +77,7 @@ const MAX_PAGES = CORE_SYNC
   : (Number(SYNC_CONFIG.maxPages) || 80);
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
 const PARSER_VERSION = TABLES_ONLY
-  ? "16.1.0-spark-table-sync"
+  ? "16.1.1-spark-delta-table-sync"
   : GAMES_ONLY
     ? "16.1.0-spark-games-sync"
     : CORE_SYNC
@@ -2135,6 +2135,79 @@ async function writeCollection(name, items, runId) {
   await writer.close();
 }
 
+
+function standingComparable(value) {
+  const row = value || {};
+  return {
+    id: String(row.id || ""),
+    teamKey: String(row.teamKey || ""),
+    teamId: String(row.teamId || ""),
+    teamName: String(row.teamName || ""),
+    competitionName: String(row.competitionName || ""),
+    position: Number.isFinite(row.position) ? row.position : null,
+    clubName: String(row.clubName || ""),
+    clubId: String(row.clubId || ""),
+    clubUrl: String(row.clubUrl || ""),
+    teamLogoUrl: String(row.teamLogoUrl || ""),
+    played: Number.isFinite(row.played) ? row.played : null,
+    won: Number.isFinite(row.won) ? row.won : null,
+    drawn: Number.isFinite(row.drawn) ? row.drawn : null,
+    lost: Number.isFinite(row.lost) ? row.lost : null,
+    goalsFor: Number.isFinite(row.goalsFor) ? row.goalsFor : null,
+    goalsAgainst: Number.isFinite(row.goalsAgainst) ? row.goalsAgainst : null,
+    goalDifference: Number.isFinite(row.goalDifference) ? row.goalDifference : null,
+    points: Number.isFinite(row.points) ? row.points : null,
+    source: String(row.source || ""),
+    sourceUrl: String(row.sourceUrl || ""),
+    active: row.active !== false,
+    datasetVersion: String(row.datasetVersion || ""),
+  };
+}
+
+async function writeStandingsChangesOnly(items, runId) {
+  const validItems = items.filter((item) => item && typeof item === "object" && item.id);
+  const references = validItems.map((item) => db.collection(STANDING_COLLECTION).doc(String(item.id)));
+  const snapshots = [];
+  for (let index = 0; index < references.length; index += 300) {
+    snapshots.push(...await db.getAll(...references.slice(index, index + 300)));
+  }
+  const existingById = new Map(snapshots.filter((snapshot) => snapshot.exists).map((snapshot) => [snapshot.id, snapshot.data()]));
+  const writer = db.bulkWriter();
+  writer.onWriteError((error) => {
+    console.error(`Firestore-Schreibfehler in ${STANDING_COLLECTION}/${error.documentRef?.id || "unbekannt"}:`, error.message);
+    return error.failedAttempts < 3;
+  });
+
+  let changed = 0;
+  let unchanged = 0;
+  let created = 0;
+  for (const item of validItems) {
+    const reference = db.collection(STANDING_COLLECTION).doc(String(item.id));
+    const existing = existingById.get(String(item.id));
+    const payload = {
+      ...item,
+      teamLogoUrl: item.teamLogoUrl || existing?.teamLogoUrl || "",
+      active: true,
+      datasetVersion: item.datasetVersion || DATASET_VERSION,
+    };
+    const same = existing && JSON.stringify(standingComparable(existing)) === JSON.stringify(standingComparable(payload));
+    if (same) {
+      unchanged += 1;
+      continue;
+    }
+    writer.set(reference, removeUndefinedDeep({
+      ...payload,
+      syncRunId: runId,
+      sourceUpdatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }), { merge: false });
+    changed += 1;
+    if (!existing) created += 1;
+  }
+  await writer.close();
+  return { changed, unchanged, created, checked: validItems.length };
+}
+
 async function cleanupExistingMatchDuplicates(runId) {
   const snapshot = await db.collection(MATCH_COLLECTION).get();
   const groups = new Map();
@@ -2520,7 +2593,9 @@ async function main() {
       updatedMatchCount = uniqueMatches.length - newMatchCount;
       await writeCollection(MATCH_COLLECTION, uniqueMatches.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
     }
-    if (!GAMES_ONLY && standingsReliable) await writeCollection(STANDING_COLLECTION, uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId);
+    const standingWriteStats = !GAMES_ONLY && standingsReliable
+      ? await writeStandingsChangesOnly(uniqueStandings.map((item) => ({ ...item, datasetVersion: DATASET_VERSION })), runId)
+      : { changed: 0, unchanged: 0, created: 0, checked: 0 };
     if (!LEAN_SYNC && uniqueClubProfiles.length) await writeCollection("kfvClubs", uniqueClubProfiles, runId);
     if (!LEAN_SYNC && uniqueSquad.length) await writeCollection("kfvSquad", uniqueSquad, runId);
     if (!LEAN_SYNC && uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
@@ -2566,6 +2641,9 @@ async function main() {
       postponedMatchCount: uniqueMatches.filter((item) => item.status === "postponed").length,
       cancelledMatchCount: uniqueMatches.filter((item) => item.status === "cancelled").length,
       standingCount: standingsReliable ? uniqueStandings.length : 0,
+      standingChangedCount: standingWriteStats.changed,
+      standingUnchangedCount: standingWriteStats.unchanged,
+      standingCreatedCount: standingWriteStats.created,
       standingsReliable,
       matchReportCount: uniqueMatchReports.length,
       lineupReportCount: uniqueMatchReports.filter((item) => item.homeLineup.length || item.awayLineup.length).length,
@@ -2576,7 +2654,7 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: TABLES_ONLY ? "v16.1-spark-table-sync" : GAMES_ONLY ? "v16.1-spark-games-sync" : CORE_SYNC ? "v16.1-spark-core-sync" : "v13.4-independent-official-sync",
+      syncArchitecture: TABLES_ONLY ? "v16.1.1-spark-delta-table-sync" : GAMES_ONLY ? "v16.1.1-scheduled-games-sync" : CORE_SYNC ? "v16.1-spark-core-sync" : "v13.4-independent-official-sync",
       syncMode: SYNC_MODE,
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
@@ -2609,6 +2687,7 @@ async function main() {
     console.log(`  Verschoben: ${matchStatusCounts.postponed || 0}`);
     console.log(`  Abgesagt: ${matchStatusCounts.cancelled || 0}`);
     console.log(`Tabellenzeilen: ${standingsReliable ? uniqueStandings.length : "übersprungen (unvollständig)"}`);
+    if (!GAMES_ONLY && standingsReliable) console.log(`Tabellen Delta: ${standingWriteStats.changed} geändert/neu, ${standingWriteStats.unchanged} unverändert übersprungen.`);
     for (const team of ACTIVE_TEAMS) {
       const status = teamSyncStatus[team.key];
       console.log(`${team.name}: ${status.matches || 0} Spiele | ${status.standings || 0} Tabellenzeilen | Tabelle ${status.tableReliable ? "OK" : "beibehalten"}`);

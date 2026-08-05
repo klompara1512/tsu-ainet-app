@@ -1,7 +1,7 @@
 {
   "name": "tsu-ainet-app",
   "private": true,
-  "version": "16.1.0",
+  "version": "16.1.1",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "sync:kfv": "node scripts/kfv-core-sync.cjs",
     "check": "npm run sync:check && npm run typecheck",
     "typecheck": "tsc -b --pretty false",
-    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node --check scripts/kfv-games-sync.cjs && node --check scripts/kfv-table-sync.cjs && node --check scripts/weekend-holiday-gate.cjs && node --check scripts/kfv-club-sync.cjs && node --check scripts/kfv-squad-sync.cjs && node --check scripts/kfv-report-news-sync.cjs && node --check scripts/home-game-task-sync.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
+    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node --check scripts/kfv-games-sync.cjs && node --check scripts/kfv-table-sync.cjs && node --check scripts/weekend-holiday-gate.cjs && node --check scripts/game-sync-time-gate.cjs && node --check scripts/kfv-club-sync.cjs && node --check scripts/kfv-squad-sync.cjs && node --check scripts/kfv-report-news-sync.cjs && node --check scripts/home-game-task-sync.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
     "sync:selftest": "node scripts/official-sync-selftest.cjs",
     "sync:core": "node scripts/kfv-core-sync.cjs",
     "sync:full": "node scripts/kfv-sync.cjs",

@@ -49,10 +49,10 @@ function austrianPublicHolidays(year) {
 
 const now = new Date();
 const manual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch" || process.env.FORCE_SYNC === "true";
-const weekend = now.getDay() === 0 || now.getDay() === 6;
+const weekend = now.getDay() === 0 || now.getDay() === 5 || now.getDay() === 6;
 const holidayName = austrianPublicHolidays(now.getFullYear()).get(key(now)) || "";
 const allowed = manual || weekend || Boolean(holidayName);
-const reason = manual ? "manueller Start" : weekend ? "Wochenende" : holidayName || "Werktag";
+const reason = manual ? "manueller Start" : weekend ? "Freitag/Wochenende" : holidayName || "Werktag";
 
 console.log(`Tabellen-Sync: ${allowed ? "aktiv" : "übersprungen"} (${reason}, ${key(now)}).`);
 const output = process.env.GITHUB_OUTPUT;

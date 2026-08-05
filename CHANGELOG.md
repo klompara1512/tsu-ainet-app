@@ -179,3 +179,10 @@
 - Zentrale `kfvClubs`-Datenbank mit Aliasen und stabilen IDs.
 - Alte falsche Ainet-Logos bei Gegnern werden beim Sync bereinigt.
 - Namensvergleich bleibt nur als Fallback erhalten.
+
+## 16.1.1 – Spark Delta Sync
+
+- Tabellen Freitag bis Sonntag und an österreichischen Feiertagen alle 30 Minuten.
+- Spielplan täglich um 06:00, 12:00 und 18:00 Uhr Europe/Vienna.
+- Tabellen und Kader schreiben nur tatsächliche Änderungen nach Firestore.
+- Kaderbestand wird nur einmal pro Lauf gelesen.

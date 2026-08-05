@@ -1,4 +1,4 @@
-name: KFV / ÖFB Tabellen am Wochenende und an Feiertagen
+name: KFV / ÖFB Tabellen Freitag bis Sonntag und an Feiertagen
 
 on:
   workflow_dispatch:

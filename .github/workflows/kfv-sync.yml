@@ -3,7 +3,7 @@ name: KFV / ÖFB Spielpläne und Ergebnisse synchronisieren
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 */3 * * *"
+    - cron: "17 * * * *"
 
 concurrency:
   group: kfv-oefb-games-sync
@@ -24,20 +24,35 @@ jobs:
       - name: Projekt laden
         uses: actions/checkout@v4
 
+      - name: Geplante Uhrzeit 06, 12 oder 18 Uhr prüfen
+        id: gate
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/game-sync-time-gate.cjs
+
       - name: Node.js einrichten
+        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: npm
 
       - name: Abhängigkeiten installieren
+        if: steps.gate.outputs.run == 'true'
         run: npm ci
 
       - name: Projekt und Spiele-Sync prüfen
+        if: steps.gate.outputs.run == 'true'
         run: npm run sync:check
 
       - name: Spielpläne und Ergebnisse synchronisieren
+        if: steps.gate.outputs.run == 'true'
         run: npm run sync:games
 
       - name: Heimspiel-Aufgaben automatisch aktualisieren
+        if: steps.gate.outputs.run == 'true'
         run: npm run sync:home-tasks
+
+      - name: Außerhalb des Zeitfensters übersprungen
+        if: steps.gate.outputs.run != 'true'
+        run: echo "Spielplan-Sync übersprungen. Grund ${{ steps.gate.outputs.reason }}."

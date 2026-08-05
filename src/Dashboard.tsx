@@ -24,6 +24,11 @@ import { Icon } from "./Icons";
 import HomeGameTasks from "./HomeGameTasks";
 import LogoManager from "./LogoManager";
 import SponsorManager from "./SponsorManager";
+import ClubPeopleManager from "./ClubPeopleManager";
+import PublicSponsors from "./PublicSponsors";
+import PublicEvents from "./PublicEvents";
+import PublicPeople from "./PublicPeople";
+import PublicClubInfo from "./PublicClubInfo";
 import { APP_VERSION } from "./appVersion";
 
 type Page =
@@ -45,7 +50,15 @@ type Page =
   | "notifications-admin"
   | "home-game-tasks"
   | "logo-manager"
-  | "sponsor-manager";
+  | "sponsor-manager"
+  | "board-manager"
+  | "trainer-manager"
+  | "public-sponsors"
+  | "public-events"
+  | "public-board"
+  | "public-trainers"
+  | "public-club"
+  | "administration";
 
 type DashboardProps = { user: User | null; profile: UserProfile; onLogin?: () => void };
 
@@ -64,136 +77,67 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const canManageSync = role === "admin";
   const canManageClub = role === "admin" || role === "section";
   const canManageSponsors = hasPermission(role, "manageSponsors");
-  const canManageAnything =
-    canManageMatches || canManageStandings || canManagePeople || canManageEvents || canManageNews;
+  const hasInternalAccess = Boolean(user) && ["admin", "section", "trainer", "board"].includes(role);
 
   function renderMorePage() {
     return (
-      <section className="dashboard-page clear-more-page">
+      <section className="dashboard-page clear-more-page public-more-page">
         <h2>Mehr</h2>
-        <h3 className="clear-group-title">Verein</h3>
-
-        <div
-          className="quick-grid"
-          style={{ marginTop: "24px" }}
-        >
-          <button
-            type="button"
-            className="quick-card"
-            onClick={() => { setSelectedMatchId(""); setKfvInitialTab("matches"); setActivePage("kfv-live"); }}
-          >
-            <span className="quick-icon"><Icon name="live" /></span>
-
-            <span className="quick-content">
-              <strong>Spiel- & Tabellenzentrum</strong>
-              
-            </span>
-
-            <span className="quick-arrow">›</span>
+        <div className="public-more-grid">
+          <button type="button" onClick={() => { setSelectedMatchId(""); setKfvInitialTab("table"); setActivePage("kfv-live"); }}>
+            <span className="quick-icon"><Icon name="table" /></span><strong>Tabellen</strong><span>›</span>
           </button>
-
-
-          <div className="clear-grid-break"><h3>Organisation</h3></div>
-          {user && (
-            <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
-              <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong></span><span className="quick-arrow">›</span>
-            </button>
-          )}
-
-          <button type="button" className="quick-card" onClick={() => setActivePage("fan-features")}>
-            <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Fanbereich</strong></span><span className="quick-arrow">›</span>
+          <button type="button" onClick={() => setActivePage("public-board")}>
+            <span className="quick-icon"><Icon name="shield" /></span><strong>Vorstand</strong><span>›</span>
           </button>
+          <button type="button" onClick={() => setActivePage("public-trainers")}>
+            <span className="quick-icon"><Icon name="users" /></span><strong>Trainer</strong><span>›</span>
+          </button>
+          <button type="button" onClick={() => setActivePage("public-sponsors")}>
+            <span className="quick-icon"><Icon name="sponsor" /></span><strong>Sponsoren</strong><span>›</span>
+          </button>
+          <button type="button" onClick={() => setActivePage("public-events")}>
+            <span className="quick-icon"><Icon name="calendar" /></span><strong>Termine</strong><span>›</span>
+          </button>
+          <button type="button" onClick={() => setActivePage("public-club")}>
+            <span className="quick-icon"><Icon name="location" /></span><strong>Verein</strong><span>›</span>
+          </button>
+        </div>
 
+        {hasInternalAccess && (
+          <button type="button" className="administration-entry" onClick={() => setActivePage("administration")}>
+            <span className="quick-icon"><Icon name="settings" /></span>
+            <strong>Administration</strong>
+            <span>›</span>
+          </button>
+        )}
+      </section>
+    );
+  }
+
+  function renderAdministrationPage() {
+    if (!hasInternalAccess) return renderMorePage();
+    return (
+      <section className="dashboard-page clear-more-page administration-page">
+        <header className="administration-header">
+          <button type="button" onClick={() => setActivePage("mehr")}>‹</button>
+          <h2>Administration</h2>
+          <span />
+        </header>
+        <div className="quick-grid administration-grid">
+          {canManageMatches && <button type="button" className="quick-card" onClick={() => setActivePage("match-admin")}><span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageStandings && <button type="button" className="quick-card" onClick={() => setActivePage("standings-admin")}><span className="quick-icon"><Icon name="table" /></span><span className="quick-content"><strong>Tabellen verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageEvents && <button type="button" className="quick-card" onClick={() => setActivePage("events-admin")}><span className="quick-icon"><Icon name="calendar" /></span><span className="quick-content"><strong>Termine verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageNews && <button type="button" className="quick-card" onClick={() => setActivePage("news-admin")}><span className="quick-icon"><Icon name="news" /></span><span className="quick-content"><strong>News verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("admin")}><span className="quick-icon"><Icon name="users" /></span><span className="quick-content"><strong>Personenverwaltung</strong></span><span className="quick-arrow">›</span></button>}
+          {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("board-manager")}><span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vorstand verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("trainer-manager")}><span className="quick-icon"><Icon name="users" /></span><span className="quick-content"><strong>Trainer verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageSponsors && <button type="button" className="quick-card" onClick={() => setActivePage("sponsor-manager")}><span className="quick-icon"><Icon name="sponsor" /></span><span className="quick-content"><strong>Sponsor Manager</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageClub && user && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong></span><span className="quick-arrow">›</span></button>}
-
-          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}>
-            <span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span>
-          </button>}
-
-          {canManageSponsors && <button type="button" className="quick-card" onClick={() => setActivePage("sponsor-manager")}>
-            <span className="quick-icon"><Icon name="star" /></span><span className="quick-content"><strong>Sponsor Manager</strong></span><span className="quick-arrow">›</span>
-          </button>}
-
-          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}>
-            <span className="quick-icon"><Icon name="settings" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong></span><span className="quick-arrow">›</span>
-          </button>}
-
-          {hasPermission(role, "manageTasks") && <button type="button" className="quick-card" onClick={() => setActivePage("home-game-tasks")}><span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Heimspiel-Aufgaben</strong></span><span className="quick-arrow">›</span></button>}
-
-          {canManageAnything && (<><div className="clear-grid-break"><h3>Verwaltung</h3></div>
-          {canManageMatches && <button type="button" className="quick-card" onClick={() => setActivePage("match-admin")}>
-            <span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong></span><span className="quick-arrow">›</span>
-          </button>}
-
-          {canManageSync && <button type="button" className="quick-card" onClick={() => setActivePage("kfv-sync-admin")}>
-            <span className="quick-icon"><Icon name="sync" /></span><span className="quick-content"><strong>KFV-Synchronisierung</strong></span><span className="quick-arrow">›</span>
-          </button>}
-
-          {canManageStandings && <button type="button" className="quick-card" onClick={() => setActivePage("standings-admin")}>
-            <span className="quick-icon"><Icon name="table" /></span><span className="quick-content"><strong>Tabellen verwalten</strong></span><span className="quick-arrow">›</span>
-          </button>}
-
-          {canManagePeople && <button
-            type="button"
-            className="quick-card"
-            onClick={() => setActivePage("admin")}
-          >
-            <span className="quick-icon"><Icon name="users" /></span>
-
-            <span className="quick-content">
-              <strong>Personenverwaltung</strong>
-              
-            </span>
-
-            <span className="quick-arrow">›</span>
-          </button>}
-
-          {canManageEvents && <button
-            type="button"
-            className="quick-card"
-            onClick={() =>
-              setActivePage("events-admin")
-            }
-          >
-            <span className="quick-icon"><Icon name="calendar" /></span>
-
-            <span className="quick-content">
-              <strong>Terminverwaltung</strong>
-              
-            </span>
-
-            <span className="quick-arrow">›</span>
-          </button>}
-
-          {canManageNews && <button
-            type="button"
-            className="quick-card"
-            onClick={() =>
-              setActivePage("news-admin")
-            }
-          >
-            <span className="quick-icon"><Icon name="news" /></span>
-
-            <span className="quick-content">
-              <strong>Newsverwaltung</strong>
-              
-            </span>
-
-            <span className="quick-arrow">›</span>
-          </button>}
-
-          </>)}
-
-          {user && (
-            <button
-              type="button"
-              className="quick-card"
-            >
-              <span className="quick-icon"><Icon name="document" /></span>
-              <span className="quick-content"><strong>Dokumente</strong></span>
-              <span className="quick-arrow">›</span>
-            </button>
-          )}
+          {hasPermission(role, "manageTasks") && <button type="button" className="quick-card" onClick={() => setActivePage("home-game-tasks")}><span className="quick-icon"><Icon name="target" /></span><span className="quick-content"><strong>Heimspiel-Aufgaben</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}><span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageSync && <button type="button" className="quick-card" onClick={() => setActivePage("kfv-sync-admin")}><span className="quick-icon"><Icon name="sync" /></span><span className="quick-content"><strong>Synchronisierung</strong></span><span className="quick-arrow">›</span></button>}
         </div>
       </section>
     );
@@ -212,6 +156,13 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
       return <News />;
     }
 
+    if (activePage === "public-sponsors") return <PublicSponsors onBack={() => setActivePage("mehr")} />;
+    if (activePage === "public-events") return <PublicEvents onBack={() => setActivePage("mehr")} />;
+    if (activePage === "public-board") return <PublicPeople kind="board" onBack={() => setActivePage("mehr")} />;
+    if (activePage === "public-trainers") return <PublicPeople kind="trainer" onBack={() => setActivePage("mehr")} />;
+    if (activePage === "public-club") return <PublicClubInfo onBack={() => setActivePage("mehr")} />;
+    if (activePage === "administration") return renderAdministrationPage();
+
     if (activePage === "kfv-live") {
       return <KfvLive initialMatchId={selectedMatchId} initialTab={kfvInitialTab} />;
     }
@@ -229,7 +180,15 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     }
 
     if (activePage === "sponsor-manager") {
-      return canManageSponsors ? <SponsorManager onBack={() => setActivePage("mehr")} /> : renderMorePage();
+      return canManageSponsors ? <SponsorManager onBack={() => setActivePage("administration")} /> : renderMorePage();
+    }
+
+    if (activePage === "board-manager") {
+      return canManagePeople ? <ClubPeopleManager kind="board" onBack={() => setActivePage("administration")} /> : renderMorePage();
+    }
+
+    if (activePage === "trainer-manager") {
+      return canManagePeople ? <ClubPeopleManager kind="trainer" onBack={() => setActivePage("administration")} /> : renderMorePage();
     }
 
     if (activePage === "fan-features") {
@@ -350,7 +309,15 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     activePage === "notifications-admin" ||
     activePage === "home-game-tasks" ||
     activePage === "logo-manager" ||
-    activePage === "sponsor-manager"
+    activePage === "sponsor-manager" ||
+    activePage === "board-manager" ||
+    activePage === "trainer-manager" ||
+    activePage === "public-sponsors" ||
+    activePage === "public-events" ||
+    activePage === "public-board" ||
+    activePage === "public-trainers" ||
+    activePage === "public-club" ||
+    activePage === "administration"
       ? "mehr"
       : activePage;
 
@@ -396,6 +363,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
                   <strong>{profile.name}</strong>
                   <span>{profile.email || user.email}</span>
                   <small>Interner Vereinsbereich</small>
+                  {hasInternalAccess && <button type="button" onClick={() => { setProfileOpen(false); setActivePage("administration"); }}>Administration</button>}
                   <button type="button" onClick={() => signOut(auth)}>Abmelden</button>
                 </div>
               )}

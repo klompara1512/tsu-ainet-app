@@ -32,6 +32,7 @@ match /oefbV12Standings/{d=**}{allow read:if true;allow write:if football();}
  match /news/{d=**}{allow read:if true;allow write:if editors();}
  match /documents/{d=**}{allow read:if active();allow write:if editors();}
  match /sponsors/{d=**}{allow read:if true;allow write:if editors();}
+ match /clubPeople/{d=**}{allow read:if true;allow write:if leaders();}
  match /gallery/{d=**}{allow read:if true;allow write:if editors();}
  match /videos/{d=**}{allow read:if true;allow write:if editors();}
  match /settings/{d=**}{allow read:if active();allow write:if leaders();}

@@ -1,0 +1,27 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userProfile() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid));
+    }
+
+    function activeLeader() {
+      return signedIn()
+        && userProfile().data.active != false
+        && userProfile().data.approved == true
+        && (userProfile().data.role == 'admin' || userProfile().data.role == 'section');
+    }
+
+    match /club-logos/{ownerUid}/{allPaths=**} {
+      allow read: if true;
+      allow create, update: if activeLeader()
+        && request.resource.size < 2 * 1024 * 1024
+        && request.resource.contentType.matches('image/(png|jpeg|webp)');
+      allow delete: if activeLeader();
+    }
+  }
+}

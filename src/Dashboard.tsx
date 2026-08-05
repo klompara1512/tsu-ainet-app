@@ -219,9 +219,7 @@ function Dashboard({ user, profile }: DashboardProps) {
     }
 
     if (activePage === "logo-manager") {
-      return canManageClub
-        ? <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} />
-        : renderMorePage();
+      return <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} />;
     }
 
     if (activePage === "fan-features") {

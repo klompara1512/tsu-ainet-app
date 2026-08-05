@@ -8,6 +8,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
+import { subscribeClubLogos } from "./clubLogoFirestore";
 import type {
   KfvClub,
   KfvMatch,
@@ -467,15 +468,19 @@ export function subscribeKfvClubs(
   onData: (clubs: KfvClub[]) => void,
   onError?: (message: string) => void,
 ) {
+  let officialClubs: KfvClub[] = [];
+  let managedClubs: KfvClub[] = [];
+
+  const emit = () => onData([...managedClubs, ...officialClubs]);
   const clubsQuery = query(
     collection(db, "kfvClubs"),
     orderBy("name", "asc"),
   );
 
-  return onSnapshot(
+  const unsubscribeOfficial = onSnapshot(
     clubsQuery,
     (snapshot) => {
-      const clubs = snapshot.docs
+      officialClubs = snapshot.docs
         .map((clubDocument) => {
           const data = clubDocument.data();
           const name = typeof data.name === "string" ? data.name.trim() : "";
@@ -494,31 +499,59 @@ export function subscribeKfvClubs(
             logoUrl: typeof data.logoUrl === "string" ? data.logoUrl.trim() : "",
             logoSource: typeof data.logoSource === "string" ? data.logoSource.trim() : "",
             logoValidated: data.logoValidated === true,
-            primaryColor:
-              typeof data.primaryColor === "string" ? data.primaryColor : "",
-            secondaryColor:
-              typeof data.secondaryColor === "string" ? data.secondaryColor : "",
+            primaryColor: typeof data.primaryColor === "string" ? data.primaryColor : "",
+            secondaryColor: typeof data.secondaryColor === "string" ? data.secondaryColor : "",
             stadium: typeof data.stadium === "string" ? data.stadium : "",
             website: typeof data.website === "string" ? data.website : "",
             active: typeof data.active === "boolean" ? data.active : true,
           } satisfies KfvClub;
         })
         .filter((club) => club.active && club.name);
-
-      onData(clubs);
+      emit();
     },
     (error) => {
       console.error("Fehler beim Laden der KFV-Vereine:", error);
-      onData([]);
-      onError?.("Die Vereinslogos konnten nicht geladen werden.");
+      officialClubs = [];
+      emit();
+      onError?.("Die offiziellen Vereinslogos konnten nicht geladen werden.");
     },
   );
+
+  const unsubscribeManaged = subscribeClubLogos(
+    (entries) => {
+      managedClubs = entries.map((entry) => ({
+        id: `managed:${entry.id}`,
+        clubId: `managed:${entry.id}`,
+        name: entry.clubName,
+        normalizedName: normalizeClubName(entry.clubName),
+        oefbClubId: "",
+        pageUrl: "",
+        aliases: entry.aliases,
+        logoUrl: entry.logoUrl,
+        logoSource: "manual-logo-manager",
+        logoValidated: true,
+        primaryColor: "",
+        secondaryColor: "",
+        stadium: "",
+        website: "",
+        active: entry.active,
+      }));
+      emit();
+    },
+    (message) => onError?.(message),
+  );
+
+  return () => {
+    unsubscribeOfficial();
+    unsubscribeManaged();
+  };
 }
 
 function clubSelectionScore(club: KfvClub) {
   let score = 0;
   if (club.logoUrl?.trim()) score += 100;
   if (club.logoValidated) score += 200;
+  if (club.logoSource === "manual-logo-manager") score += 1000;
   if (club.logoSource === "manual-kfv-official-override") score += 400;
   if (/^kfv:/i.test(club.clubId || club.id)) score += 60;
   else if (/^oefb:/i.test(club.clubId || club.id)) score += 40;
@@ -650,10 +683,14 @@ export function getKfvClubLogo(
   matchLogoUrl = "",
   clubId = "",
 ) {
+  const club = findKfvClub(clubs, teamName, clubId);
+  if (club?.logoSource === "manual-logo-manager" && club.logoUrl?.trim()) {
+    return club.logoUrl.trim();
+  }
+
   const fixedOfficialLogo = officialFrontendLogo(teamName);
   if (fixedOfficialLogo && !isTsuAinet(teamName)) return fixedOfficialLogo;
 
-  const club = findKfvClub(clubs, teamName, clubId);
   const clubLogo = club?.logoUrl?.trim() || "";
   const sourceLogo = matchLogoUrl.trim();
 

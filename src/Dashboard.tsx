@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { signOut, type User } from "firebase/auth";
 import { auth } from "./firebase";
-import { hasPermission, roleLabel, type UserProfile } from "./permissions";
+import { hasPermission, type UserProfile } from "./permissions";
 import "./Dashboard.css";
 import "./ClearClub.css";
 import Admin from "./Admin";

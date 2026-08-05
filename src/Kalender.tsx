@@ -42,10 +42,6 @@ function sameDay(firstDate: Date, secondDate: Date) {
   );
 }
 
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-}
-
 function normalizeTeamName(value: string) {
   return value
     .toLocaleLowerCase("de-AT")
@@ -316,11 +312,6 @@ function Kalender() {
       .filter((match) => match.kickoffAt.getTime() >= today)
       .sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime());
   }, [filteredMatches]);
-
-  const monthMatchCount = useMemo(
-    () => filteredMatches.filter((match) => monthKey(match.kickoffAt) === monthKey(visibleMonth)).length,
-    [filteredMatches, visibleMonth],
-  );
 
   function changeMonth(offset: number) {
     setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));

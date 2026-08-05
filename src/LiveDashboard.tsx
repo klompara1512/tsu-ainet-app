@@ -47,13 +47,38 @@ type Props = {
   onOpenMatch: (matchId: string) => void;
 };
 
-function isFirstTeam(value: string) {
-  const text = value.toLocaleLowerCase("de-AT");
-  return (
-    text.includes("kampfmannschaft") ||
-    text.includes("1. klasse west") ||
-    text === "km"
-  );
+type DashboardStandingTeamKey = "km" | "challenge" | "u17" | "u12" | "u10" | "u8";
+
+const DASHBOARD_STANDING_TEAM_ORDER: DashboardStandingTeamKey[] = [
+  "km",
+  "challenge",
+  "u17",
+  "u12",
+  "u10",
+  "u8",
+];
+
+function getStandingTeamKey(row: KfvStandingRow): DashboardStandingTeamKey {
+  const text = `${row.teamId} ${row.teamName} ${row.competitionName}`
+    .toLocaleLowerCase("de-AT")
+    .replace(/[^a-z0-9äöüß]+/g, " ")
+    .trim();
+
+  if (text.includes("challenge") || text.includes("reserve") || text.includes(" res ") || text.includes("1b")) return "challenge";
+  if (text.includes("u17")) return "u17";
+  if (text.includes("u12")) return "u12";
+  if (text.includes("u10")) return "u10";
+  if (text.includes("u8") || text.includes("u08")) return "u8";
+  return "km";
+}
+
+function getStandingTeamLabel(key: DashboardStandingTeamKey) {
+  if (key === "challenge") return "Challenge";
+  if (key === "u17") return "U17";
+  if (key === "u12") return "U12";
+  if (key === "u10") return "U10";
+  if (key === "u8") return "U8";
+  return "Kampfmannschaft";
 }
 
 
@@ -91,6 +116,13 @@ function LiveDashboard({
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [loadingKfv, setLoadingKfv] = useState(true);
   const [clock, setClock] = useState(() => new Date());
+  const [selectedStandingTeam, setSelectedStandingTeam] = useState<DashboardStandingTeamKey>(() => {
+    if (typeof window === "undefined") return "km";
+    const saved = window.localStorage.getItem("tsu-dashboard-standing-team");
+    return DASHBOARD_STANDING_TEAM_ORDER.includes(saved as DashboardStandingTeamKey)
+      ? (saved as DashboardStandingTeamKey)
+      : "km";
+  });
 
   useEffect(() => {
     const timer = window.setInterval(() => setClock(new Date()), 60_000);
@@ -228,26 +260,41 @@ function LiveDashboard({
     [uniqueMatches],
   );
 
-  const firstTeamStandings = useMemo(() => {
-    const matchingRows = standings.filter(
-      (row) =>
-        isFirstTeam(row.teamName || "") ||
-        isFirstTeam(row.competitionName || ""),
-    );
-
-    return (matchingRows.length ? matchingRows : standings)
-      .slice()
-      .sort((a, b) => a.position - b.position);
+  const availableStandingTeams = useMemo(() => {
+    const keys = new Set<DashboardStandingTeamKey>();
+    standings.forEach((row) => keys.add(getStandingTeamKey(row)));
+    return DASHBOARD_STANDING_TEAM_ORDER.filter((key) => keys.has(key));
   }, [standings]);
 
+  useEffect(() => {
+    if (!availableStandingTeams.length) return;
+    if (!availableStandingTeams.includes(selectedStandingTeam)) {
+      setSelectedStandingTeam(availableStandingTeams[0]);
+    }
+  }, [availableStandingTeams, selectedStandingTeam]);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("tsu-dashboard-standing-team", selectedStandingTeam);
+    }
+  }, [selectedStandingTeam]);
+
+  const selectedTeamStandings = useMemo(
+    () => standings
+      .filter((row) => getStandingTeamKey(row) === selectedStandingTeam)
+      .slice()
+      .sort((a, b) => a.position - b.position),
+    [standings, selectedStandingTeam],
+  );
+
   const standing = useMemo(
-    () => firstTeamStandings.find((row) => isTsuAinet(row.clubName)) ?? null,
-    [firstTeamStandings],
+    () => selectedTeamStandings.find((row) => isTsuAinet(row.clubName)) ?? null,
+    [selectedTeamStandings],
   );
 
   const topFive = useMemo(
-    () => firstTeamStandings.slice(0, 5),
-    [firstTeamStandings],
+    () => selectedTeamStandings.slice(0, 5),
+    [selectedTeamStandings],
   );
 
   const upcomingEvents = useMemo(
@@ -400,7 +447,7 @@ function LiveDashboard({
         <button type="button" onClick={onOpenStandings}>
           <span><Icon name="table" /></span>
           <strong>Tabelle</strong>
-          <small>{standing ? `${standing.position}. Platz · ${standing.points} Punkte` : "1. Klasse West"}</small>
+          <small>{standing ? `${getStandingTeamLabel(selectedStandingTeam)} · ${standing.position}. Platz · ${standing.points} Punkte` : getStandingTeamLabel(selectedStandingTeam)}</small>
         </button>
         <button type="button" onClick={onOpenTeams}>
           <span><Icon name="users" /></span>
@@ -439,9 +486,26 @@ function LiveDashboard({
         </section>
 
         <section className="v101-card">
-          <div className="v101-card-head">
-            <div><span className="v101-overline">1. Klasse West</span><h2>Tabelle</h2></div>
-            <button type="button" onClick={onOpenStandings}>Komplett</button>
+          <div className="v101-card-head v101-table-card-head">
+            <div>
+              <span className="v101-overline">Tabelle</span>
+              <h2>{getStandingTeamLabel(selectedStandingTeam)}</h2>
+            </div>
+            <div className="v101-table-actions">
+              <label className="v101-table-team-select">
+                <span>Mannschaft</span>
+                <select
+                  value={selectedStandingTeam}
+                  onChange={(event) => setSelectedStandingTeam(event.target.value as DashboardStandingTeamKey)}
+                  aria-label="Mannschaft für Dashboard-Tabelle auswählen"
+                >
+                  {availableStandingTeams.map((key) => (
+                    <option key={key} value={key}>{getStandingTeamLabel(key)}</option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" onClick={onOpenStandings}>Komplett</button>
+            </div>
           </div>
 
           <div className="v101-table">
@@ -458,7 +522,7 @@ function LiveDashboard({
                 <strong>{row.clubName}</strong>
                 <small>{row.played} Sp.</small>
               </button>
-            )) : <div className="v101-empty">Noch keine Tabelle verfügbar.</div>}
+            )) : <div className="v101-empty">Für diese Mannschaft ist noch keine Tabelle verfügbar.</div>}
           </div>
 
           {standing && (

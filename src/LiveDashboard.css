@@ -536,3 +536,69 @@
 
 /* Version 15.3.1 – Punkte in der mobilen Tabelle vorne */
 .v101-table > button{grid-template-columns:23px 34px 31px 1fr auto}.v101-table > button > b{display:grid;place-items:center;min-width:30px;height:26px;border-radius:8px;background:rgba(246,201,69,.13);color:#f6c945;text-align:center}.v101-table > button > strong{text-align:left}
+
+/* Version 17.1.3 – auswählbare Dashboard-Tabelle */
+.v101-table-actions {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.v101-table-team-select {
+  display: grid;
+  gap: 4px;
+}
+
+.v101-table-team-select > span {
+  color: rgba(255,255,255,.48);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.v101-table-team-select select {
+  min-width: 156px;
+  height: 38px;
+  padding: 0 34px 0 12px;
+  color: #f8fbff;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  background: #111d31;
+  border: 1px solid rgba(255,255,255,.13);
+  border-radius: 11px;
+  cursor: pointer;
+}
+
+.v101-table-team-select select:focus-visible {
+  outline: 2px solid #f6c945;
+  outline-offset: 2px;
+}
+
+@media (max-width: 640px) {
+  .v101-table-card-head {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .v101-table-actions {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .v101-table-team-select {
+    flex: 1;
+  }
+
+  .v101-table-team-select select {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    font-size: 14px;
+  }
+
+  .v101-table-actions > button {
+    min-height: 44px;
+  }
+}

@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "16.1.0-spark-report-window";
+const VERSION = "16.1.1-complete-event-ticker";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -499,30 +499,93 @@ async function waitForReport(page) {
 
   await new Promise((resolve) => setTimeout(resolve, 1400));
 
-  // Zuerst die Berichtsdaten anstoßen. "Aufstellung" wird absichtlich
-  // zuletzt geöffnet, weil der ÖFB die Tab-Inhalte dynamisch austauscht.
+  // Die ÖFB-Seite tauscht den Inhalt der Reiter dynamisch aus. Deshalb werden
+  // alle Ereignis-Reiter nacheinander geöffnet und ihre Inhalte zwischengespeichert,
+  // bevor zuletzt die Aufstellung für die Spielererkennung geöffnet wird.
   await page
     .evaluate(async () => {
       const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      const compact = (value) => String(value || "").replace(/\s+/g, " ").trim();
+      const snapshots = [];
+      const seen = new Set();
+
+      const rememberVisibleEventContent = () => {
+        const selectors = [
+          "[class*='ticker']",
+          "[class*='timeline']",
+          "[class*='event']",
+          "[class*='ereignis']",
+          "[class*='goal']",
+          "[class*='tor']",
+          "[class*='card']",
+          "[class*='karte']",
+          "[class*='substitution']",
+          "[class*='wechsel']",
+          "[data-event]",
+          "[data-minute]",
+          "[data-testid*='event']",
+          "[role='tabpanel']",
+        ];
+
+        const values = [];
+        for (const selector of selectors) {
+          for (const node of document.querySelectorAll(selector)) {
+            const rect = node.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) continue;
+            const text = compact(node.innerText || node.textContent || "");
+            if (text.length >= 6 && text.length <= 12000) values.push(text);
+          }
+        }
+
+        // Fallback: sichtbaren Seitentext ebenfalls sichern. Der spätere Parser
+        // filtert Navigation, Tabellen, Karten und sonstige Störtexte streng aus.
+        const body = compact(document.body?.innerText || "");
+        if (body) values.push(body.slice(0, 50000));
+
+        for (const value of values) {
+          const key = value.toLocaleLowerCase("de-AT");
+          if (seen.has(key)) continue;
+          seen.add(key);
+          snapshots.push(value);
+        }
+      };
+
       const clickTab = async (labels) => {
         const candidates = [
           ...document.querySelectorAll("button,a,[role='tab'],[data-toggle='tab']"),
         ];
         const target = candidates.find((node) => {
-          const text = String(node.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+          const text = compact(node.textContent).toLowerCase();
           return labels.some((label) => text === label || text.includes(label));
         });
         if (!target) return false;
         target.click();
-        await sleep(650);
+        await sleep(850);
+        rememberVisibleEventContent();
         return true;
       };
 
-      for (const labels of [["spielbericht"], ["tore"], ["karten"], ["wechsel"]]) {
+      rememberVisibleEventContent();
+
+      // Übersicht/Liveticker zuerst, danach Spezialreiter. Manche ÖFB-Versionen
+      // verwenden unterschiedliche Bezeichnungen, daher mehrere Alternativen.
+      const eventTabs = [
+        ["übersicht", "uebersicht"],
+        ["liveticker", "live ticker", "ticker"],
+        ["spielbericht"],
+        ["tore", "tor"],
+        ["karten", "karte"],
+        ["wechsel", "auswechslungen"],
+      ];
+
+      for (const labels of eventTabs) {
         await clickTab(labels);
       }
 
-      // Aufstellungen zuletzt sichtbar lassen.
+      window.__TSU_EVENT_SNAPSHOTS__ = snapshots;
+
+      // Aufstellungen zuletzt sichtbar lassen, damit der bestehende
+      // Aufstellungsparser weiterhin alle Spieler erkennen kann.
       await clickTab(["aufstellung", "aufstellungen", "lineup"]);
 
       const max = Math.min(document.body?.scrollHeight || 0, 10000);
@@ -908,30 +971,154 @@ async function extractReport(browser, match) {
         homeBench = homeBench.filter((item) => !homeStarterKeys.has(playerKey(item))).slice(0, 15);
         awayBench = awayBench.filter((item) => !awayStarterKeys.has(playerKey(item))).slice(0, 15);
 
+        const eventSnapshots = Array.isArray(window.__TSU_EVENT_SNAPSHOTS__)
+          ? window.__TSU_EVENT_SNAPSHOTS__.filter((value) => typeof value === "string")
+          : [];
+
+        const eventNoise = /(?:leaflet|openstreetmap|sportplatz\s+möllbrücke|waldweg\s+1|programm\s+(?:sa|so|mo|di|mi|do|fr)\.?|tabellen?|resultate|torverteilung|vereins-homepage|datenschutz|impressum|cookie|navigation|spielort\s+sportplatz|\+\s*−)/i;
+        const eventKeyword = /(?:tor\b|trifft|spielstand|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
+
+        const cleanEventDescription = (value) => compact(value)
+          .replace(/^\s*(?:\d{1,3})(?:\s*\+\s*\d{1,2})?\s*[.'’:]?\s*/, "")
+          .replace(/^\s*(?:tor|wechsel|ereignis|karte|gelbe karte|rote karte)\s*/i, "")
+          .replace(/\s+/g, " ")
+          .trim()
+          .slice(0, 420);
+
+        const parseMinute = (value) => {
+          const text = compact(value);
+          const match = text.match(/(?:^|\s)(\d{1,3})(?:\s*\+\s*(\d{1,2}))?\s*[.'’:]?(?=\s|$)/);
+          if (!match) return null;
+          const base = Number(match[1]);
+          const added = match[2] ? Number(match[2]) : 0;
+          if (!Number.isFinite(base) || base < 0 || base > 130) return null;
+          return {
+            minute: base,
+            added,
+            minuteText: added ? `${base}+${added}` : String(base),
+            sortValue: base * 100 + added,
+          };
+        };
+
+        const classifyEventType = (description) => {
+          const text = normalize(description);
+          if (/gelb\s*rot|gelbrote|zweite\s+gelbe/.test(text)) return "yellowRed";
+          if (/rote?\s+karte|ausschluss|vom\s+platz/.test(text)) return "red";
+          if (/gelbe?\s+karte|verwarnt/.test(text)) return "yellow";
+          if (/wechsel|ersetzt|kommt\s+fur|verlasst\s+das\s+spielfeld|einwechslung|auswechslung/.test(text)) return "substitution";
+          if (/halbzeit|pause/.test(text)) return "halfTime";
+          if (/spielende|endstand|abpfiff/.test(text)) return "fullTime";
+          if (/tor\b|trifft|spielstand|elfmeter|eigentor/.test(text)) return "goal";
+          return "other";
+        };
+
+        const eventTeam = (description) => {
+          const homeHits = tokenHits(description, homeTokens);
+          const awayHits = tokenHits(description, awayTokens);
+          if (homeHits > awayHits && homeHits > 0) return "home";
+          if (awayHits > homeHits && awayHits > 0) return "away";
+          return "neutral";
+        };
+
         const events = [];
         const seenEvents = new Set();
-        const eventPattern = /(\d{1,3})[.'’]\s*(.*?)(?=(?:\d{1,3}[.'’])|$)/g;
-        let eventMatch;
-        while ((eventMatch = eventPattern.exec(bodyText))) {
-          const minute = Number(eventMatch[1]);
-          const description = compact(eventMatch[2]).slice(0, 220);
-          if (
-            !description ||
-            minute > 130 ||
-            !/(tor|wechsel|gelb|rot|karte|elfmeter|eigentor)/i.test(description)
-          ) continue;
-          const type = /rot/i.test(description)
-            ? "red-card"
-            : /gelb/i.test(description)
-              ? "yellow-card"
-              : /wechsel/i.test(description)
-                ? "substitution"
-                : "goal";
-          const key = `${minute}:${type}:${description.toLowerCase()}`;
-          if (seenEvents.has(key)) continue;
+
+        const addEvent = (rawValue, forcedMinute = null) => {
+          const rawText = compact(rawValue);
+          if (!rawText || rawText.length < 5 || rawText.length > 1400) return;
+          if (eventNoise.test(rawText)) return;
+          if (!eventKeyword.test(rawText)) return;
+
+          const parsedMinute = forcedMinute || parseMinute(rawText);
+          if (!parsedMinute) return;
+
+          const description = cleanEventDescription(rawText);
+          if (!description || description.length < 4 || eventNoise.test(description)) return;
+          if (!eventKeyword.test(description)) return;
+
+          const type = classifyEventType(description);
+          const normalizedDescription = normalize(description)
+            .replace(/\b(?:neuerlicher|erneuter|nochmaliger)\b/g, "")
+            .replace(/\s+/g, " ")
+            .trim();
+          const key = `${parsedMinute.minuteText}:${type}:${normalizedDescription}`;
+          if (seenEvents.has(key)) return;
           seenEvents.add(key);
-          events.push({ minute, type, description });
+
+          events.push({
+            id: `event-${parsedMinute.minuteText}-${type}-${seenEvents.size}`,
+            minute: parsedMinute.minute,
+            minuteText: parsedMinute.minuteText,
+            type,
+            team: eventTeam(description),
+            playerName: "",
+            secondaryPlayerName: "",
+            description,
+            _sortValue: parsedMinute.sortValue,
+          });
+        };
+
+        // 1. Strukturierte DOM-Elemente aus dem aktuell sichtbaren Reiter.
+        const structuredSelectors = [
+          "[class*='ticker'] li",
+          "[class*='ticker'] [class*='item']",
+          "[class*='timeline'] li",
+          "[class*='timeline'] [class*='item']",
+          "[class*='event']",
+          "[class*='ereignis']",
+          "[data-event]",
+          "[data-minute]",
+          "[data-testid*='event']",
+        ];
+        const structuredNodes = [...new Set(
+          structuredSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]),
+        )];
+        for (const node of structuredNodes) {
+          const text = compact(node.innerText || node.textContent || "");
+          const minuteAttribute = compact(
+            node.getAttribute("data-minute") ||
+            node.querySelector("[data-minute]")?.getAttribute("data-minute") ||
+            "",
+          );
+          addEvent(text, minuteAttribute ? parseMinute(minuteAttribute) : null);
         }
+
+        // 2. Gesicherte Reiter-Inhalte zeilen- und blockweise analysieren.
+        const sourceTexts = [...eventSnapshots, bodyText];
+        for (const sourceText of sourceTexts) {
+          const lines = String(sourceText || "")
+            .split(/\n+/)
+            .map(compact)
+            .filter(Boolean);
+
+          // Einzelne Zeilen mit Minute am Anfang.
+          for (const line of lines) addEvent(line);
+
+          // Mehrzeilige Ereigniskarten: Minute und Beschreibung können getrennt sein.
+          for (let index = 0; index < lines.length; index += 1) {
+            const minuteOnly = parseMinute(lines[index]);
+            if (!minuteOnly || !/^\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]?$/.test(lines[index])) continue;
+            const following = lines.slice(index + 1, index + 5).join(" ");
+            addEvent(`${lines[index]} ${following}`, minuteOnly);
+          }
+
+          // Fließtext-Fallback mit Unterstützung für Nachspielzeit.
+          const flowPattern = /(?:^|\s)(\d{1,3})(?:\s*\+\s*(\d{1,2}))?\s*[.'’:]\s*(.*?)(?=(?:\s\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:])|$)/g;
+          let flowMatch;
+          while ((flowMatch = flowPattern.exec(sourceText))) {
+            const base = Number(flowMatch[1]);
+            const added = flowMatch[2] ? Number(flowMatch[2]) : 0;
+            addEvent(`${base}${added ? `+${added}` : ""}' ${flowMatch[3]}`, {
+              minute: base,
+              added,
+              minuteText: added ? `${base}+${added}` : String(base),
+              sortValue: base * 100 + added,
+            });
+          }
+        }
+
+        events.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
+        for (const event of events) delete event._sortValue;
 
         const images = [...document.images]
           .map((img) => absolute(img.currentSrc || img.src || img.dataset?.src))

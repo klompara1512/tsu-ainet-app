@@ -5,8 +5,6 @@ import {
   deleteDoc,
   doc,
   onSnapshot,
-  orderBy,
-  query,
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
@@ -56,9 +54,8 @@ function SponsorManager({ onBack }: Props) {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const sponsorQuery = query(collection(db, "sponsors"), orderBy("order", "asc"));
     return onSnapshot(
-      sponsorQuery,
+      collection(db, "sponsors"),
       (snapshot) => {
         const rows = snapshot.docs.map((item, index) => {
           const data = item.data();

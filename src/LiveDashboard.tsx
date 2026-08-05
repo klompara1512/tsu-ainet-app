@@ -438,6 +438,37 @@ function LiveDashboard({
         )}
       </section>
 
+      {sponsors.length > 0 && (
+        <section className="v101-sponsors v181-sponsors-prominent" aria-labelledby="dashboard-sponsors-title">
+          <div className="v101-card-head">
+            <div>
+              <span className="v101-overline">Partner</span>
+              <h2 id="dashboard-sponsors-title">Unsere Sponsoren</h2>
+            </div>
+          </div>
+          <div className="v181-sponsor-marquee">
+            <div className="v101-sponsor-track">
+              {[...sponsors, ...sponsors].map((sponsor, index) => (
+                <button
+                  type="button"
+                  key={`${sponsor.id}-${index}`}
+                  className={!sponsor.website ? "is-static" : ""}
+                  onClick={() => sponsor.website && window.open(sponsor.website, "_blank", "noopener,noreferrer")}
+                  aria-label={sponsor.website ? `${sponsor.name} – Website öffnen` : sponsor.name}
+                  title={sponsor.website ? `${sponsor.name} – Website öffnen` : sponsor.name}
+                >
+                  {sponsor.logoUrl ? (
+                    <img src={sponsor.logoUrl} alt={sponsor.name} loading="lazy" decoding="async" />
+                  ) : (
+                    <strong>{sponsor.name}</strong>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
       <nav className="v101-shortcuts" aria-label="Schnellzugriffe">
         <button type="button" onClick={onOpenCalendar}>
           <span><Icon name="calendar" /></span>
@@ -579,25 +610,6 @@ function LiveDashboard({
         <b>›</b>
       </button>
 
-      {sponsors.length > 0 && (
-        <section className="v101-sponsors">
-          <div className="v101-card-head">
-            <div><span className="v101-overline">Partner</span><h2>Unsere Sponsoren</h2></div>
-          </div>
-          <div className="v101-sponsor-track">
-            {[...sponsors, ...sponsors].map((sponsor, index) => (
-              <button
-                type="button"
-                key={`${sponsor.id}-${index}`}
-                onClick={() => sponsor.website && window.open(sponsor.website, "_blank", "noopener,noreferrer")}
-                aria-label={sponsor.name}
-              >
-                {sponsor.logoUrl ? <img src={sponsor.logoUrl} alt={sponsor.name} loading="lazy" /> : <strong>{sponsor.name}</strong>}
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
     </section>
   );
 }

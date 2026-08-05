@@ -1,3 +1,7 @@
+# 17.1.0 – Mobile First UI
+
+- Hauptseiten bereinigt und mobile Kalenderansicht verbessert.
+
 # 17.0.0 – Clear Club Experience
 
 - Modernes, ruhiges und sportliches Vereinsdesign

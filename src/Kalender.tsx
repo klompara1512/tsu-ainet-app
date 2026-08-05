@@ -237,7 +237,11 @@ function Kalender() {
   const [matches, setMatches] = useState<KfvMatch[]>([]);
   const [clubs, setClubs] = useState<KfvClub[]>([]);
   const [selectedTeam, setSelectedTeam] = useState("all");
-  const [view, setView] = useState<CalendarView>("month");
+  const [view, setView] = useState<CalendarView>(() =>
+    typeof window !== "undefined" && window.matchMedia("(max-width: 760px)").matches
+      ? "list"
+      : "month",
+  );
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -378,9 +382,7 @@ function Kalender() {
         <div>
           <p className="calendar-eyebrow">TSU Ainet Fußball</p>
           <h2>Spielkalender</h2>
-          <p>Alle offiziellen Spiele mit Vereinslogos, Gegner, Ergebnis und Spielbericht.</p>
         </div>
-        <span className="calendar-count">{filteredMatches.length} Spiele</span>
       </div>
 
       <div className="calendar-toolbar calendar-toolbar-games">

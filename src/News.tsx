@@ -276,10 +276,6 @@ function News() {
 
           <h1>Vereinsnews</h1>
 
-          <p className="news-intro">
-            Aktuelle Meldungen, Spielberichte und
-            Informationen aus dem Verein.
-          </p>
         </div>
 
         <div className="news-header-mark">

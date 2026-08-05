@@ -531,7 +531,6 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
         <div>
           <p className="kfv-eyebrow">TSU Ainet Fußball</p>
           <h2>Spiel- & Tabellenzentrum</h2>
-          <p>Spielpläne, Ergebnisse, Tabellen und Mannschaftskader der TSU Ainet.</p>
         </div>
 
       </header>

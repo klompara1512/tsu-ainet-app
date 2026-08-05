@@ -118,3 +118,12 @@
   .dashboard-content{padding-top:34px}
   .v101-shortcuts{grid-template-columns:repeat(4,1fr)}
 }
+
+/* Version 17.1 – compact page headers */
+.teams-header,.news-header,.kfv-header{margin-bottom:18px!important}
+.teams-header>div>p:last-child:not(.teams-label),.news-intro,.kfv-header>div>p:last-child:not(.kfv-eyebrow){display:none!important}
+.teams-total-badge,.calendar-count{display:none!important}
+@media(max-width:760px){
+  .teams-header h2,.news-header h1,.kfv-header h2{font-size:32px!important}
+  .teams-header,.news-header,.kfv-header{margin-bottom:14px!important}
+}

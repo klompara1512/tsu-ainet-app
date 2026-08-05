@@ -681,7 +681,7 @@ function Teams() {
 
   return (
     <section className="teams-page">
-      <div className="teams-header"><div><p className="teams-label">TSU Ainet Fußball</p><h2>Mannschaften</h2><p>Alle Teams auf einen Blick. Öffne eine Mannschaft für Spielplan, Kader, Tabelle und Saisonstatistik.</p></div>{!isLoadingTeams && <span className="teams-total-badge">{teams.length} Mannschaften</span>}</div>
+      <div className="teams-header"><div><p className="teams-label">TSU Ainet Fußball</p><h2>Mannschaften</h2></div></div>
       {teamsError && <div className="teams-message teams-error-message"><strong>Firebase-Fehler</strong><p>{teamsError}</p></div>}
       {isLoadingTeams && <div className="teams-loading"><span className="teams-loading-spinner" /><p>Mannschaften werden geladen …</p></div>}
       {!isLoadingTeams && teams.length > 0 && !teamsError && <div className="teams-grid">{teams.map((team) => {

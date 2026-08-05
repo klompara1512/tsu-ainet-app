@@ -22,6 +22,7 @@ import FanFeatures from "./FanFeatures";
 import NotificationsAdmin from "./NotificationsAdmin";
 import { Icon } from "./Icons";
 import HomeGameTasks from "./HomeGameTasks";
+import LogoManager from "./LogoManager";
 import { APP_VERSION } from "./appVersion";
 
 type Page =
@@ -41,7 +42,8 @@ type Page =
   | "club-hub"
   | "fan-features"
   | "notifications-admin"
-  | "home-game-tasks";
+  | "home-game-tasks"
+  | "logo-manager";
 
 type DashboardProps = { user: User; profile: UserProfile };
 
@@ -98,6 +100,10 @@ function Dashboard({ user, profile }: DashboardProps) {
           </button>
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong></span><span className="quick-arrow">›</span></button>}
+
+          {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}>
+            <span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span>
+          </button>}
 
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}>
             <span className="quick-icon"><Icon name="settings" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong></span><span className="quick-arrow">›</span>
@@ -210,6 +216,12 @@ function Dashboard({ user, profile }: DashboardProps) {
 
     if (activePage === "home-game-tasks") {
       return <HomeGameTasks onBack={() => setActivePage("start")} />;
+    }
+
+    if (activePage === "logo-manager") {
+      return canManageClub
+        ? <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} />
+        : renderMorePage();
     }
 
     if (activePage === "fan-features") {
@@ -328,7 +340,8 @@ function Dashboard({ user, profile }: DashboardProps) {
     activePage === "club-hub" ||
     activePage === "fan-features" ||
     activePage === "notifications-admin" ||
-    activePage === "home-game-tasks"
+    activePage === "home-game-tasks" ||
+    activePage === "logo-manager"
       ? "mehr"
       : activePage;
 

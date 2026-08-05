@@ -103,13 +103,15 @@ function standingLogoFor(rows: KfvStandingRow[], name: string, clubId: string) {
 
       if (normalizedId && rowId && normalizedId === rowId) score += 1000;
       if (normalizedName && rowName === normalizedName) score += 500;
-      else if (
-        normalizedName &&
-        rowName &&
-        (normalizedName.includes(rowName) || rowName.includes(normalizedName)) &&
-        Math.min(normalizedName.length, rowName.length) >= 5
-      ) {
-        score += 200;
+      else if (normalizedName && rowName) {
+        const wantedTokens = normalizedName.split(" ").filter(Boolean);
+        const rowTokens = rowName.split(" ").filter(Boolean);
+        const shorter = wantedTokens.length <= rowTokens.length ? wantedTokens : rowTokens;
+        const longer = new Set(wantedTokens.length <= rowTokens.length ? rowTokens : wantedTokens);
+
+        if (shorter.length >= 2 && shorter.every((token) => longer.has(token))) {
+          score += 200;
+        }
       }
       if (row.teamLogoUrl?.trim()) score += 50;
       return { row, score };
@@ -151,8 +153,9 @@ function TeamLogo({ url = "", name, size = "normal", className = "", clubId = ""
 
     const values = [
       localLogoFor(name),
-      // Das Tabellenlogo ist die verlässlichste Quelle für den Spielplan.
-      // Dadurch verwendet jedes Spiel dasselbe Vereinswappen wie die Tabelle.
+      // Zuerst nur über Vereinsname und Alias auflösen. Damit hat ein Logo aus
+      // dem Logo Manager Vorrang vor fehlerhaften Club-IDs und Tabellenlogos.
+      getKfvClubLogo(clubs, name),
       getKfvClubLogo(clubs, name, tableLogoUrl, effectiveClubId),
       getKfvClubLogo(clubs, name, url, clubId),
     ].filter(Boolean);

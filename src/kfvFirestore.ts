@@ -464,6 +464,17 @@ export function normalizeClubName(name: string) {
     .trim();
 }
 
+function strictClubNamePartialMatch(first: string, second: string) {
+  if (!first || !second || first === second) return false;
+
+  const firstTokens = first.split(" ").filter(Boolean);
+  const secondTokens = second.split(" ").filter(Boolean);
+  const shorter = firstTokens.length <= secondTokens.length ? firstTokens : secondTokens;
+  const longer = new Set(firstTokens.length <= secondTokens.length ? secondTokens : firstTokens);
+
+  return shorter.length >= 2 && shorter.every((token) => longer.has(token));
+}
+
 export function subscribeKfvClubs(
   onData: (clubs: KfvClub[]) => void,
   onError?: (message: string) => void,
@@ -565,20 +576,12 @@ function bestClub(candidates: KfvClub[]) {
 }
 
 export function findKfvClub(clubs: KfvClub[], teamName: string, clubId = "") {
-  if (clubId) {
-    const normalizedId = clubId.trim().toLocaleLowerCase("de-AT");
-    const idCandidates = clubs.filter((club) =>
-      [club.clubId, club.oefbClubId, club.id]
-        .filter(Boolean)
-        .some((value) => value.trim().toLocaleLowerCase("de-AT") === normalizedId),
-    );
-    const byId = bestClub(idCandidates);
-    if (byId) return byId;
-  }
-
   const wantedName = normalizeClubName(teamName);
   if (!wantedName) return null;
 
+  // Exakte Namen und Aliase haben Vorrang vor IDs aus Spiel- oder Tabellendaten.
+  // So überschreibt der Logo Manager auch dann zuverlässig, wenn eine falsche
+  // Club-ID oder ein falsches Tabellenlogo geliefert wird.
   const exactCandidates = clubs.filter((club) => {
     const names = [club.normalizedName, club.name, ...club.aliases]
       .map(normalizeClubName)
@@ -588,16 +591,44 @@ export function findKfvClub(clubs: KfvClub[], teamName: string, clubId = "") {
   const exactClub = bestClub(exactCandidates);
   if (exactClub) return exactClub;
 
-  const candidates = clubs.filter((club) => {
+  const nameCandidates = clubs.filter((club) => {
     const names = [club.normalizedName, club.name, ...club.aliases]
       .map(normalizeClubName)
       .filter(Boolean);
-    return names.some((name) =>
-      (wantedName.includes(name) || name.includes(wantedName)) &&
-      Math.min(name.length, wantedName.length) >= 5,
-    );
+    return names.some((name) => strictClubNamePartialMatch(wantedName, name));
   });
-  return bestClub(candidates);
+  const matchedByName = bestClub(nameCandidates);
+
+  // Ein manuell verwaltetes Logo mit passendem Namen hat immer Vorrang.
+  if (matchedByName?.logoSource === "manual-logo-manager") {
+    return matchedByName;
+  }
+
+  if (clubId) {
+    const normalizedId = clubId.trim().toLocaleLowerCase("de-AT");
+    const idCandidates = clubs.filter((club) =>
+      [club.clubId, club.oefbClubId, club.id]
+        .filter(Boolean)
+        .some((value) => value.trim().toLocaleLowerCase("de-AT") === normalizedId),
+    );
+    const byId = bestClub(idCandidates);
+
+    if (byId) {
+      const idNames = [byId.normalizedName, byId.name, ...byId.aliases]
+        .map(normalizeClubName)
+        .filter(Boolean);
+
+      // Eine ID darf nicht mehr ein völlig anderes Vereinslogo erzwingen.
+      if (
+        idNames.includes(wantedName) ||
+        idNames.some((name) => strictClubNamePartialMatch(wantedName, name))
+      ) {
+        return byId;
+      }
+    }
+  }
+
+  return matchedByName;
 }
 
 function normalizeLogoUrl(value: string) {
@@ -663,6 +694,7 @@ const OFFICIAL_FRONTEND_LOGOS: Record<string, string> = {
   "sillian heinfels urc thal assling u17": "https://vereine.oefb.at/vereine3/images/834733022602002384_7a1c5115aa477996b426-1,0-200x200.png",
   rothenthurn: "https://vereine.oefb.at/vereine3/images/834733022602002384_7fd15cf6a875c296a040-1,0-200x200.png",
   "woerthersee atus fliesen koller velden": "https://vereine.oefb.at/vereine3/images/834733022602002384_317b96e5aaf01ac56836-1,0-200x200.png",
+  "lienzer talboden": "https://kfv-fussball.at/oefb2/images/1278650591628556536_b19bf14e13c0c11671ed-2-200x200-200x200.png",
   oberlienz: "https://kfv-fussball.at/oefb2/images/1278650591628556536_2a7e449d8e2567d70986-2-200x200-200x200.png",
   koetschach: "https://kfv-fussball.at/oefb2/images/1278650591628556536_1d8c4339242538787420-2-200x200-200x200.png",
 };
@@ -672,8 +704,8 @@ function officialFrontendLogo(teamName: string) {
   if (!normalized) return "";
   if (OFFICIAL_FRONTEND_LOGOS[normalized]) return OFFICIAL_FRONTEND_LOGOS[normalized];
   const entries = Object.entries(OFFICIAL_FRONTEND_LOGOS)
-    .filter(([key]) => normalized.includes(key) || key.includes(normalized))
-    .sort((a, b) => b[0].length - a[0].length);
+    .filter(([key]) => strictClubNamePartialMatch(normalized, key))
+    .sort((a, b) => b[0].split(" ").length - a[0].split(" ").length);
   return entries[0]?.[1] || "";
 }
 

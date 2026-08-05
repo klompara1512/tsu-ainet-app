@@ -1,3 +1,12 @@
+# 17.0.0 – Clear Club Experience
+
+- Modernes, ruhiges und sportliches Vereinsdesign
+- Fünf klare Navigationspunkte: Start, Spiele, Teams, News, Mehr
+- Vereinfachte Startseite und strukturierter Mehr-Bereich
+- Mobile Tabellen priorisieren Platz, Verein und Punkte
+- Technische Hinweise aus der normalen Oberfläche entfernt
+- Größere Touchflächen und optimierte iPhone-Abstände
+
 ## 11.2.2 – Mannschaftsspezifische ÖFB-Quellen
 
 - Eigene Spielplan- und Tabellenquelle für KM, Challenge, U17, U12 und U10.

@@ -3,6 +3,7 @@ import { signOut, type User } from "firebase/auth";
 import { auth } from "./firebase";
 import { hasPermission, roleLabel, type UserProfile } from "./permissions";
 import "./Dashboard.css";
+import "./ClearClub.css";
 import Admin from "./Admin";
 import BottomNav from "./BottomNav";
 import EventsAdmin from "./EventsAdmin";
@@ -20,7 +21,6 @@ import ClubHub from "./ClubHub";
 import FanFeatures from "./FanFeatures";
 import NotificationsAdmin from "./NotificationsAdmin";
 import { Icon } from "./Icons";
-import BoardOverview from "./BoardOverview";
 import HomeGameTasks from "./HomeGameTasks";
 import { APP_VERSION } from "./appVersion";
 
@@ -64,17 +64,11 @@ function Dashboard({ user, profile }: DashboardProps) {
 
   function renderMorePage() {
     return (
-      <section className="dashboard-page">
-        <p className="home-eyebrow">
-          TSU Ainet Fußball
-        </p>
-
+      <section className="dashboard-page clear-more-page">
+        <p className="home-eyebrow">TSU Ainet Fußball</p>
         <h2>Mehr</h2>
-
-        <p>
-          Verwaltung, Dokumente, Profil und
-          Einstellungen.
-        </p>
+        <p>Verein, Organisation und persönliche Einstellungen.</p>
+        <h3 className="clear-group-title">Verein</h3>
 
         <div
           className="quick-grid"
@@ -96,6 +90,7 @@ function Dashboard({ user, profile }: DashboardProps) {
           </button>
 
 
+          <div className="clear-grid-break"><h3>Organisation</h3></div>
           <button type="button" className="quick-card" onClick={() => setActivePage("club-hub")}>
             <span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsbereich</strong><small>Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
           </button>
@@ -110,7 +105,9 @@ function Dashboard({ user, profile }: DashboardProps) {
             <span className="quick-icon"><Icon name="settings" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong><small>Benutzer, Einladungen, Aufgaben, Dienste, Dokumente und Sponsoren</small></span><span className="quick-arrow">›</span>
           </button>}
 
-          {canManageAnything && (<>
+          {hasPermission(role, "manageTasks") && <button type="button" className="quick-card" onClick={() => setActivePage("home-game-tasks")}><span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Heimspiel-Aufgaben</strong><small>Vorbereitung, Zuständige und Fortschritt</small></span><span className="quick-arrow">›</span></button>}
+
+          {canManageAnything && (<><div className="clear-grid-break"><h3>Verwaltung</h3></div>
           {canManageMatches && <button type="button" className="quick-card" onClick={() => setActivePage("match-admin")}>
             <span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong><small>Spielplan, Ergebnisse und Status in Firestore</small></span><span className="quick-arrow">›</span>
           </button>}
@@ -280,14 +277,6 @@ function Dashboard({ user, profile }: DashboardProps) {
 
     return (
       <>
-        {hasPermission(role, "manageTasks") && (
-          <BoardOverview
-            onOpenTasks={() => setActivePage("club-admin")}
-            onOpenClubAdmin={() => setActivePage("club-admin")}
-            onOpenHomeGameTasks={() => setActivePage("home-game-tasks")}
-          />
-        )}
-
         <LiveDashboard
           displayName={profile.name}
           onOpenCalendar={() =>
@@ -367,7 +356,7 @@ function Dashboard({ user, profile }: DashboardProps) {
 
           <span>
             <strong>TSU Ainet</strong>
-            <small>Fußball</small>
+            <small>Vereins-App</small>
           </span>
         </button>
 

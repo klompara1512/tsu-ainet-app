@@ -851,3 +851,27 @@
     display: none;
   }
 }
+
+/* Version 18.3.5 RC10 – Sprint 5: Kopfsponsor-Logo füllt breite Kachel */
+.team-player-head-sponsor > div,
+.team-player-head-sponsor > a {
+  justify-items: center;
+}
+.team-player-head-sponsor .team-player-head-sponsor-logo {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 620px;
+  height: clamp(108px, 20vw, 150px);
+  padding: 8px 12px;
+  object-fit: contain;
+  object-position: center;
+  background: #fff;
+  border-radius: 16px;
+}
+@media (max-width: 520px) {
+  .team-player-head-sponsor .team-player-head-sponsor-logo {
+    height: 112px;
+    padding: 7px 10px;
+  }
+}

@@ -15,6 +15,7 @@ import {
 } from "./kfvFirestore";
 import type { KfvMatch, KfvStandingRow } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
+import AutoFitLogo from "./AutoFitLogo";
 import { Icon } from "./Icons";
 import "./LiveDashboard.css";
 
@@ -474,7 +475,7 @@ function LiveDashboard({
                   title={sponsor.website ? `${sponsor.name} – Website öffnen` : sponsor.name}
                 >
                   {sponsor.logoUrl ? (
-                    <img src={sponsor.logoUrl} alt={sponsor.name} loading="lazy" decoding="async" />
+                    <AutoFitLogo src={sponsor.logoUrl} alt={sponsor.name} className="v101-sponsor-logo" />
                   ) : (
                     <strong>{sponsor.name}</strong>
                   )}

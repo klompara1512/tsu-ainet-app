@@ -4,3 +4,16 @@
 
 /* Version 18.3.2 RC10 – Sprint 2: reine Vereinsinfo */
 .public-club-info-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.25fr);gap:18px;align-items:start}.public-club-address-card,.public-club-contacts{padding:22px;border:1px solid rgba(255,255,255,.1);border-radius:22px;background:#111a2b}.public-club-address-brand{display:flex;align-items:center;gap:16px}.public-club-address-brand img{width:86px;height:86px;object-fit:contain}.public-club-address-brand small,.public-club-contacts header small{color:#f2b705;font-weight:850;letter-spacing:.06em;text-transform:uppercase}.public-club-address-brand h1,.public-club-contacts h3{margin:4px 0 0}.public-club-address-card dl{display:grid;gap:10px;margin:22px 0}.public-club-address-card dl div{padding:14px;border-radius:14px;background:#19243a}.public-club-address-card dt{margin-bottom:5px;color:#aeb9cb;font-size:.82rem}.public-club-address-card dd{margin:0;font-weight:800;line-height:1.45}.public-club-address-card>a{display:flex;justify-content:center;padding:12px 14px;border-radius:13px;background:#f2b705;color:#141414;text-decoration:none;font-weight:900}.public-club-contacts>header{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:15px}.public-club-contacts>header span{padding:7px 10px;border-radius:999px;background:#202c42;color:#dce4f1;font-size:.78rem;font-weight:800}.public-club-contact-list{display:grid;gap:10px}.public-club-contact-list>article{display:grid;grid-template-columns:58px minmax(0,1fr);gap:13px;align-items:center;padding:13px;border:1px solid rgba(255,255,255,.08);border-radius:16px;background:#19243a}.public-club-contact-list img,.public-club-contact-placeholder{width:58px;height:58px;border-radius:50%;object-fit:cover}.public-club-contact-placeholder{display:grid;place-items:center;background:#2a3852;color:#fff;font-weight:900}.public-club-contact-main{display:grid;gap:3px;min-width:0}.public-club-contact-main>span{color:#aeb9cb;font-size:.86rem}.public-club-contact-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:7px}.public-club-contact-actions a{padding:8px 11px;border-radius:10px;background:#202c42;color:#fff;text-decoration:none;font-size:.82rem;font-weight:850}.public-club-contact-actions a:first-child{background:#f2b705;color:#141414}@media(max-width:760px){.public-club-info-grid{grid-template-columns:1fr}.public-club-address-card,.public-club-contacts{padding:17px}.public-club-address-brand img{width:72px;height:72px}.public-club-contacts>header{align-items:flex-start;flex-direction:column}.public-club-contact-actions a{flex:1;text-align:center}}
+
+/* Version 18.3.5 RC10 – Sponsorenlogos automatisch zuschneiden und einpassen */
+.public-sponsor-grid .public-sponsor-logo {
+  display: block;
+  width: 100%;
+  height: 92px;
+  max-width: 100%;
+  object-fit: contain;
+  object-position: center;
+}
+@media(max-width:620px){
+  .public-sponsor-grid .public-sponsor-logo{height:72px}
+}

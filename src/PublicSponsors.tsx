@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { collection, onSnapshot } from "firebase/firestore";
 import { db } from "./firebase";
+import AutoFitLogo from "./AutoFitLogo";
 import "./PublicPages.css";
 
 type Sponsor = { id: string; name: string; logoUrl: string; website: string; active: boolean; order: number };
@@ -30,7 +31,7 @@ export default function PublicSponsors({ onBack }: { onBack: () => void }) {
     <header className="public-page-head"><button type="button" onClick={onBack}>‹</button><h2>Sponsoren</h2><span /></header>
     {loading ? <div className="public-empty">Sponsoren werden geladen …</div> : sponsors.length ? (
       <div className="public-sponsor-grid">{sponsors.map((sponsor) => {
-        const content = <>{sponsor.logoUrl ? <img src={sponsor.logoUrl} alt={sponsor.name} loading="lazy" /> : <strong>{sponsor.name}</strong>}<span>{sponsor.name}</span></>;
+        const content = <>{sponsor.logoUrl ? <AutoFitLogo src={sponsor.logoUrl} alt={sponsor.name} className="public-sponsor-logo" /> : <strong>{sponsor.name}</strong>}<span>{sponsor.name}</span></>;
         return sponsor.website ? <a key={sponsor.id} href={sponsor.website} target="_blank" rel="noreferrer">{content}</a> : <div key={sponsor.id}>{content}</div>;
       })}</div>
     ) : <div className="public-empty">Aktuell sind noch keine Sponsoren eingetragen.</div>}

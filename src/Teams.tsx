@@ -3,6 +3,7 @@ import { collection, onSnapshot, orderBy, query, Timestamp } from "firebase/fire
 import { db } from "./firebase";
 import { Icon, type IconName } from "./Icons";
 import TeamLogo from "./TeamLogo";
+import AutoFitLogo from "./AutoFitLogo";
 import {
   getResultForTsuAinet,
   isTsuAinet,
@@ -680,12 +681,12 @@ function Teams() {
                     <small>Kopfsponsor des Spielers</small>
                     {selectedPlayer.headSponsorWebsite ? (
                       <a href={selectedPlayer.headSponsorWebsite} target="_blank" rel="noreferrer">
-                        {selectedPlayer.headSponsorImageUrl && <img src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} />}
+                        {selectedPlayer.headSponsorImageUrl && <AutoFitLogo src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} className="team-player-head-sponsor-logo" />}
                         {selectedPlayer.headSponsorText && <strong>{selectedPlayer.headSponsorText}</strong>}
                       </a>
                     ) : (
                       <div>
-                        {selectedPlayer.headSponsorImageUrl && <img src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} />}
+                        {selectedPlayer.headSponsorImageUrl && <AutoFitLogo src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} className="team-player-head-sponsor-logo" />}
                         {selectedPlayer.headSponsorText && <strong>{selectedPlayer.headSponsorText}</strong>}
                       </div>
                     )}

@@ -161,6 +161,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
   const [diagnostics, setDiagnostics] = useState<DiagnosticItem[]>([]);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState(false);
   const [diagnosticsRunning, setDiagnosticsRunning] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
   const lastCompletedRef = useRef<number>(0);
 
   useEffect(() => {
@@ -191,6 +192,12 @@ export default function KfvSyncAdmin({ onBack }: Props) {
       unsubscribeSettings();
       unsubscribeHistory();
     };
+  }, []);
+
+
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(interval);
   }, []);
 
   useEffect(() => {
@@ -247,15 +254,51 @@ export default function KfvSyncAdmin({ onBack }: Props) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status.running, waitingSince]);
 
-  const stale = useMemo(() => {
-    if (!status.lastSuccessAt) return true;
-    return Date.now() - status.lastSuccessAt.toMillis() > 90 * 60 * 1000;
-  }, [status.lastSuccessAt]);
+  const latestSuccessfulRun = useMemo(() => {
+    const candidates: SyncRun[] = [
+      { id: "current", ...status },
+      ...history,
+    ].filter((run) => run.success === true || run.status === "success");
 
-  const currentStatus = statusInfo(status);
+    return candidates.sort((left, right) => {
+      const leftTime = left.lastSuccessAt?.toMillis() || left.finishedAt?.toMillis() || 0;
+      const rightTime = right.lastSuccessAt?.toMillis() || right.finishedAt?.toMillis() || 0;
+      return rightTime - leftTime;
+    })[0] || null;
+  }, [history, status]);
+
+  const latestFailure = useMemo(() => {
+    const candidates: SyncRun[] = [
+      { id: "current", ...status },
+      ...history,
+    ].filter((run) => run.success === false || run.status === "error");
+
+    return candidates.sort((left, right) => {
+      const leftTime = left.finishedAt?.toMillis() || left.startedAt?.toMillis() || 0;
+      const rightTime = right.finishedAt?.toMillis() || right.startedAt?.toMillis() || 0;
+      return rightTime - leftTime;
+    })[0] || null;
+  }, [history, status]);
+
+  const effectiveLastSuccessAt = latestSuccessfulRun?.lastSuccessAt || latestSuccessfulRun?.finishedAt;
+  const intervalMinutes = status.intervalMinutes || latestSuccessfulRun?.intervalMinutes || 30;
+  const staleAfterMinutes = Math.max(90, intervalMinutes * 3 + 15);
+  const stale = !effectiveLastSuccessAt
+    || now - effectiveLastSuccessAt.toMillis() > staleAfterMinutes * 60_000;
+  const latestSuccessMillis = effectiveLastSuccessAt?.toMillis() || 0;
+  const latestFailureMillis = latestFailure?.finishedAt?.toMillis() || latestFailure?.startedAt?.toMillis() || 0;
+  const activeError = latestFailureMillis > latestSuccessMillis ? latestFailure?.lastError || "Der letzte Synchronisationslauf ist fehlgeschlagen." : "";
+
+  const effectiveStatus: SyncStatus = {
+    ...status,
+    success: activeError ? false : status.running ? null : latestSuccessfulRun ? true : status.success,
+    lastSuccessAt: effectiveLastSuccessAt,
+    lastError: activeError,
+  };
+  const currentStatus = statusInfo(effectiveStatus);
   const waiting = Boolean(waitingSince) && !status.running;
-  const githubStatus = githubStatusInfo(status, stale, waiting);
-  const progress = progressPercent(status, waiting);
+  const githubStatus = githubStatusInfo(effectiveStatus, stale, waiting);
+  const progress = progressPercent(effectiveStatus, waiting);
 
   async function saveSourceUrl() {
     try {
@@ -290,9 +333,9 @@ export default function KfvSyncAdmin({ onBack }: Props) {
     setDiagnostics([
       { label: "Internetverbindung", state: navigator.onLine ? "success" : "error", detail: navigator.onLine ? "Online" : "Offline" },
       { label: "Firestore", state: "checking", detail: "Verbindung wird geprüft …" },
-      { label: "GitHub-Workflow", state: githubStatus.tone === "error" ? "error" : githubStatus.tone === "warning" ? "warning" : "success", detail: status.githubWorkflow ? `${status.githubWorkflow} · ${githubStatus.label}` : "Workflow-Adresse ist konfiguriert" },
+      { label: "GitHub-Workflow", state: githubStatus.tone === "error" ? "error" : githubStatus.tone === "warning" ? "warning" : "success", detail: effectiveStatus.githubWorkflow ? `${effectiveStatus.githubWorkflow} · ${githubStatus.label}` : "Workflow-Adresse ist konfiguriert" },
       { label: "Synchronisationshistorie", state: "checking", detail: "Status wird geprüft …" },
-      { label: "Match-ID-Schema", state: status.matchIdentityVersion ? "success" : "warning", detail: status.matchIdentityVersion || "Noch nicht gemeldet" },
+      { label: "Match-ID-Schema", state: effectiveStatus.matchIdentityVersion ? "success" : "warning", detail: effectiveStatus.matchIdentityVersion || "Noch nicht gemeldet" },
     ]);
 
     let firestoreState: DiagnosticItem = { label: "Firestore", state: "success", detail: "Erreichbar" };
@@ -304,7 +347,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
     }
 
     const historyState: DiagnosticItem = history.length > 0
-      ? { label: "Synchronisationshistorie", state: stale ? "warning" : "success", detail: stale ? "Letzter erfolgreicher Lauf ist überfällig" : `${history.length} Lauf/Läufe verfügbar` }
+      ? { label: "Synchronisationshistorie", state: activeError ? "error" : stale ? "warning" : "success", detail: activeError ? activeError : stale ? `Letzter erfolgreicher Lauf ist älter als ${staleAfterMinutes} Minuten` : `${history.length} Lauf/Läufe verfügbar` }
       : { label: "Synchronisationshistorie", state: "warning", detail: "Noch keine Läufe gespeichert" };
 
     setDiagnostics((items) => items.map((item) => {
@@ -331,9 +374,9 @@ export default function KfvSyncAdmin({ onBack }: Props) {
           <h1>Synchronisierung</h1>
           <span>ÖFB-Daten, Systemprüfung und kostenlose Steuerung über GitHub Actions.</span>
         </div>
-        <span className={`sync-status-badge sync-status-badge--${status.running ? "running" : waiting ? "running" : currentStatus.tone}`}>
+        <span className={`sync-status-badge sync-status-badge--${status.running ? "running" : waiting ? "running" : stale && !activeError ? "warning" : currentStatus.tone}`}>
           {(status.running || waiting) && <span className="sync-status-badge__pulse" />}
-          {status.running ? "Synchronisierung läuft" : waiting ? "Warte auf GitHub-Start" : currentStatus.label}
+          {status.running ? "Synchronisierung läuft" : waiting ? "Warte auf GitHub-Start" : activeError ? "Letzter Lauf fehlgeschlagen" : stale ? "Synchronisierung verzögert" : currentStatus.label}
         </span>
       </header>
 
@@ -341,8 +384,8 @@ export default function KfvSyncAdmin({ onBack }: Props) {
         <div className="sync-overview-card__icon"><Icon name="sync" /></div>
         <div className="sync-overview-card__main">
           <small>Letzte erfolgreiche Synchronisierung</small>
-          <strong>{formatDate(status.lastSuccessAt)}</strong>
-          <span>Laufzeit: {formatDuration(status.durationMs, status.startedAt, status.finishedAt)} · Intervall: alle {status.intervalMinutes || 30} Minuten</span>
+          <strong>{formatDate(effectiveLastSuccessAt)}</strong>
+          <span>Laufzeit: {formatDuration(latestSuccessfulRun?.durationMs, latestSuccessfulRun?.startedAt, latestSuccessfulRun?.finishedAt)} · Soll-Intervall: alle {intervalMinutes} Minuten</span>
         </div>
         <div className="sync-overview-card__meta">
           <span>Provider</span><strong>{status.provider || "GitHub Actions"}</strong>
@@ -370,12 +413,12 @@ export default function KfvSyncAdmin({ onBack }: Props) {
         </section>
       )}
 
-      {(stale || status.lastError) && (
-        <aside className={`sync-alert ${status.lastError ? "sync-alert--error" : ""}`}>
-          <Icon name={status.lastError ? "bell" : "clock"} />
+      {(stale || activeError) && (
+        <aside className={`sync-alert ${activeError ? "sync-alert--error" : ""}`}>
+          <Icon name={activeError ? "bell" : "clock"} />
           <div>
-            <strong>{status.lastError ? "Letzter Lauf fehlgeschlagen" : "Synchronisierung überfällig"}</strong>
-            <span>{status.lastError || "Der letzte erfolgreiche Lauf ist älter als 90 Minuten. GitHub Actions und das Repository-Secret prüfen."}</span>
+            <strong>{activeError ? "Letzter Lauf fehlgeschlagen" : "Synchronisierung verzögert"}</strong>
+            <span>{activeError || `Der letzte erfolgreiche Lauf ist älter als ${staleAfterMinutes} Minuten. Erst dann wird eine Warnung angezeigt, damit übersprungene Spezial-Workflows nicht fälschlich als Fehler gelten.`}</span>
           </div>
         </aside>
       )}
@@ -417,13 +460,13 @@ export default function KfvSyncAdmin({ onBack }: Props) {
       <section className="sync-result-card">
         <div className="sync-section-heading sync-section-heading--compact"><div><small>Letzter Lauf</small><h2>Ergebnis</h2></div></div>
         <div className="sync-result-grid">
-          <div><span>Neue Spiele</span><strong>{status.newMatchCount || 0}</strong></div>
-          <div><span>Aktualisiert</span><strong>{status.updatedMatchCount || 0}</strong></div>
-          <div><span>Dubletten bereinigt</span><strong>{(status.duplicateMatchesRemoved || 0) + (status.duplicateDocumentsDeactivated || 0)}</strong></div>
-          <div><span>Warnungen</span><strong>{status.warningCount || 0}</strong></div>
+          <div><span>Neue Spiele</span><strong>{latestSuccessfulRun?.newMatchCount || 0}</strong></div>
+          <div><span>Aktualisiert</span><strong>{latestSuccessfulRun?.updatedMatchCount || 0}</strong></div>
+          <div><span>Dubletten bereinigt</span><strong>{(latestSuccessfulRun?.duplicateMatchesRemoved || 0) + (latestSuccessfulRun?.duplicateDocumentsDeactivated || 0)}</strong></div>
+          <div><span>Warnungen</span><strong>{latestSuccessfulRun?.warningCount || 0}</strong></div>
         </div>
-        {status.warnings && status.warnings.length > 0 && (
-          <details className="sync-warning-details"><summary>Warnungen des letzten Laufs anzeigen</summary><ul>{status.warnings.slice(0, 8).map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul></details>
+        {latestSuccessfulRun?.warnings && latestSuccessfulRun.warnings.length > 0 && (
+          <details className="sync-warning-details"><summary>Warnungen des letzten Laufs anzeigen</summary><ul>{latestSuccessfulRun.warnings.slice(0, 8).map((warning, index) => <li key={`${warning}-${index}`}>{warning}</li>)}</ul></details>
         )}
       </section>
 

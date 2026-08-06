@@ -51,7 +51,7 @@ function checkVersions() {
     app: appMatch?.[1] || "",
     cache: (cacheMatch?.[1] || "").replaceAll("-", "."),
   };
-  const normalized = Object.values(versions).map((v) => v.replace(/-rc\.(\d+)$/, ".rc.$1"));
+  const normalized = Object.values(versions).map((value) => String(value).replace(/\.rc\./g, "-rc.").replace(/-rc-(\d+)$/, "-rc.$1"));
   if (new Set(normalized).size !== 1) addIssue(`Versionsangaben uneinheitlich: ${JSON.stringify(versions)}`);
   else addPass(`Versionsangaben stimmen überein (${versions.app}).`);
 }

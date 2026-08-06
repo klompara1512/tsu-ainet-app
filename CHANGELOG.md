@@ -1,3 +1,9 @@
+# Version 18.3.4 RC10 – Sprint 4
+
+- Synchronisierungsstatus gegen falsche Überfällig-Meldungen stabilisiert.
+- Push-Versand, Tokenbereinigung, Deep-Links und Versandstatus überarbeitet.
+- Push-Adminansicht mit Systemzustand und Versandhistorie ergänzt.
+
 # 17.1.0 – Mobile First UI
 
 - Hauptseiten bereinigt und mobile Kalenderansicht verbessert.

@@ -53,6 +53,11 @@ match /oefbV12Standings/{d=**}{allow read:if true;allow write:if football();}
  }
  match /syncStatus/{d=**}{allow read:if true;allow write:if football();}
  match /kfvSyncRuns/{d=**}{allow read:if leaders();allow write:if false;}
- match /fcmTokens/{id}{allow read:if leaders();allow create,update,delete:if active() && request.resource.data.uid==request.auth.uid;}
+ match /fcmTokens/{id}{
+  allow read: if leaders() || (active() && resource.data.uid == request.auth.uid);
+  allow create: if active() && request.resource.data.uid == request.auth.uid;
+  allow update: if active() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+  allow delete: if active() && resource.data.uid == request.auth.uid;
+ }
  match /notificationQueue/{id}{allow read,write:if leaders();}
 }}

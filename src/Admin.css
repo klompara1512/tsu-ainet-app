@@ -699,3 +699,34 @@
   font-size: 13px;
   line-height: 1.4;
 }
+
+/* Version 18.3.0 RC9 – Kopfsponsor-Verwaltung */
+.admin-head-sponsor-field {
+  padding: 16px;
+  border: 1px solid rgba(246,201,69,.22);
+  border-radius: 16px;
+  background: rgba(246,201,69,.055);
+}
+.admin-head-sponsor-field > p {
+  margin: 0 0 12px;
+  color: rgba(255,255,255,.62);
+  font-size: 12px;
+  line-height: 1.5;
+}
+.admin-head-sponsor-preview {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+  border-radius: 13px;
+  background: rgba(0,0,0,.2);
+}
+.admin-head-sponsor-preview img {
+  width: 76px;
+  height: 58px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 10px;
+}
+.admin-head-sponsor-preview span { font-weight: 800; }

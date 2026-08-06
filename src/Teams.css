@@ -710,3 +710,42 @@
 
 /* Version 18.2.9 RC7 – größere Mannschaftskacheln mit verwaltbarem Foto */
 .teams-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.team-card{position:relative;min-height:190px;align-items:flex-end;overflow:hidden;padding:22px;background-position:center;background-size:cover;background-repeat:no-repeat}.team-card::before{position:absolute;inset:0;content:"";background:linear-gradient(180deg,rgba(6,13,27,.04),rgba(6,13,27,.9));pointer-events:none}.team-card>*{position:relative;z-index:1}.team-card-photo{display:grid;place-items:center;align-self:center;flex:0 0 88px;width:88px;height:88px;margin-right:18px;overflow:hidden;border:1px solid rgba(255,255,255,.18);border-radius:22px;background:rgba(31,48,78,.78);font-size:33px}.team-card-photo img{width:100%;height:100%;object-fit:cover}.team-card.has-team-photo .team-card-photo{background:rgba(0,0,0,.18)}.team-info strong{font-size:clamp(19px,2.5vw,27px)}.team-info em{color:rgba(255,255,255,.68);font-size:12px;font-style:normal}.team-card-position{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:58px;height:58px;border-radius:16px;background:rgba(0,0,0,.38);font-size:19px;font-weight:900}.team-card-position small{color:rgba(255,255,255,.55);font-size:9px}.team-arrow{align-self:center}@media(max-width:720px){.teams-grid{grid-template-columns:1fr}.team-card{min-height:165px;padding:18px}.team-card-photo{flex-basis:74px;width:74px;height:74px;margin-right:14px;border-radius:19px}.team-info strong{font-size:21px}}
+
+/* Version 18.3.0 RC9 – optionaler Kopfsponsor im Spielerprofil */
+.team-player-head-sponsor {
+  display: grid;
+  gap: 8px;
+  margin-top: 16px;
+  padding: 15px;
+  border: 1px solid rgba(246,201,69,.24);
+  border-radius: 17px;
+  background: linear-gradient(145deg,rgba(246,201,69,.09),rgba(255,255,255,.035));
+}
+.team-player-head-sponsor > small {
+  color: #f6c945;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.team-player-head-sponsor > div,
+.team-player-head-sponsor > a {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  color: #fff;
+  text-decoration: none;
+}
+.team-player-head-sponsor img {
+  width: min(140px,42%);
+  max-height: 82px;
+  padding: 6px;
+  object-fit: contain;
+  background: #fff;
+  border-radius: 12px;
+}
+.team-player-head-sponsor strong {
+  min-width: 0;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}

@@ -35,6 +35,9 @@ type Player = {
   profileUrl?: string;
   official?: boolean;
   birthday: Date | null;
+  headSponsorText: string;
+  headSponsorImageUrl: string;
+  headSponsorWebsite: string;
 };
 
 type Trainer = {
@@ -243,6 +246,9 @@ function Teams() {
               profileUrl: typeof data.profileUrl === "string" ? data.profileUrl : "",
               official: true,
               birthday: readBirthday(data.birthday ?? data.birthDate ?? data.dateOfBirth),
+              headSponsorText: typeof data.headSponsorText === "string" ? data.headSponsorText.trim() : "",
+              headSponsorImageUrl: typeof data.headSponsorImageUrl === "string" ? data.headSponsorImageUrl.trim() : "",
+              headSponsorWebsite: typeof data.headSponsorWebsite === "string" ? data.headSponsorWebsite.trim() : "",
               belongs,
             };
           })
@@ -669,6 +675,22 @@ function Teams() {
                   <div><strong>{leagueLabel(selectedTeam)}</strong><span>Mannschaft</span></div>
                 </div>
                 {!selectedPlayer.birthday && <p className="team-player-birthday-note">Der Geburtstag ist noch nicht hinterlegt und kann in der Vereinsverwaltung ergänzt werden.</p>}
+                {(selectedPlayer.headSponsorText || selectedPlayer.headSponsorImageUrl) && (
+                  <div className="team-player-head-sponsor">
+                    <small>Kopfsponsor des Spielers</small>
+                    {selectedPlayer.headSponsorWebsite ? (
+                      <a href={selectedPlayer.headSponsorWebsite} target="_blank" rel="noreferrer">
+                        {selectedPlayer.headSponsorImageUrl && <img src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} />}
+                        {selectedPlayer.headSponsorText && <strong>{selectedPlayer.headSponsorText}</strong>}
+                      </a>
+                    ) : (
+                      <div>
+                        {selectedPlayer.headSponsorImageUrl && <img src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} />}
+                        {selectedPlayer.headSponsorText && <strong>{selectedPlayer.headSponsorText}</strong>}
+                      </div>
+                    )}
+                  </div>
+                )}
                 {selectedPlayer.profileUrl ? <a className="team-player-profile-link" href={selectedPlayer.profileUrl} target="_blank" rel="noreferrer">Offizielles ÖFB-Profil öffnen</a> : <p className="team-player-profile-note">Für diesen Spieler ist aktuell kein externes Profil hinterlegt.</p>}
               </div>
             </article>

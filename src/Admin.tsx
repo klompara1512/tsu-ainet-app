@@ -34,6 +34,9 @@ type Member = {
   imageUrl: string;
   profileUrl: string;
   birthday: string;
+  headSponsorText: string;
+  headSponsorImageUrl: string;
+  headSponsorWebsite: string;
   source: string;
 };
 
@@ -48,6 +51,9 @@ type MemberForm = {
   imageUrl: string;
   profileUrl: string;
   birthday: string;
+  headSponsorText: string;
+  headSponsorImageUrl: string;
+  headSponsorWebsite: string;
 };
 
 type AdminProps = { onBack: () => void };
@@ -63,6 +69,9 @@ const emptyForm: MemberForm = {
   imageUrl: "",
   profileUrl: "",
   birthday: "",
+  headSponsorText: "",
+  headSponsorImageUrl: "",
+  headSponsorWebsite: "",
 };
 
 function normalizeTeam(value: string) {
@@ -241,6 +250,9 @@ function Admin({ onBack }: AdminProps) {
                 imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
                 profileUrl: typeof data.profileUrl === "string" ? data.profileUrl : "",
                 birthday: typeof data.birthday === "string" ? data.birthday : "",
+                headSponsorText: typeof data.headSponsorText === "string" ? data.headSponsorText : "",
+                headSponsorImageUrl: typeof data.headSponsorImageUrl === "string" ? data.headSponsorImageUrl : "",
+                headSponsorWebsite: typeof data.headSponsorWebsite === "string" ? data.headSponsorWebsite : "",
                 source: typeof data.source === "string" ? data.source : "manual",
               };
             })
@@ -278,6 +290,9 @@ function Admin({ onBack }: AdminProps) {
               imageUrl: "",
               profileUrl: "",
               birthday: "",
+              headSponsorText: "",
+              headSponsorImageUrl: "",
+              headSponsorWebsite: "",
               source: "manual",
             };
           }),
@@ -330,6 +345,21 @@ function Admin({ onBack }: AdminProps) {
     }
   }
 
+
+  async function selectHeadSponsorImage(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    clearMessages();
+    try {
+      const imageUrl = await compressMemberPhoto(file);
+      setFormData((current) => ({ ...current, headSponsorImageUrl: imageUrl }));
+      setSuccessMessage("Das Kopfsponsor-Bild wurde vorbereitet. Speichere jetzt die Änderungen.");
+    } catch (error) {
+      setErrorMessage(error instanceof Error ? error.message : "Das Kopfsponsor-Bild konnte nicht verarbeitet werden.");
+    }
+  }
   function startEditing(member: Member) {
     setEditingMemberId(member.id);
     setFormData({
@@ -343,6 +373,9 @@ function Admin({ onBack }: AdminProps) {
       imageUrl: member.imageUrl,
       profileUrl: member.profileUrl,
       birthday: member.birthday,
+      headSponsorText: member.headSponsorText,
+      headSponsorImageUrl: member.headSponsorImageUrl,
+      headSponsorWebsite: member.headSponsorWebsite,
     });
     clearMessages();
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -397,6 +430,9 @@ function Admin({ onBack }: AdminProps) {
           imageUrl: formData.imageUrl.trim(),
           profileUrl: formData.profileUrl.trim(),
           birthday: formData.birthday || "",
+          headSponsorText: formData.headSponsorText.trim(),
+          headSponsorImageUrl: formData.headSponsorImageUrl.trim(),
+          headSponsorWebsite: formData.headSponsorWebsite.trim(),
           teamId: normalizeTeam(selectedTeam.name),
           teamKey: officialTeamKey(selectedTeam.name),
           teamName: selectedTeam.name,
@@ -573,6 +609,17 @@ function Admin({ onBack }: AdminProps) {
               <label className="admin-field"><span>Rückennummer</span><input type="number" min="0" max="99" value={formData.shirtNumber} placeholder="Zum Beispiel 1" onChange={(event) => setFormData((current) => ({ ...current, shirtNumber: event.target.value }))} /></label>
               <label className="admin-field"><span>Geburtstag</span><input type="date" value={formData.birthday} onChange={(event) => setFormData((current) => ({ ...current, birthday: event.target.value }))} /></label>
               <label className="admin-field admin-field-wide"><span>ÖFB-Profil-URL</span><input type="url" value={formData.profileUrl} placeholder="https://vereine.oefb.at/…" onChange={(event) => setFormData((current) => ({ ...current, profileUrl: event.target.value }))} /></label>
+              <div className="admin-field admin-field-wide admin-head-sponsor-field">
+                <span>Kopfsponsor (optional)</span>
+                <p>Für Firmen oder private Unterstützer. Text, Bild oder beides sind möglich. Ohne Inhalt wird beim Spieler nichts angezeigt.</p>
+                <label className="admin-field"><span>Text / Name</span><input type="text" value={formData.headSponsorText} placeholder="z. B. Unterstützt von Familie Huber" onChange={(event) => setFormData((current) => ({ ...current, headSponsorText: event.target.value }))} /></label>
+                <label className="admin-field"><span>Website (optional)</span><input type="url" value={formData.headSponsorWebsite} placeholder="https://…" onChange={(event) => setFormData((current) => ({ ...current, headSponsorWebsite: event.target.value }))} /></label>
+                <div className="admin-photo-actions">
+                  <label className="admin-photo-upload">Bild auswählen<input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectHeadSponsorImage} /></label>
+                  {formData.headSponsorImageUrl && <button type="button" className="admin-photo-remove" onClick={() => setFormData((current) => ({ ...current, headSponsorImageUrl: "" }))}>Bild entfernen</button>}
+                </div>
+                {formData.headSponsorImageUrl && <div className="admin-head-sponsor-preview"><img src={formData.headSponsorImageUrl} alt="Vorschau Kopfsponsor" /><span>{formData.headSponsorText || "Kopfsponsor-Bild"}</span></div>}
+              </div>
             </>}
 
             <div className="admin-field admin-field-wide admin-photo-field">

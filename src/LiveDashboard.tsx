@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   collection,
   onSnapshot,
@@ -341,12 +341,6 @@ function LiveDashboard({
     [events, clock],
   );
 
-  const dateText = new Intl.DateTimeFormat("de-AT", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  }).format(clock);
-
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("de-AT", {
       weekday: "short",
@@ -373,32 +367,27 @@ function LiveDashboard({
     ? nextMatch.status === "scheduled" && clock.getTime() >= nextMatch.kickoffAt.getTime() - 15 * 60_000 && clock.getTime() <= nextMatch.kickoffAt.getTime() + 150 * 60_000
     : false;
   const isFinishedToday = Boolean(nextMatch && isToday && nextMatch.status === "finished");
-  const matchStatusLabel = nextMatch
-    ? isLive
-      ? "Das Spiel läuft – direkt zum Liveticker"
-      : isFinishedToday
-        ? "Endstand ist verfügbar"
-        : isToday
-          ? "Heute ist Spieltag"
-          : `Noch ${days} ${days === 1 ? "Tag" : "Tage"} bis zum nächsten Spiel`
-    : "Aktuell kein kommendes Spiel";
   const scheduledCount = uniqueMatches.filter((match) => match.status === "scheduled" && match.kickoffAt >= clock).length;
 
   return (
     <section className="v101-home">
       <header
         className={`v101-intro v1825-welcome-hero ${isToday ? "is-matchday" : ""}`}
-        style={heroImages[heroIndex]?.imageUrl ? { backgroundImage: `linear-gradient(105deg, rgba(4,10,23,.92), rgba(4,10,23,.52)), url(${heroImages[heroIndex].imageUrl})` } : undefined}
+        style={heroImages[heroIndex]?.imageUrl ? ({ "--hero-image": `url("${heroImages[heroIndex].imageUrl}")` } as CSSProperties) : undefined}
       >
+        {heroImages[heroIndex]?.imageUrl && (
+          <div className="v183-hero-photo" aria-hidden="true">
+            <img src={heroImages[heroIndex].imageUrl} alt="" />
+          </div>
+        )}
         <div className="v1825-welcome-overlay" />
         <div className="v1825-welcome-copy">
           {isToday && <span className="v101-overline">Matchday · TSU Ainet</span>}
           <h1>Willkommen bei der TSU Ainet</h1>
           <p className="v1825-since">Since 1966</p>
-          <strong className="v1825-slogan">Mehr als ein Verein – eine Familie</strong>
-          <small>{dateText} · {matchStatusLabel}</small>
+          <strong className="v1825-slogan">Unsere Farben. Unser Stolz.</strong>
         </div>
-        <img src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
+        <img className="v183-hero-club-logo" src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
       </header>
 
       <section className="v101-match-hero">

@@ -779,3 +779,7 @@
   .v101-table > button > small { display:none; }
   .v101-table > button > .v1825-table-position { width:28px; height:28px; }
 }
+
+/* Version 18.2.9 RC7 – finale Bild- und Inhaltsanpassungen */
+.v1825-welcome-hero{background-position:center;background-size:cover;background-repeat:no-repeat;transition:background-image .8s ease}.v1825-welcome-copy h1{margin-top:0}.v1825-eleven-logo{width:112px;height:62px;padding:8px 12px;background:#fff}.v1825-eleven-logo img{display:block;width:100%;height:100%;object-fit:contain}.v101-sponsor-track button{overflow:hidden}.v101-sponsor-track img[src^="data:image"]{max-width:116%;max-height:70px;transform:scale(1.18)}.v101-team .team-logo-hero[src^="data:image"]{transform:scale(1.17)}.v101-team{overflow:visible}.v101-team .team-logo-hero{overflow:hidden}.v101-table-team-select select{min-width:150px}.v101-table-card-head{align-items:center}
+@media(max-width:520px){.v1825-eleven-logo{width:94px;height:54px}.v101-sponsor-track img[src^="data:image"]{max-height:62px;transform:scale(1.2)}.v101-table-card-head{align-items:flex-start}.v101-table-actions{width:100%;justify-content:stretch}.v101-table-team-select{flex:1}.v101-table-team-select select{width:100%;min-width:0}}

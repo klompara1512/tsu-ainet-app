@@ -88,7 +88,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
 
   useEffect(() => {
     if (selectedMatch) setMatchDetailTab("overview");
-  }, [selectedMatch?.id]);
+  }, [selectedMatch]);
 
 
   useEffect(() => {
@@ -111,7 +111,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
         setLoadingMatchReport(false);
       },
     );
-  }, [selectedMatch?.id]);
+  }, [selectedMatch]);
 
   const teams = useMemo(() => {
     const fixedTeams = [
@@ -140,7 +140,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   }, [initialTab]);
 
   useEffect(() => {
-    if (activeTab === "squad" && selectedTeamId === "all" && teams.length > 0) {
+    if ((activeTab === "squad" || activeTab === "table") && selectedTeamId === "all" && teams.length > 0) {
       setSelectedTeamId(teams[0].id);
     }
   }, [activeTab, selectedTeamId, teams]);
@@ -577,7 +577,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
             value={selectedTeamId}
             onChange={(event) => setSelectedTeamId(event.target.value)}
           >
-            {activeTab !== "squad" && <option value="all">Alle Mannschaften</option>}
+            {activeTab === "matches" && <option value="all">Alle Mannschaften</option>}
             {teams.map((team) => (
               <option key={team.id} value={team.id}>
                 {team.name}

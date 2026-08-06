@@ -1,23 +1,220 @@
-import { useEffect,useMemo,useState,type FormEvent } from "react";
-import { addDoc,collection,deleteDoc,doc,onSnapshot,orderBy,query,serverTimestamp,updateDoc } from "firebase/firestore";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  addDoc,
+  collection,
+  deleteDoc,
+  doc,
+  onSnapshot,
+  orderBy,
+  query,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "./firebase";
-import { roleLabel,type AppRole } from "./permissions";
+import { roleLabel, type AppRole } from "./permissions";
 import "./ClubAdmin.css";
-type Tab="users"|"invites"|"tasks"|"services"|"documents"|"sponsors";
-type Row={id:string;[k:string]:string|number|boolean|string[]|undefined};
-const roles:AppRole[]=["admin","section","board","trainer","player","member","fan"];
-const teams=["KM","Challenge","U17","U12","U10"];
-const tabLabels:Record<Tab,string>={users:"Benutzer",invites:"Einladungen",tasks:"Aufgaben",services:"Dienste",documents:"Dokumente",sponsors:"Sponsoren"};
-function code(){return "TSU-"+Math.random().toString(36).slice(2,8).toUpperCase()}
-export default function ClubAdmin({onBack}:{onBack:()=>void}){
- const [tab,setTab]=useState<Tab>("users"),[rows,setRows]=useState<Row[]>([]),[users,setUsers]=useState<Row[]>([]),[qv,setQv]=useState("");
- const [form,setForm]=useState<Record<string,string>>({});
- useEffect(()=>onSnapshot(collection(db,"users"),s=>setUsers(s.docs.map(d=>({id:d.id,...d.data()})))),[]);
- useEffect(()=>{if(tab==="users")return;const qq=query(collection(db,tab),orderBy("createdAt","desc"));return onSnapshot(qq,s=>setRows(s.docs.map(d=>({id:d.id,...d.data()}))),()=>setRows([]))},[tab]);
- const shown=useMemo(()=>users.filter(u=>`${u.name} ${u.email}`.toLowerCase().includes(qv.toLowerCase())),[users,qv]);
- async function save(e:FormEvent){e.preventDefault();const base={...form,createdAt:serverTimestamp(),active:true};if(tab==="invites")Object.assign(base,{code:code(),used:false});if(tab==="tasks")Object.assign(base,{status:"open"});await addDoc(collection(db,tab),base);setForm({})}
- const field=(name:string,label:string,type="text")=><input type={type} placeholder={label} value={form[name]||""} onChange={e=>setForm({...form,[name]:e.target.value})} required/>;
- return <section className="club-admin"><header><button onClick={onBack}>‹ Zurück</button><div><small>TSU Ainet</small><h2>Vereinsverwaltung</h2></div></header><nav>{(["users","invites","tasks","services","documents","sponsors"] as Tab[]).map(t=><button key={t} className={tab==t?"active":""} onClick={()=>setTab(t)}>{tabLabels[t]}</button>)}</nav>
- {tab==="users"?<div className="admin-panel"><div className="admin-title"><div><h3>Benutzer</h3><p>{users.filter(u=>!u.approved).length} offene Freigaben</p></div><input placeholder="Suchen …" value={qv} onChange={e=>setQv(e.target.value)}/></div><div className="user-list">{shown.map(u=><article key={u.id}><div className="avatar">{(u.name||u.email||"?").slice(0,2).toUpperCase()}</div><div className="user-main"><strong>{u.name||"Ohne Name"}</strong><small>{u.email}</small><div className="chips">{!u.approved&&<span className="warn">Freigabe offen</span>}<span>{roleLabel((u.role||"pending") as AppRole)}</span></div></div><div className="user-actions"><select value={u.role||"pending"} onChange={e=>updateDoc(doc(db,"users",u.id),{role:e.target.value})}><option value="pending">Ausstehend</option>{roles.map(r=><option key={r} value={r}>{roleLabel(r)}</option>)}</select><select multiple value={u.teamIds||[]} onChange={e=>updateDoc(doc(db,"users",u.id),{teamIds:Array.from(e.target.selectedOptions).map(o=>o.value)})}>{teams.map(t=><option key={t}>{t}</option>)}</select><button onClick={()=>updateDoc(doc(db,"users",u.id),{approved:true,active:true,role:u.role==="pending"?"member":u.role})}>Freigeben</button><button className="muted" onClick={()=>updateDoc(doc(db,"users",u.id),{active:u.active===false})}>{u.active===false?"Aktivieren":"Sperren"}</button></div></article>)}</div></div>:
- <div className="admin-grid"><form className="admin-panel create-form" onSubmit={save}><h3>{tab==="invites"?"Einladung erstellen":tab==="tasks"?"Aufgabe anlegen":tab==="services"?"Dienst einteilen":tab==="documents"?"Dokument verlinken":"Sponsor anlegen"}</h3>{tab==="invites"&&<>{field("name","Name")}{field("email","E-Mail","email")}<select value={form.role||"member"} onChange={e=>setForm({...form,role:e.target.value})}>{roles.map(r=><option key={r} value={r}>{roleLabel(r)}</option>)}</select><select value={form.teamId||""} onChange={e=>setForm({...form,teamId:e.target.value})}><option value="">Keine Mannschaft</option>{teams.map(t=><option key={t}>{t}</option>)}</select></>}{tab==="tasks"&&<>{field("title","Aufgabe")}{field("assignedTo","Zuständig")}{field("dueDate","Fällig am","date")}</>}{tab==="services"&&<>{field("title","Dienst / Tätigkeit")}{field("assignedTo","Eingeteilte Person")}{field("date","Datum","date")}{field("time","Uhrzeit","time")}</>}{tab==="documents"&&<>{field("title","Bezeichnung")}{field("url","Link zum Dokument","url")} {field("category","Kategorie")}</>}{tab==="sponsors"&&<>{field("name","Sponsorname")}{field("website","Webseite","url")}{field("logoUrl","Logo-URL","url")}</>}<button className="primary">Speichern</button></form><div className="admin-panel"><h3>Vorhandene Einträge</h3><div className="simple-list">{rows.map(r=><article key={r.id}><div><strong>{r.title||r.name||r.code}</strong><small>{r.assignedTo||r.email||r.website||r.url||r.date||""}</small>{r.code&&<code>{r.code}</code>}</div>{tab==="tasks"&&<button onClick={()=>updateDoc(doc(db,tab,r.id),{status:r.status==="done"?"open":"done"})}>{r.status==="done"?"Erledigt ✓":"Offen"}</button>}<button className="danger" onClick={()=>deleteDoc(doc(db,tab,r.id))}>Löschen</button></article>)}</div></div></div>}</section>
+
+type Tab = "users" | "invites" | "tasks" | "services" | "documents" | "sponsors";
+type RowValue = string | number | boolean | string[] | undefined;
+type Row = { id: string; [key: string]: RowValue };
+
+type ClubForm = Record<string, string>;
+
+const roles: AppRole[] = ["admin", "section", "board", "trainer", "player", "member", "fan"];
+const teams = ["KM", "Challenge", "U17", "U12", "U10"];
+const tabLabels: Record<Tab, string> = {
+  users: "Benutzer",
+  invites: "Einladungen",
+  tasks: "Aufgaben",
+  services: "Dienste",
+  documents: "Dokumente",
+  sponsors: "Sponsoren",
+};
+
+function createInviteCode() {
+  return `TSU-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+}
+
+function rowText(value: RowValue) {
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "boolean") return value ? "Ja" : "Nein";
+  if (typeof value === "number") return String(value);
+  return value ?? "";
+}
+
+function rowStringArray(value: RowValue) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+export default function ClubAdmin({ onBack }: { onBack: () => void }) {
+  const [tab, setTab] = useState<Tab>("users");
+  const [rows, setRows] = useState<Row[]>([]);
+  const [users, setUsers] = useState<Row[]>([]);
+  const [search, setSearch] = useState("");
+  const [form, setForm] = useState<ClubForm>({});
+
+  useEffect(
+    () =>
+      onSnapshot(collection(db, "users"), (snapshot) =>
+        setUsers(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Row)),
+      ),
+    [],
+  );
+
+  useEffect(() => {
+    if (tab === "users") return undefined;
+    const listQuery = query(collection(db, tab), orderBy("createdAt", "desc"));
+    return onSnapshot(
+      listQuery,
+      (snapshot) => setRows(snapshot.docs.map((item) => ({ id: item.id, ...item.data() }) as Row)),
+      () => setRows([]),
+    );
+  }, [tab]);
+
+  const shownUsers = useMemo(() => {
+    const needle = search.toLocaleLowerCase("de-AT");
+    return users.filter((user) =>
+      `${rowText(user.name)} ${rowText(user.email)}`.toLocaleLowerCase("de-AT").includes(needle),
+    );
+  }, [users, search]);
+
+  async function save(event: FormEvent) {
+    event.preventDefault();
+    const base: Record<string, unknown> = {
+      ...form,
+      createdAt: serverTimestamp(),
+      active: true,
+    };
+    if (tab === "invites") Object.assign(base, { code: createInviteCode(), used: false });
+    if (tab === "tasks") Object.assign(base, { status: "open" });
+    await addDoc(collection(db, tab), base);
+    setForm({});
+  }
+
+  const field = (name: string, label: string, type = "text") => (
+    <input
+      type={type}
+      placeholder={label}
+      value={form[name] ?? ""}
+      onChange={(event) => setForm((current) => ({ ...current, [name]: event.target.value }))}
+      required
+    />
+  );
+
+  return (
+    <section className="club-admin">
+      <header>
+        <button type="button" onClick={onBack}>‹ Zurück</button>
+        <div><small>TSU Ainet</small><h2>Vereinsverwaltung</h2></div>
+      </header>
+
+      <nav>
+        {(Object.keys(tabLabels) as Tab[]).map((item) => (
+          <button key={item} type="button" className={tab === item ? "active" : ""} onClick={() => setTab(item)}>
+            {tabLabels[item]}
+          </button>
+        ))}
+      </nav>
+
+      {tab === "users" ? (
+        <div className="admin-panel">
+          <div className="admin-title">
+            <div><h3>Benutzer</h3><p>{users.filter((user) => user.approved !== true).length} offene Freigaben</p></div>
+            <input placeholder="Suchen …" value={search} onChange={(event) => setSearch(event.target.value)} />
+          </div>
+
+          <div className="user-list">
+            {shownUsers.map((user) => {
+              const name = rowText(user.name);
+              const email = rowText(user.email);
+              const role = rowText(user.role) || "pending";
+              const active = user.active !== false;
+              const approved = user.approved === true;
+              const teamIds = rowStringArray(user.teamIds);
+
+              return (
+                <article key={user.id}>
+                  <div className="avatar">{(name || email || "?").slice(0, 2).toUpperCase()}</div>
+                  <div className="user-main">
+                    <strong>{name || "Ohne Name"}</strong>
+                    <small>{email}</small>
+                    <div className="chips">
+                      {!approved && <span className="warn">Freigabe offen</span>}
+                      <span>{roleLabel(role as AppRole)}</span>
+                    </div>
+                  </div>
+                  <div className="user-actions">
+                    <select value={role} onChange={(event) => void updateDoc(doc(db, "users", user.id), { role: event.target.value })}>
+                      <option value="pending">Ausstehend</option>
+                      {roles.map((item) => <option key={item} value={item}>{roleLabel(item)}</option>)}
+                    </select>
+                    <select
+                      multiple
+                      value={teamIds}
+                      onChange={(event) => void updateDoc(doc(db, "users", user.id), {
+                        teamIds: Array.from(event.target.selectedOptions).map((option) => option.value),
+                      })}
+                    >
+                      {teams.map((team) => <option key={team} value={team}>{team}</option>)}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => void updateDoc(doc(db, "users", user.id), {
+                        approved: true,
+                        active: true,
+                        role: role === "pending" ? "member" : role,
+                      })}
+                    >Freigeben</button>
+                    <button
+                      type="button"
+                      className="muted"
+                      onClick={() => void updateDoc(doc(db, "users", user.id), { active: !active })}
+                    >{active ? "Sperren" : "Aktivieren"}</button>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      ) : (
+        <div className="admin-grid">
+          <form className="admin-panel create-form" onSubmit={save}>
+            <h3>{tab === "invites" ? "Einladung erstellen" : tab === "tasks" ? "Aufgabe anlegen" : tab === "services" ? "Dienst einteilen" : tab === "documents" ? "Dokument verlinken" : "Sponsor anlegen"}</h3>
+            {tab === "invites" && <>{field("name", "Name")}{field("email", "E-Mail", "email")}<select value={form.role ?? "member"} onChange={(event) => setForm((current) => ({ ...current, role: event.target.value }))}>{roles.map((item) => <option key={item} value={item}>{roleLabel(item)}</option>)}</select><select value={form.teamId ?? ""} onChange={(event) => setForm((current) => ({ ...current, teamId: event.target.value }))}><option value="">Keine Mannschaft</option>{teams.map((team) => <option key={team} value={team}>{team}</option>)}</select></>}
+            {tab === "tasks" && <>{field("title", "Aufgabe")}{field("assignedTo", "Zuständig")}{field("dueDate", "Fällig am", "date")}</>}
+            {tab === "services" && <>{field("title", "Dienst / Tätigkeit")}{field("assignedTo", "Eingeteilte Person")}{field("date", "Datum", "date")}{field("time", "Uhrzeit", "time")}</>}
+            {tab === "documents" && <>{field("title", "Bezeichnung")}{field("url", "Link zum Dokument", "url")}{field("category", "Kategorie")}</>}
+            {tab === "sponsors" && <>{field("name", "Sponsorname")}{field("website", "Webseite", "url")}{field("logoUrl", "Logo-URL", "url")}</>}
+            <button className="primary" type="submit">Speichern</button>
+          </form>
+
+          <div className="admin-panel">
+            <h3>Vorhandene Einträge</h3>
+            <div className="simple-list">
+              {rows.map((row) => {
+                const title = rowText(row.title) || rowText(row.name) || rowText(row.code);
+                const detail = rowText(row.assignedTo) || rowText(row.email) || rowText(row.website) || rowText(row.url) || rowText(row.date);
+                const status = rowText(row.status);
+                return (
+                  <article key={row.id}>
+                    <div>
+                      <strong>{title}</strong>
+                      <small>{detail}</small>
+                      {row.code && <code>{rowText(row.code)}</code>}
+                    </div>
+                    {tab === "tasks" && (
+                      <button type="button" onClick={() => void updateDoc(doc(db, tab, row.id), { status: status === "done" ? "open" : "done" })}>
+                        {status === "done" ? "Erledigt ✓" : "Offen"}
+                      </button>
+                    )}
+                    <button type="button" className="danger" onClick={() => void deleteDoc(doc(db, tab, row.id))}>Löschen</button>
+                  </article>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </section>
+  );
 }

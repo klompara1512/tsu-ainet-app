@@ -110,3 +110,21 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: #07101c; }
 ::-webkit-scrollbar-thumb { background: #263853; border: 2px solid #07101c; border-radius: 999px; }
+
+/* Phase 3: Performance & UX */
+html { scroll-behavior: smooth; }
+button, [role="button"], a { touch-action: manipulation; }
+button, input, select, textarea { font: inherit; }
+img { max-width: 100%; }
+@media (max-width: 700px) {
+  button, [role="button"], input, select { min-height: 44px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

@@ -163,11 +163,12 @@ function TeamLogo({ url = "", name, size = "normal", className = "", clubId = ""
     return values.filter((value, index) => values.indexOf(value) === index);
   }, [clubs, standings, name, url, clubId]);
 
+  const candidateKey = candidates.join("|");
   const [candidateIndex, setCandidateIndex] = useState(0);
 
   useEffect(() => {
     setCandidateIndex(0);
-  }, [name, url, candidates.join("|")]);
+  }, [name, url, candidateKey]);
 
   const initials =
     name

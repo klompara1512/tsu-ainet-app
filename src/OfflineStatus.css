@@ -1,0 +1,36 @@
+.network-status {
+  position: fixed;
+  top: calc(10px + env(safe-area-inset-top));
+  left: 50%;
+  z-index: 2147482000;
+  display: grid;
+  grid-template-columns: 28px auto;
+  gap: 2px 10px;
+  align-items: center;
+  width: min(92vw, 460px);
+  padding: 11px 14px;
+  border: 1px solid rgba(255,255,255,.16);
+  border-radius: 16px;
+  color: #fff;
+  background: rgba(13, 24, 42, .96);
+  box-shadow: 0 16px 45px rgba(0,0,0,.42);
+  transform: translateX(-50%);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.network-status > span {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-weight: 900;
+}
+.network-status strong { font-size: .92rem; }
+.network-status small { color: #c8d2e3; }
+.network-status--offline > span { background: #8f2d3e; }
+.network-status--online > span { background: #147a4d; }
+@media (max-width: 520px) {
+  .network-status { top: calc(8px + env(safe-area-inset-top)); }
+}

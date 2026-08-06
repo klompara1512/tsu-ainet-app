@@ -28,6 +28,13 @@ type ClubEvent = {
   active: boolean;
 };
 
+type HeroImage = {
+  id: string;
+  imageUrl: string;
+  order: number;
+  active: boolean;
+};
+
 type Sponsor = {
   id: string;
   name: string;
@@ -112,6 +119,8 @@ function LiveDashboard({
   const [matches, setMatches] = useState<KfvMatch[]>([]);
   const [standings, setStandings] = useState<KfvStandingRow[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const [heroImages, setHeroImages] = useState<HeroImage[]>([]);
+  const [heroIndex, setHeroIndex] = useState(0);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [loadingKfv, setLoadingKfv] = useState(true);
   const [clock, setClock] = useState(() => new Date());
@@ -162,6 +171,22 @@ function LiveDashboard({
       () => setLoadingEvents(false),
     );
 
+    const unsubscribeHeroImages = onSnapshot(
+      query(collection(db, "visualAssets"), orderBy("order", "asc")),
+      (snapshot) => {
+        setHeroImages(snapshot.docs.map((document, index) => {
+          const data = document.data();
+          return {
+            id: document.id,
+            imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
+            order: typeof data.order === "number" ? data.order : index,
+            active: data.active !== false,
+          } satisfies HeroImage;
+        }).filter((item) => item.active && item.imageUrl));
+      },
+      () => setHeroImages([]),
+    );
+
     const unsubscribeSponsors = onSnapshot(
       collection(db, "sponsors"),
       (snapshot) => {
@@ -208,11 +233,23 @@ function LiveDashboard({
     return () => {
       window.clearInterval(timer);
       unsubscribeEvents();
+      unsubscribeHeroImages();
       unsubscribeSponsors();
       unsubscribeMatches();
       unsubscribeStandings();
     };
   }, []);
+
+  useEffect(() => {
+    if (heroImages.length <= 1) {
+      setHeroIndex(0);
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setHeroIndex((current) => (current + 1) % heroImages.length);
+    }, 9_000);
+    return () => window.clearInterval(timer);
+  }, [heroImages.length]);
 
   const uniqueMatches = useMemo(() => {
     const map = new Map<string, KfvMatch>();
@@ -304,15 +341,6 @@ function LiveDashboard({
     [events, clock],
   );
 
-  const clubNotice = useMemo(
-    () =>
-      events.find(
-        (event) =>
-          event.type === "club" && event.startAt.getTime() >= clock.getTime(),
-      ) ?? null,
-    [events, clock],
-  );
-
   const dateText = new Intl.DateTimeFormat("de-AT", {
     weekday: "long",
     day: "2-digit",
@@ -358,11 +386,14 @@ function LiveDashboard({
 
   return (
     <section className="v101-home">
-      <header className={`v101-intro v1825-welcome-hero ${isToday ? "is-matchday" : ""}`}>
+      <header
+        className={`v101-intro v1825-welcome-hero ${isToday ? "is-matchday" : ""}`}
+        style={heroImages[heroIndex]?.imageUrl ? { backgroundImage: `linear-gradient(105deg, rgba(4,10,23,.92), rgba(4,10,23,.52)), url(${heroImages[heroIndex].imageUrl})` } : undefined}
+      >
         <div className="v1825-welcome-overlay" />
         <div className="v1825-welcome-copy">
-          <span className="v101-overline">{isToday ? "Matchday · TSU Ainet" : "Willkommen bei der TSU Ainet"}</span>
-          <h1>{isToday ? "Heute ist Spieltag" : "Willkommen bei der TSU Ainet"}</h1>
+          {isToday && <span className="v101-overline">Matchday · TSU Ainet</span>}
+          <h1>Willkommen bei der TSU Ainet</h1>
           <p className="v1825-since">Since 1966</p>
           <strong className="v1825-slogan">Mehr als ein Verein – eine Familie</strong>
           <small>{dateText} · {matchStatusLabel}</small>
@@ -466,8 +497,8 @@ function LiveDashboard({
       )}
 
       <section className="v182-shop-card" aria-labelledby="dashboard-shop-title">
-        <div className="v182-shop-icon v1825-eleven-logo" aria-label="11teamsports">
-          <span>11</span><strong>teamsports</strong>
+        <div className="v182-shop-icon v1825-eleven-logo">
+          <img src="https://www.11teamsports.com/media/3f/b8/52/1639126281/logo.svg" alt="11teamsports" referrerPolicy="no-referrer" />
         </div>
         <div className="v182-shop-copy">
           <span className="v101-overline">Offizieller Clubshop</span>
@@ -581,7 +612,7 @@ function LiveDashboard({
 
       <section className="v101-card">
         <div className="v101-card-head">
-          <div><span className="v101-overline">Vereinsleben</span><h2>Nächste Termine</h2></div>
+          <div><span className="v101-overline">Termine</span><h2>Nächste Termine</h2></div>
           <button type="button" onClick={onOpenCalendar}>Alle</button>
         </div>
 
@@ -609,15 +640,7 @@ function LiveDashboard({
         </div>
       </section>
 
-      <button type="button" className="v101-notice" onClick={onOpenCalendar}>
-        <span><Icon name="shield" /></span>
-        <div>
-          <small>Vereinsinfo</small>
-          <strong>{clubNotice?.title || "60 Jahre Sportunion Ainet"}</strong>
-          <p>{clubNotice ? `${formatDate(clubNotice.startAt)} · ${formatTime(clubNotice.startAt)} Uhr${clubNotice.location ? ` · ${clubNotice.location}` : ""}` : "Tradition, Gemeinschaft und Sport seit 1966."}</p>
-        </div>
-        <b>›</b>
-      </button>
+
 
       <button type="button" className="v101-more" onClick={onOpenMore}>
         <span><Icon name="settings" /></span>

@@ -1,15 +1,16 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
-import Login from "./Login";
-import Dashboard from "./Dashboard";
+const Login = lazy(() => import("./Login"));
+const Dashboard = lazy(() => import("./Dashboard"));
 import {
   normalizeRole,
   type AppRole,
   type UserProfile,
 } from "./permissions";
-import InstallApp from "./InstallApp";
+const InstallApp = lazy(() => import("./InstallApp"));
+import OfflineStatus from "./OfflineStatus";
 import "./App.css";
 
 export type { AppRole, UserProfile } from "./permissions";
@@ -121,12 +122,22 @@ function AppContent() {
   return <Dashboard user={user} profile={profile} />;
 }
 
+function AppFallback() {
+  return (
+    <div className="app-loading" role="status" aria-live="polite">
+      <img src="/tsu-ainet-logo.png" alt="" />
+      <span>TSU Ainet wird geladen …</span>
+    </div>
+  );
+}
+
 function App() {
   return (
-    <>
+    <Suspense fallback={<AppFallback />}>
       <AppContent />
       <InstallApp />
-    </>
+      <OfflineStatus />
+    </Suspense>
   );
 }
 

@@ -1,58 +1,38 @@
-name: KFV / ÖFB Spielpläne und Ergebnisse synchronisieren
+name: KFV / ÖFB Synchronisierung
 
 on:
   workflow_dispatch:
   schedule:
-    - cron: "17 * * * *"
-
-concurrency:
-  group: kfv-oefb-games-sync
-  cancel-in-progress: true
+    - cron: "*/30 * * * *"
 
 permissions:
   contents: read
 
+concurrency:
+  group: kfv-oefb-sync
+  cancel-in-progress: false
+
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      TZ: Europe/Vienna
-      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
+    timeout-minutes: 30
     steps:
       - name: Projekt laden
         uses: actions/checkout@v4
 
-      - name: Geplante Uhrzeit 06, 12 oder 18 Uhr prüfen
-        id: gate
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-        run: node scripts/game-sync-time-gate.cjs
-
       - name: Node.js einrichten
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "22"
           cache: npm
 
       - name: Abhängigkeiten installieren
-        if: steps.gate.outputs.run == 'true'
         run: npm ci
 
-      - name: Projekt und Spiele-Sync prüfen
-        if: steps.gate.outputs.run == 'true'
+      - name: Projekt und Synchronisierung prüfen
         run: npm run sync:check
 
-      - name: Spielpläne und Ergebnisse synchronisieren
-        if: steps.gate.outputs.run == 'true'
-        run: npm run sync:games
-
-      - name: Heimspiel-Aufgaben automatisch aktualisieren
-        if: steps.gate.outputs.run == 'true'
-        run: npm run sync:home-tasks
-
-      - name: Außerhalb des Zeitfensters übersprungen
-        if: steps.gate.outputs.run != 'true'
-        run: echo "Spielplan-Sync übersprungen. Grund ${{ steps.gate.outputs.reason }}."
+      - name: KFV / ÖFB synchronisieren
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: npm run sync:full

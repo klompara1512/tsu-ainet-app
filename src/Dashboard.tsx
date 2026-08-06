@@ -17,17 +17,16 @@ import MatchAdmin from "./MatchAdmin";
 import StandingsAdmin from "./StandingsAdmin";
 import KfvSyncAdmin from "./KfvSyncAdmin";
 import ClubAdmin from "./ClubAdmin";
-import ClubHub from "./ClubHub";
 import FanFeatures from "./FanFeatures";
 import NotificationsAdmin from "./NotificationsAdmin";
 import { Icon } from "./Icons";
-import HomeGameTasks from "./HomeGameTasks";
 import LogoManager from "./LogoManager";
 import SponsorManager from "./SponsorManager";
 import ClubPeopleManager from "./ClubPeopleManager";
 import PublicSponsors from "./PublicSponsors";
 import PublicEvents from "./PublicEvents";
 import PublicPeople from "./PublicPeople";
+import PublicClubInfo from "./PublicClubInfo";
 import VisualManager from "./VisualManager";
 import { APP_VERSION } from "./appVersion";
 
@@ -45,10 +44,8 @@ type Page =
   | "standings-admin"
   | "kfv-sync-admin"
   | "club-admin"
-  | "club-hub"
   | "fan-features"
   | "notifications-admin"
-  | "home-game-tasks"
   | "logo-manager"
   | "sponsor-manager"
   | "board-manager"
@@ -139,7 +136,6 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           {canManageClub && user && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("visual-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Bildverwaltung</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong></span><span className="quick-arrow">›</span></button>}
-          {hasPermission(role, "manageTasks") && <button type="button" className="quick-card" onClick={() => setActivePage("home-game-tasks")}><span className="quick-icon"><Icon name="target" /></span><span className="quick-content"><strong>Heimspiel-Aufgaben</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("club-admin")}><span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vereinsverwaltung</strong></span><span className="quick-arrow">›</span></button>}
           {canManageSync && <button type="button" className="quick-card" onClick={() => setActivePage("kfv-sync-admin")}><span className="quick-icon"><Icon name="sync" /></span><span className="quick-content"><strong>Synchronisierung</strong></span><span className="quick-arrow">›</span></button>}
         </div>
@@ -164,20 +160,14 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     if (activePage === "public-events") return <PublicEvents onBack={() => setActivePage("mehr")} />;
     if (activePage === "public-board") return <PublicPeople kind="board" onBack={() => setActivePage("mehr")} />;
     if (activePage === "public-trainers") return <PublicPeople kind="trainer" onBack={() => setActivePage("mehr")} />;
-    if (activePage === "public-club") return hasInternalAccess ? <ClubHub /> : renderMorePage();
+    if (activePage === "public-club") return hasInternalAccess ? <PublicClubInfo onBack={() => setActivePage("mehr")} /> : renderMorePage();
     if (activePage === "administration") return renderAdministrationPage();
 
     if (activePage === "kfv-live") {
       return <KfvLive initialMatchId={selectedMatchId} initialTab={kfvInitialTab} />;
     }
 
-    if (activePage === "club-hub") {
-      return <ClubHub />;
-    }
 
-    if (activePage === "home-game-tasks") {
-      return <HomeGameTasks onBack={() => setActivePage("start")} />;
-    }
 
     if (activePage === "logo-manager") {
       return canManageClub && user ? <LogoManager user={user} profile={profile} onBack={() => setActivePage("mehr")} /> : renderMorePage();
@@ -312,10 +302,8 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     activePage === "standings-admin" ||
     activePage === "kfv-sync-admin" ||
     activePage === "club-admin" ||
-    activePage === "club-hub" ||
     activePage === "fan-features" ||
     activePage === "notifications-admin" ||
-    activePage === "home-game-tasks" ||
     activePage === "logo-manager" ||
     activePage === "sponsor-manager" ||
     activePage === "visual-manager" ||

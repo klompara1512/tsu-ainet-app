@@ -2,20 +2,24 @@ name: KFV / ÖFB Tabellen Freitag bis Sonntag und an Feiertagen
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "7,37 * * * *"
 
-concurrency:
-  group: kfv-oefb-table-sync
-  cancel-in-progress: true
+  # Freitag bis Sonntag alle 6 Stunden
+  schedule:
+    - cron: "15 */6 * * 5-0"
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync:
+    name: Tabellen synchronisieren
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -34,14 +38,15 @@ jobs:
         if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "20"
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
         if: steps.gate.outputs.run == 'true'
         run: npm ci
 
-      - name: Projekt und Tabellen-Sync prüfen
+      - name: Projekt und Tabellen-Synchronisierung prüfen
         if: steps.gate.outputs.run == 'true'
         run: npm run sync:check
 
@@ -51,4 +56,6 @@ jobs:
 
       - name: Übersprungen protokollieren
         if: steps.gate.outputs.run != 'true'
-        run: echo "Tabellen-Sync heute nicht erforderlich. Grund ${{ steps.gate.outputs.reason }}."
+        run: |
+          echo "Tabellen-Synchronisierung heute nicht erforderlich."
+          echo "Grund: ${{ steps.gate.outputs.reason }}"

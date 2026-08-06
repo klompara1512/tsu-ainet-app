@@ -1,24 +1,27 @@
 name: Push-Benachrichtigungen senden
 
 on:
-  schedule:
-    - cron: "*/5 * * * *"
+  # Nur manuell starten
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: tsu-ainet-push-dispatch
-  cancel-in-progress: false
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   send:
+    name: Push-Benachrichtigungen versenden
+
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
     steps:
       - name: Projekt laden
         uses: actions/checkout@v4
@@ -26,11 +29,22 @@ jobs:
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version: "20"
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
         run: npm ci
+
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+
+          echo "Firebase-Service-Account ist vorhanden."
 
       - name: Push-System prüfen
         run: npm run push:selftest

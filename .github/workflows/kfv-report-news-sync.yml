@@ -1,26 +1,33 @@
-name: KFV / ÖFB Spielberichte im Spielzeitfenster synchronisieren
+name: KFV / ÖFB Spielberichte synchronisieren
 
 on:
+  # Ausschließlich manuell starten.
+  # Spielberichte werden zusätzlich durch den geplanten Voll-Sync erfasst.
   workflow_dispatch:
-  schedule:
-    - cron: "10,40 * * * *"
-
-concurrency:
-  group: kfv-oefb-report-news-sync
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync:
+    name: Spielberichte synchronisieren
     runs-on: ubuntu-latest
     timeout-minutes: 20
+
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
+
+      # Nur Berichte von Spielen berücksichtigen,
+      # die höchstens 60 Minuten vor dem Anstoß stehen
+      # oder deren Anstoß maximal 300 Minuten zurückliegt.
       REPORT_PRE_KICKOFF_MINUTES: "60"
       REPORT_POST_KICKOFF_MINUTES: "300"
 
@@ -31,14 +38,25 @@ jobs:
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "20"
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Projekt und Spielbericht-Sync prüfen
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+
+          echo "Firebase-Service-Account ist vorhanden."
+
+      - name: Projekt und Spielbericht-Synchronisierung prüfen
         run: npm run sync:check
 
-      - name: Berichte nur eine Stunde vor bis fünf Stunden nach Anstoß synchronisieren
+      - name: Spielberichte im relevanten Spielzeitfenster synchronisieren
         run: npm run sync:reports

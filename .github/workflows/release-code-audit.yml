@@ -1,19 +1,23 @@
 name: Release Code Audit
 
 on:
+  # Ausschließlich manuell starten.
+  # So entstehen bei normalen Commits und Pull Requests keine Actions-Minuten.
   workflow_dispatch:
-  push:
-    branches: [main]
-  pull_request:
-    branches: [main]
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   audit:
+    name: Release-Prüfung durchführen
     runs-on: ubuntu-latest
     timeout-minutes: 15
+
     steps:
       - name: Repository laden
         uses: actions/checkout@v4
@@ -21,8 +25,9 @@ jobs:
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "20"
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
         run: npm ci

@@ -1,19 +1,38 @@
 name: Release UI Audit
 
 on:
+  # Nur manuell starten
   workflow_dispatch:
-  pull_request:
-    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   ui-audit:
+    name: UI Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "20"
           cache: npm
-      - run: npm ci
-      - run: npm run release:ui-audit
-      - run: npm run build
+          cache-dependency-path: package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: UI Audit ausführen
+        run: npm run release:ui-audit
+
+      - name: Produktions-Build prüfen
+        run: npm run build

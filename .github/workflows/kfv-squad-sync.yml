@@ -1,21 +1,23 @@
-name: KFV / ÖFB Kader synchronisieren
+ame: KFV / ÖFB Kader synchronisieren
 
 on:
+  # Nur manuell starten.
+  # Die reguläre Aktualisierung erfolgt zusätzlich über den Voll-Sync.
   workflow_dispatch:
-  schedule:
-    - cron: "40 3 * * *"
-
-concurrency:
-  group: kfv-oefb-squad-sync
-  cancel-in-progress: true
 
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   sync:
+    name: Offizielle Kader synchronisieren
     runs-on: ubuntu-latest
     timeout-minutes: 25
+
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -29,13 +31,24 @@ jobs:
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "20"
           cache: npm
+          cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Projekt und Kader-Sync prüfen
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+
+          echo "Firebase-Service-Account ist vorhanden."
+
+      - name: Projekt und Kader-Synchronisierung prüfen
         run: npm run sync:check
 
       - name: Offizielle Kader synchronisieren

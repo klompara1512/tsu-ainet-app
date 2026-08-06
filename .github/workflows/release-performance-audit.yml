@@ -1,25 +1,38 @@
 name: Release Performance UX Audit
 
 on:
+  # Nur manuell starten
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths:
-      - "src/**"
-      - "public/**"
-      - "vite.config.ts"
-      - "scripts/release-performance-audit.cjs"
-      - "package.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   audit:
+    name: Performance & UX Audit
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Repository laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: "20"
           cache: npm
-      - run: npm ci
-      - run: npm run release:performance-audit
-      - run: npm run build
+          cache-dependency-path: package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Performance Audit ausführen
+        run: npm run release:performance-audit
+
+      - name: Produktions-Build prüfen
+        run: npm run build

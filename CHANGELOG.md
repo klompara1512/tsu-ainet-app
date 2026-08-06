@@ -199,3 +199,8 @@
 - Spielplan täglich um 06:00, 12:00 und 18:00 Uhr Europe/Vienna.
 - Tabellen und Kader schreiben nur tatsächliche Änderungen nach Firestore.
 - Kaderbestand wird nur einmal pro Lauf gelesen.
+
+## 18.3.3 RC10 – Sprint 3
+- Kopfsponsor-Kacheln verbreitert.
+- Sponsorenlaufband und Vereinslogos vereinheitlicht.
+- Mannschaftskarten und Mannschaftsfotos vergrößert.

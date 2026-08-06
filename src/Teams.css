@@ -749,3 +749,105 @@
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
+
+/* Version 18.3.3 RC10 – Sprint 3: breite Kopfsponsoren und große Mannschaftskarten */
+.team-player-head-sponsor {
+  gap: 10px;
+  padding: 16px;
+}
+.team-player-head-sponsor > div,
+.team-player-head-sponsor > a {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  width: 100%;
+}
+.team-player-head-sponsor img {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 520px;
+  height: clamp(92px, 18vw, 128px);
+  max-height: none;
+  padding: 12px 16px;
+  object-fit: contain;
+  object-position: center;
+  background: #fff;
+  border: 1px solid rgba(255,255,255,.72);
+  border-radius: 15px;
+  box-shadow: 0 12px 30px rgba(0,0,0,.2);
+}
+.team-player-head-sponsor strong {
+  display: block;
+  width: 100%;
+  text-align: center;
+}
+
+.teams-grid {
+  gap: 20px;
+}
+.team-card {
+  min-height: 230px;
+  padding: 24px;
+  background-position: center;
+}
+.team-card-photo {
+  flex: 0 0 clamp(150px, 26%, 210px);
+  width: clamp(150px, 26%, 210px);
+  height: 124px;
+  margin-right: 22px;
+  border-radius: 20px;
+  box-shadow: 0 14px 34px rgba(0,0,0,.3);
+}
+.team-card-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+}
+.team-card .team-info {
+  align-self: center;
+}
+.team-card .team-info strong {
+  font-size: clamp(22px, 2.7vw, 30px);
+}
+@media(max-width:720px) {
+  .team-card {
+    min-height: 210px;
+    padding: 18px;
+  }
+  .team-card-photo {
+    flex-basis: 128px;
+    width: 128px;
+    height: 104px;
+    margin-right: 15px;
+    border-radius: 17px;
+  }
+  .team-card .team-info strong {
+    font-size: 22px;
+  }
+}
+@media(max-width:460px) {
+  .team-card {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    min-height: 265px;
+    align-content: end;
+    gap: 10px 12px;
+  }
+  .team-card-photo {
+    grid-column: 1 / -1;
+    width: 100%;
+    height: 132px;
+    margin: 0 0 4px;
+  }
+  .team-card .team-info {
+    min-width: 0;
+  }
+  .team-card-position {
+    grid-column: 2;
+    grid-row: 2;
+  }
+  .team-arrow {
+    display: none;
+  }
+}

@@ -281,8 +281,8 @@ export default function KfvSyncAdmin({ onBack }: Props) {
   }, [history, status]);
 
   const effectiveLastSuccessAt = latestSuccessfulRun?.lastSuccessAt || latestSuccessfulRun?.finishedAt;
-  const intervalMinutes = status.intervalMinutes || latestSuccessfulRun?.intervalMinutes || 30;
-  const staleAfterMinutes = Math.max(90, intervalMinutes * 3 + 15);
+  const intervalMinutes = status.intervalMinutes || latestSuccessfulRun?.intervalMinutes || 720;
+  const staleAfterMinutes = Math.max(1080, intervalMinutes + 360);
   const stale = !effectiveLastSuccessAt
     || now - effectiveLastSuccessAt.toMillis() > staleAfterMinutes * 60_000;
   const latestSuccessMillis = effectiveLastSuccessAt?.toMillis() || 0;
@@ -306,7 +306,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
       if (parsed.protocol !== "https:" || !parsed.hostname.endsWith("oefb.at")) throw new Error("Ungültige ÖFB-Adresse");
       await setDoc(
         doc(db, "settings", "kfvSync"),
-        { sourceUrl: url.trim(), intervalMinutes: 30, workflowUrl: GITHUB_WORKFLOW_URL, updatedAt: serverTimestamp() },
+        { sourceUrl: url.trim(), intervalMinutes: 720, workflowUrl: GITHUB_WORKFLOW_URL, updatedAt: serverTimestamp() },
         { merge: true },
       );
       setMessage("Öffentliche ÖFB-Quelladresse gespeichert.");
@@ -385,7 +385,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
         <div className="sync-overview-card__main">
           <small>Letzte erfolgreiche Synchronisierung</small>
           <strong>{formatDate(effectiveLastSuccessAt)}</strong>
-          <span>Laufzeit: {formatDuration(latestSuccessfulRun?.durationMs, latestSuccessfulRun?.startedAt, latestSuccessfulRun?.finishedAt)} · Soll-Intervall: alle {intervalMinutes} Minuten</span>
+          <span>Laufzeit: {formatDuration(latestSuccessfulRun?.durationMs, latestSuccessfulRun?.startedAt, latestSuccessfulRun?.finishedAt)} · Geplanter Voll-Sync: zweimal täglich</span>
         </div>
         <div className="sync-overview-card__meta">
           <span>Provider</span><strong>{status.provider || "GitHub Actions"}</strong>
@@ -418,7 +418,7 @@ export default function KfvSyncAdmin({ onBack }: Props) {
           <Icon name={activeError ? "bell" : "clock"} />
           <div>
             <strong>{activeError ? "Letzter Lauf fehlgeschlagen" : "Synchronisierung verzögert"}</strong>
-            <span>{activeError || `Der letzte erfolgreiche Lauf ist älter als ${staleAfterMinutes} Minuten. Erst dann wird eine Warnung angezeigt, damit übersprungene Spezial-Workflows nicht fälschlich als Fehler gelten.`}</span>
+            <span>{activeError || `Der letzte erfolgreiche Voll-Sync ist älter als ${Math.round(staleAfterMinutes / 60)} Stunden. Tabellen und Spielberichte laufen zusätzlich Freitag bis Sonntag um 20:00 Uhr.`}</span>
           </div>
         </aside>
       )}

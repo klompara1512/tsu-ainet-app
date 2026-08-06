@@ -1,8 +1,6 @@
-ame: KFV / ÖFB Kader synchronisieren
+name: KFV / ÖFB Kader synchronisieren
 
 on:
-  # Nur manuell starten.
-  # Die reguläre Aktualisierung erfolgt zusätzlich über den Voll-Sync.
   workflow_dispatch:
 
 permissions:
@@ -17,27 +15,22 @@ jobs:
     name: Offizielle Kader synchronisieren
     runs-on: ubuntu-latest
     timeout-minutes: 25
-
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       SQUAD_SYNC_CONCURRENCY: "2"
       SQUAD_NAVIGATION_TIMEOUT: "50000"
-
     steps:
       - name: Projekt laden
         uses: actions/checkout@v4
-
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: package-lock.json
-
       - name: Abhängigkeiten installieren
         run: npm ci
-
       - name: Firebase-Zugang prüfen
         shell: bash
         run: |
@@ -45,11 +38,7 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-
-          echo "Firebase-Service-Account ist vorhanden."
-
       - name: Projekt und Kader-Synchronisierung prüfen
         run: npm run sync:check
-
       - name: Offizielle Kader synchronisieren
         run: npm run sync:squad

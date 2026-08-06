@@ -2,11 +2,9 @@ name: KFV / ÖFB Synchronisierung
 
 on:
   workflow_dispatch:
-
   schedule:
-    # Zweimal täglich um 04:15 und 16:15 Uhr in Österreich.
+    # Zweimal täglich. GitHub-Cron verwendet UTC.
     - cron: "15 4,16 * * *"
-      timezone: "Europe/Vienna"
 
 permissions:
   contents: read
@@ -47,7 +45,6 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-
           echo "Firebase-Service-Account ist vorhanden."
 
       - name: KFV / ÖFB synchronisieren

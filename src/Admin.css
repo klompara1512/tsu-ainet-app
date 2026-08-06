@@ -714,19 +714,60 @@
   line-height: 1.5;
 }
 .admin-head-sponsor-preview {
-  display: flex;
-  align-items: center;
-  gap: 12px;
+  display: grid;
+  gap: 10px;
+  width: 100%;
   margin-top: 12px;
   padding: 12px;
-  border-radius: 13px;
+  border-radius: 14px;
   background: rgba(0,0,0,.2);
+  box-sizing: border-box;
 }
 .admin-head-sponsor-preview img {
-  width: 76px;
-  height: 58px;
+  display: block;
+  width: 100%;
+  height: clamp(110px, 18vw, 170px);
   object-fit: contain;
+  object-position: center;
+  padding: 10px 14px;
+  box-sizing: border-box;
   background: #fff;
-  border-radius: 10px;
+  border-radius: 12px;
 }
-.admin-head-sponsor-preview span { font-weight: 800; }
+.admin-head-sponsor-preview span {
+  display: block;
+  text-align: center;
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 700px) {
+  .admin-head-sponsor-preview img {
+    height: 120px;
+    padding: 8px 10px;
+  }
+}
+
+/* Version 18.3.0 RC10 – Mobile-Web-App Logo-Vorschau */
+.admin-head-sponsor-preview {
+  width: 100%;
+  max-width: 760px;
+  margin-inline: auto;
+}
+.admin-head-sponsor-preview img {
+  width: 100%;
+  height: auto;
+  min-height: 120px;
+  aspect-ratio: 4 / 1;
+  object-fit: contain;
+  object-position: center;
+}
+@media (max-width: 700px) {
+  .admin-head-sponsor-field { padding: 14px; }
+  .admin-head-sponsor-preview { padding: 9px; }
+  .admin-head-sponsor-preview img {
+    min-height: 92px;
+    height: auto;
+    aspect-ratio: 3.6 / 1;
+    padding: 8px;
+  }
+}

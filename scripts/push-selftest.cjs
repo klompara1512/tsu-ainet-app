@@ -40,10 +40,7 @@ const workflow = fs.readFileSync(
 );
 
 const checks = [
-  [
-    sender.includes("sendEachForMulticast"),
-    "Multicast-Versand fehlt",
-  ],
+  [sender.includes("sendEachForMulticast"), "Multicast-Versand fehlt"],
   [
     sender.includes("registration-token-not-registered"),
     "Ungültige Tokens werden nicht bereinigt",
@@ -95,3 +92,4 @@ if (failed.length) {
 
 console.log(
   "Push-Selbsttest erfolgreich: Token, Versand, Status, Deep-Link und manueller Workflow geprüft.",
+);

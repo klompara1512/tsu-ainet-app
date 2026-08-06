@@ -1,10 +1,10 @@
-name: KFV / ÖFB Spielberichte synchronisieren
+name: KFV / ÖFB Spielberichte Freitag bis Sonntag
 
 on:
   workflow_dispatch:
-
   schedule:
-    # Freitag, Samstag und Sonntag um 20:00 Uhr (Österreich Sommerzeit)
+    # Freitag, Samstag und Sonntag um 18:00 UTC.
+    # Das entspricht während der Sommerzeit 20:00 Uhr in Österreich.
     - cron: "0 18 * * 5,6,0"
 
 permissions:
@@ -17,17 +17,14 @@ concurrency:
 jobs:
   sync:
     name: Spielberichte synchronisieren
-
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-
       REPORT_PRE_KICKOFF_MINUTES: "60"
       REPORT_POST_KICKOFF_MINUTES: "300"
 
@@ -52,7 +49,6 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-
           echo "Firebase-Service-Account ist vorhanden."
 
       - name: Projekt und Spielbericht-Synchronisierung prüfen

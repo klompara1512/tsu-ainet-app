@@ -2,9 +2,9 @@ name: KFV / ÖFB Tabellen Freitag bis Sonntag
 
 on:
   workflow_dispatch:
-
   schedule:
-    # Freitag, Samstag und Sonntag um 20:00 Uhr (Österreich Sommerzeit)
+    # Freitag, Samstag und Sonntag um 18:00 UTC.
+    # Das entspricht während der Sommerzeit 20:00 Uhr in Österreich.
     - cron: "0 18 * * 5,6,0"
 
 permissions:
@@ -28,14 +28,7 @@ jobs:
       - name: Projekt laden
         uses: actions/checkout@v4
 
-      - name: Wochenende oder österreichischen Feiertag prüfen
-        id: gate
-        env:
-          GITHUB_EVENT_NAME: ${{ github.event_name }}
-        run: node scripts/weekend-holiday-gate.cjs
-
       - name: Node.js einrichten
-        if: steps.gate.outputs.run == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: "20"
@@ -43,19 +36,19 @@ jobs:
           cache-dependency-path: package-lock.json
 
       - name: Abhängigkeiten installieren
-        if: steps.gate.outputs.run == 'true'
         run: npm ci
 
-      - name: Projekt prüfen
-        if: steps.gate.outputs.run == 'true'
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+          echo "Firebase-Service-Account ist vorhanden."
+
+      - name: Projekt und Tabellen-Synchronisierung prüfen
         run: npm run sync:check
 
       - name: Tabellen synchronisieren
-        if: steps.gate.outputs.run == 'true'
         run: npm run sync:tables
-
-      - name: Übersprungen protokollieren
-        if: steps.gate.outputs.run != 'true'
-        run: |
-          echo "Tabellen-Synchronisierung heute nicht erforderlich."
-          echo "Grund: ${{ steps.gate.outputs.reason }}"

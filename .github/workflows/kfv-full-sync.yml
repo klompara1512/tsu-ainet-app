@@ -13,32 +13,25 @@ concurrency:
 jobs:
   sync:
     name: Vollständige Synchronisierung
-
     runs-on: ubuntu-latest
-
     timeout-minutes: 45
-
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       SYNC_MODE: full
       RUN_DAILY_TASKS: "true"
       RUN_DUPLICATE_CLEANUP: "true"
-
     steps:
       - name: Projekt laden
         uses: actions/checkout@v4
-
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: package-lock.json
-
       - name: Abhängigkeiten installieren
         run: npm ci
-
       - name: Firebase-Zugang prüfen
         shell: bash
         run: |
@@ -46,11 +39,7 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-
-          echo "Firebase-Service-Account ist vorhanden."
-
       - name: Projekt und Synchronisierung prüfen
         run: npm run sync:check
-
       - name: Vollständigen Sync ausführen
         run: npm run sync:full

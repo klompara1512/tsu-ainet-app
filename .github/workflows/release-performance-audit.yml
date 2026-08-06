@@ -1,7 +1,6 @@
 name: Release Performance UX Audit
 
 on:
-  # Nur manuell starten
   workflow_dispatch:
 
 permissions:
@@ -16,23 +15,18 @@ jobs:
     name: Performance & UX Audit
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Repository laden
         uses: actions/checkout@v4
-
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: package-lock.json
-
       - name: Abhängigkeiten installieren
         run: npm ci
-
       - name: Performance Audit ausführen
         run: npm run release:performance-audit
-
       - name: Produktions-Build prüfen
         run: npm run build

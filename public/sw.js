@@ -95,3 +95,5 @@ self.addEventListener("fetch", (event) => {
 });
 
 // RC10 mobile hero clear-image update
+
+// RC10 hero soft side-edge update

@@ -1109,3 +1109,48 @@
     ) !important;
   }
 }
+
+/* RC10 – Hero-Bild mit weichem seitlichem Abschluss */
+.v1825-welcome-hero::after {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  content: "";
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg,
+      rgba(5, 13, 27, .72) 0%,
+      rgba(5, 13, 27, .26) 4.5%,
+      transparent 13%,
+      transparent 87%,
+      rgba(5, 13, 27, .26) 95.5%,
+      rgba(5, 13, 27, .72) 100%
+    );
+  box-shadow:
+    inset 18px 0 28px -20px rgba(1, 7, 17, .95),
+    inset -18px 0 28px -20px rgba(1, 7, 17, .95);
+}
+
+.v1825-welcome-copy,
+.v183-hero-club-logo {
+  position: relative;
+  z-index: 2;
+}
+
+@media (max-width: 700px) {
+  .v1825-welcome-hero::after {
+    background:
+      linear-gradient(90deg,
+        rgba(4, 11, 24, .82) 0%,
+        rgba(4, 11, 24, .32) 5%,
+        transparent 15%,
+        transparent 85%,
+        rgba(4, 11, 24, .32) 95%,
+        rgba(4, 11, 24, .82) 100%
+      );
+    box-shadow:
+      inset 22px 0 34px -22px rgba(1, 7, 17, 1),
+      inset -22px 0 34px -22px rgba(1, 7, 17, 1);
+  }
+}

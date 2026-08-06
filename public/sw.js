@@ -1,6 +1,5 @@
 const CACHE_NAME = "tsu-ainet-v18-3-0-rc-10";
 const APP_SHELL = [
-  "/",
   "/index.html",
   "/manifest.webmanifest",
   "/favicon-64.png",
@@ -11,31 +10,41 @@ const APP_SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(APP_SHELL.map((url) => cache.add(url)));
+    }),
+  );
   self.skipWaiting();
 });
 
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key)))
-    )
+      Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))),
+    ),
   );
   self.clients.claim();
 });
 
-async function navigationResponse(request) {
+async function networkFirst(request, fallbackUrl) {
+  const cache = await caches.open(CACHE_NAME);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 4500);
+  const timeout = setTimeout(() => controller.abort(), 6500);
+
   try {
-    const response = await fetch(request, { signal: controller.signal });
-    if (response.ok) {
-      const cache = await caches.open(CACHE_NAME);
-      await cache.put("/index.html", response.clone());
-    }
+    const response = await fetch(request, {
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (response.ok) await cache.put(request, response.clone());
     return response;
   } catch {
-    return (await caches.match("/index.html")) || Response.error();
+    return (
+      (await cache.match(request)) ||
+      (fallbackUrl ? await cache.match(fallbackUrl) : undefined) ||
+      Response.error()
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -45,23 +54,42 @@ async function staleWhileRevalidate(request) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
   const network = fetch(request)
-    .then((response) => {
-      if (response.ok) void cache.put(request, response.clone());
+    .then(async (response) => {
+      if (response.ok) await cache.put(request, response.clone());
       return response;
     })
-    .catch(() => cached);
+    .catch(() => cached || Response.error());
+
   return cached || network;
 }
 
 self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-  const url = new URL(event.request.url);
+  const request = event.request;
+  if (request.method !== "GET") return;
+
+  const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
 
-  if (event.request.mode === "navigate") {
-    event.respondWith(navigationResponse(event.request));
+  if (request.mode === "navigate") {
+    event.respondWith(networkFirst(request, "/index.html"));
     return;
   }
 
-  event.respondWith(staleWhileRevalidate(event.request));
+  const destination = request.destination;
+
+  // JavaScript und CSS immer zuerst frisch laden. Dadurch kann kein alter
+  // PWA-Cache mehr auf gelöschte Vite-Chunk-Dateien verweisen.
+  if (destination === "script" || destination === "style" || destination === "worker") {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
+  // Bilder und Schriften dürfen schnell aus dem Cache kommen und werden
+  // im Hintergrund aktualisiert.
+  if (destination === "image" || destination === "font") {
+    event.respondWith(staleWhileRevalidate(request));
+    return;
+  }
+
+  event.respondWith(networkFirst(request));
 });

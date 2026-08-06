@@ -13,6 +13,29 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="TSU Ainet" />
     <meta name="mobile-web-app-capable" content="yes" />
+    <script>
+      // Einmalige Selbstheilung bei veralteten PWA-Dateien nach einem Update.
+      window.addEventListener("error", async (event) => {
+        const message = String(event.message || "");
+        const source = String(event.filename || "");
+        const isAssetFailure = /Loading chunk|Failed to fetch dynamically imported module|Importing a module script failed/i.test(message)
+          || /\/assets\/.*\.(js|css)(\?|$)/i.test(source);
+        if (!isAssetFailure || sessionStorage.getItem("tsu-pwa-recovery") === "1") return;
+        sessionStorage.setItem("tsu-pwa-recovery", "1");
+        try {
+          if ("serviceWorker" in navigator) {
+            const registrations = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(registrations.map((registration) => registration.unregister()));
+          }
+          if ("caches" in window) {
+            const keys = await caches.keys();
+            await Promise.all(keys.map((key) => caches.delete(key)));
+          }
+        } finally {
+          window.location.reload();
+        }
+      }, true);
+    </script>
     <title>TSU Ainet Fußball</title>
   </head>
   <body>

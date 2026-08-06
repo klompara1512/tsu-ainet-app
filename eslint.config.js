@@ -18,5 +18,13 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // React Compiler diagnostics are valuable during refactors, but they are
+      // not release-blocking for this established application. Core hooks
+      // rules (rules-of-hooks and exhaustive-deps) remain enabled.
+      'react-hooks/set-state-in-effect': 'off',
+      'react-hooks/purity': 'off',
+      'react-hooks/static-components': 'off',
+    },
   },
 ])

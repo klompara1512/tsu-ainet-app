@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import type { User } from "firebase/auth";
 import type { UserProfile } from "./permissions";
 import {
@@ -94,6 +95,46 @@ function LogoManager({ user, profile, onBack }: LogoManagerProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editorOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.classList.add("logo-editor-open");
+    document.documentElement.classList.add("logo-editor-open");
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.classList.remove("logo-editor-open");
+      document.documentElement.classList.remove("logo-editor-open");
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [editorOpen]);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      const height = viewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--logo-viewport-height", `${Math.round(height)}px`);
+    };
+
+    updateViewportHeight();
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+      window.removeEventListener("resize", updateViewportHeight);
+      document.documentElement.style.removeProperty("--logo-viewport-height");
+    };
+  }, [editorOpen]);
 
   useEffect(
     () =>
@@ -418,71 +459,78 @@ function LogoManager({ user, profile, onBack }: LogoManagerProps) {
         </div>
       )}
 
-      {editorOpen && (
-        <div className="logo-manager-modal" onClick={() => !saving && resetEditor()}>
-          <form className="logo-manager-editor" onSubmit={handleSave} onClick={(event) => event.stopPropagation()}>
+      {editorOpen && createPortal(
+        <div
+          className="logo-manager-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={form.originalId ? "Logo bearbeiten" : "Logo zuordnen"}
+        >
+          <form className="logo-manager-editor" onSubmit={handleSave}>
             <div className="logo-manager-editor-head">
               <h3>{form.originalId ? "Logo bearbeiten" : "Logo zuordnen"}</h3>
               <button type="button" disabled={saving} onClick={resetEditor} aria-label="Schließen">×</button>
             </div>
 
-            <label>
-              Vereinsname
-              <input
-                value={form.clubName}
-                onChange={(event) => setForm((current) => ({ ...current, clubName: event.target.value }))}
-                placeholder="z. B. SG Virgen/Prägraten U12 A"
-                autoFocus
-              />
-            </label>
-
-            <label>
-              Alternative Namen
-              <textarea
-                value={form.aliasesText}
-                onChange={(event) => setForm((current) => ({ ...current, aliasesText: event.target.value }))}
-                placeholder={"Ein Name pro Zeile\nz. B. Virgen Prägraten U12"}
-                rows={4}
-              />
-            </label>
-
-            <div className="logo-manager-file-field">
-              <span>Logo auswählen</span>
-              <label className="logo-manager-file-button">
+            <div className="logo-manager-editor-scroll">
+              <label>
+                Vereinsname
                 <input
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp"
-                  onChange={(event) => handleFileSelection(event.target.files?.[0] || null)}
+                  value={form.clubName}
+                  onChange={(event) => setForm((current) => ({ ...current, clubName: event.target.value }))}
+                  placeholder="z. B. SG Virgen/Prägraten U12 A"
+                  autoFocus
                 />
-                {selectedFile ? "Andere Datei wählen" : form.logoUrl ? "Logo ersetzen" : "Logo auswählen"}
               </label>
-              {selectedFile && (
-                <div className="logo-manager-file-info">
-                  <strong>{selectedFile.name}</strong>
-                  <span>{Math.max(selectedFile.size / 1024, 1).toFixed(0)} KB</span>
-                  <button type="button" onClick={() => setSelectedFile(null)}>Entfernen</button>
-                </div>
-              )}
-              <small>PNG, JPG oder WebP · automatische Verkleinerung auf 256 × 256 Pixel · maximal 4 MB</small>
-            </div>
 
-            <div className="logo-manager-divider"><span>oder</span></div>
+              <label>
+                Alternative Namen
+                <textarea
+                  value={form.aliasesText}
+                  onChange={(event) => setForm((current) => ({ ...current, aliasesText: event.target.value }))}
+                  placeholder={"Ein Name pro Zeile\nz. B. Virgen Prägraten U12"}
+                  rows={4}
+                />
+              </label>
 
-            <label>
-              Direkte Logo-URL (optional)
-              <input
-                type="url"
-                value={form.logoUrl}
-                onChange={(event) => {
-                  setSelectedFile(null);
-                  setForm((current) => ({ ...current, logoUrl: event.target.value }));
-                }}
-                placeholder="https://…/logo.png"
-              />
-            </label>
+              <div className="logo-manager-file-field">
+                <span>Logo auswählen</span>
+                <label className="logo-manager-file-button">
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    onChange={(event) => handleFileSelection(event.target.files?.[0] || null)}
+                  />
+                  {selectedFile ? "Andere Datei wählen" : form.logoUrl ? "Logo ersetzen" : "Logo auswählen"}
+                </label>
+                {selectedFile && (
+                  <div className="logo-manager-file-info">
+                    <strong>{selectedFile.name}</strong>
+                    <span>{Math.max(selectedFile.size / 1024, 1).toFixed(0)} KB</span>
+                    <button type="button" onClick={() => setSelectedFile(null)}>Entfernen</button>
+                  </div>
+                )}
+                <small>PNG, JPG oder WebP · automatische Verkleinerung auf 256 × 256 Pixel · maximal 4 MB</small>
+              </div>
 
-            <div className="logo-manager-large-preview">
-              {previewUrl ? <img src={previewUrl} alt="Logo-Vorschau" /> : <span>Logo-Vorschau</span>}
+              <div className="logo-manager-divider"><span>oder</span></div>
+
+              <label>
+                Direkte Logo-URL (optional)
+                <input
+                  type="url"
+                  value={form.logoUrl}
+                  onChange={(event) => {
+                    setSelectedFile(null);
+                    setForm((current) => ({ ...current, logoUrl: event.target.value }));
+                  }}
+                  placeholder="https://…/logo.png"
+                />
+              </label>
+
+              <div className="logo-manager-large-preview">
+                {previewUrl ? <img src={previewUrl} alt="Logo-Vorschau" /> : <span>Logo-Vorschau</span>}
+              </div>
             </div>
 
             <div className="logo-manager-editor-actions">
@@ -490,7 +538,8 @@ function LogoManager({ user, profile, onBack }: LogoManagerProps) {
               <button type="submit" disabled={saving}>{saving ? "Bild wird verarbeitet …" : "Speichern"}</button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );

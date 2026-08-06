@@ -1,7 +1,7 @@
 {
   "name": "tsu-ainet-app",
   "private": true,
-  "version": "18.2.1",
+  "version": "18.2.4-rc.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -22,7 +22,10 @@
     "sync:home-tasks": "node scripts/home-game-task-sync.cjs",
     "sync:games": "node scripts/kfv-games-sync.cjs",
     "sync:tables": "node scripts/kfv-table-sync.cjs",
-    "sync:holiday-gate": "node scripts/weekend-holiday-gate.cjs"
+    "sync:holiday-gate": "node scripts/weekend-holiday-gate.cjs",
+    "release:audit": "node scripts/release-audit.cjs",
+    "release:check": "npm run release:cleanup && npm run sync:check && npm run typecheck && npm run lint && npm run release:audit && npm run build",
+    "release:cleanup": "node scripts/release-cleanup.cjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

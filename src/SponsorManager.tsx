@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   addDoc,
   collection,
@@ -52,6 +53,46 @@ function SponsorManager({ onBack }: Props) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!editorOpen) return;
+
+    const previousBodyOverflow = document.body.style.overflow;
+    const previousHtmlOverflow = document.documentElement.style.overflow;
+    document.body.classList.add("sponsor-editor-open");
+    document.documentElement.classList.add("sponsor-editor-open");
+    document.body.style.overflow = "hidden";
+    document.documentElement.style.overflow = "hidden";
+
+    return () => {
+      document.body.classList.remove("sponsor-editor-open");
+      document.documentElement.classList.remove("sponsor-editor-open");
+      document.body.style.overflow = previousBodyOverflow;
+      document.documentElement.style.overflow = previousHtmlOverflow;
+    };
+  }, [editorOpen]);
+
+  useEffect(() => {
+    if (!editorOpen) return;
+
+    const viewport = window.visualViewport;
+    const updateViewportHeight = () => {
+      const height = viewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty("--sponsor-viewport-height", `${Math.round(height)}px`);
+    };
+
+    updateViewportHeight();
+    viewport?.addEventListener("resize", updateViewportHeight);
+    viewport?.addEventListener("scroll", updateViewportHeight);
+    window.addEventListener("resize", updateViewportHeight);
+
+    return () => {
+      viewport?.removeEventListener("resize", updateViewportHeight);
+      viewport?.removeEventListener("scroll", updateViewportHeight);
+      window.removeEventListener("resize", updateViewportHeight);
+      document.documentElement.style.removeProperty("--sponsor-viewport-height");
+    };
+  }, [editorOpen]);
 
   useEffect(() => {
     return onSnapshot(
@@ -245,20 +286,36 @@ function SponsorManager({ onBack }: Props) {
         </div>
       )}
 
-      {editorOpen && (
-        <div className="sponsor-manager-modal" onClick={closeEditor}>
-          <form className="sponsor-manager-editor" onSubmit={saveSponsor} onClick={(event) => event.stopPropagation()}>
-            <div className="sponsor-manager-editor-head"><h3>{form.id ? "Sponsor bearbeiten" : "Sponsor hinzufügen"}</h3><button type="button" onClick={closeEditor}>×</button></div>
-            <label>Sponsorname<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} autoFocus /></label>
-            <div className="sponsor-manager-file-field"><span>Logo</span><label className="sponsor-manager-file-button"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0] || null)} />{selectedFile ? "Andere Datei wählen" : form.logoUrl ? "Logo ersetzen" : "Logo auswählen"}</label><small>PNG, JPG oder WebP · wird automatisch verkleinert</small></div>
-            <div className="sponsor-manager-divider"><span>oder</span></div>
-            <label>Logo-URL<input type="url" value={form.logoUrl} onChange={(event) => { setSelectedFile(null); setForm((current) => ({ ...current, logoUrl: event.target.value })); }} placeholder="https://…/logo.png" /></label>
-            <label>Website<input value={form.website} onChange={(event) => setForm((current) => ({ ...current, website: event.target.value }))} placeholder="www.sponsor.at" /></label>
-            <label className="sponsor-manager-active"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />In der App anzeigen</label>
-            <div className="sponsor-manager-preview">{preview ? <img src={preview} alt="Sponsorlogo-Vorschau" /> : <span>Logo-Vorschau</span>}</div>
-            <div className="sponsor-manager-editor-actions"><button type="button" className="secondary" onClick={closeEditor}>Abbrechen</button><button type="submit" disabled={saving}>{saving ? "Speichern …" : "Speichern"}</button></div>
+      {editorOpen && createPortal(
+        <div
+          className="sponsor-manager-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={form.id ? "Sponsor bearbeiten" : "Sponsor hinzufügen"}
+        >
+          <form className="sponsor-manager-editor" onSubmit={saveSponsor}>
+            <div className="sponsor-manager-editor-head">
+              <h3>{form.id ? "Sponsor bearbeiten" : "Sponsor hinzufügen"}</h3>
+              <button type="button" onClick={closeEditor} aria-label="Fenster schließen">×</button>
+            </div>
+
+            <div className="sponsor-manager-editor-scroll">
+              <label>Sponsorname<input value={form.name} onChange={(event) => setForm((current) => ({ ...current, name: event.target.value }))} autoFocus /></label>
+              <div className="sponsor-manager-file-field"><span>Logo</span><label className="sponsor-manager-file-button"><input type="file" accept="image/png,image/jpeg,image/webp" onChange={(event) => selectFile(event.target.files?.[0] || null)} />{selectedFile ? "Andere Datei wählen" : form.logoUrl ? "Logo ersetzen" : "Logo auswählen"}</label><small>PNG, JPG oder WebP · wird automatisch verkleinert</small></div>
+              <div className="sponsor-manager-divider"><span>oder</span></div>
+              <label>Logo-URL<input type="url" value={form.logoUrl} onChange={(event) => { setSelectedFile(null); setForm((current) => ({ ...current, logoUrl: event.target.value })); }} placeholder="https://…/logo.png" /></label>
+              <label>Website<input value={form.website} onChange={(event) => setForm((current) => ({ ...current, website: event.target.value }))} placeholder="www.sponsor.at" /></label>
+              <label className="sponsor-manager-active"><input type="checkbox" checked={form.active} onChange={(event) => setForm((current) => ({ ...current, active: event.target.checked }))} />In der App anzeigen</label>
+              <div className="sponsor-manager-preview">{preview ? <img src={preview} alt="Sponsorlogo-Vorschau" /> : <span>Logo-Vorschau</span>}</div>
+            </div>
+
+            <div className="sponsor-manager-editor-actions">
+              <button type="button" className="secondary" onClick={closeEditor} disabled={saving}>Abbrechen</button>
+              <button type="submit" disabled={saving}>{saving ? "Speichern …" : "Speichern"}</button>
+            </div>
           </form>
-        </div>
+        </div>,
+        document.body,
       )}
     </section>
   );

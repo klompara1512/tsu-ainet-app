@@ -13,7 +13,7 @@ function NavIcon({ name }: { name: IconName }) {
 }
 
 const items: Array<{page:string; label:string; icon:IconName}> = [
-  {page:"start",label:"Start",icon:"home"},{page:"kalender",label:"Spiele",icon:"calendar"},{page:"teams",label:"Teams",icon:"teams"},{page:"news",label:"Ankündigungen",icon:"news"},{page:"mehr",label:"Mehr",icon:"more"}
+  {page:"start",label:"Start",icon:"home"},{page:"kalender",label:"Spiele",icon:"calendar"},{page:"teams",label:"Teams",icon:"teams"},{page:"news",label:"Ankündigungen",icon:"news"},{page:"mehr",label:"Verein",icon:"more"}
 ];
 
 export default function BottomNav({ activePage, onPageChange }: BottomNavProps) {

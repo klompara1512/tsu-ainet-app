@@ -1,0 +1,16 @@
+TSU Ainet Release Code Audit – Version 18.2.3-rc.1
+===================================================
+
+Ergebnis: 9 Prüfungen bestanden, 0 Warnungen, 0 Fehler.
+
+Zusätzlich behoben:
+- Alte Instagram-Synchronisationsdateien entfernt.
+- Automatisches Bereinigungsskript für bestehende Projektordner ergänzt.
+- Untere Navigation von „Mehr“ auf „Verein“ geändert.
+- Logo-Manager-Editor mobil vollständig scrollbar.
+- Sponsor-Manager-Editor mobil vollständig scrollbar.
+- Abbrechen und Speichern bleiben in beiden Editoren dauerhaft sichtbar.
+- Untere Navigation wird während der Bearbeitung ausgeblendet.
+
+Ausführen:
+  npm run release:check

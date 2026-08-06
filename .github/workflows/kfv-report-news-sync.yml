@@ -1,9 +1,11 @@
 name: KFV / ÖFB Spielberichte synchronisieren
 
 on:
-  # Ausschließlich manuell starten.
-  # Spielberichte werden zusätzlich durch den geplanten Voll-Sync erfasst.
   workflow_dispatch:
+
+  schedule:
+    # Freitag, Samstag und Sonntag um 20:00 Uhr (Österreich Sommerzeit)
+    - cron: "0 18 * * 5,6,0"
 
 permissions:
   contents: read
@@ -15,6 +17,7 @@ concurrency:
 jobs:
   sync:
     name: Spielberichte synchronisieren
+
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -25,9 +28,6 @@ jobs:
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
 
-      # Nur Berichte von Spielen berücksichtigen,
-      # die höchstens 60 Minuten vor dem Anstoß stehen
-      # oder deren Anstoß maximal 300 Minuten zurückliegt.
       REPORT_PRE_KICKOFF_MINUTES: "60"
       REPORT_POST_KICKOFF_MINUTES: "300"
 
@@ -58,5 +58,5 @@ jobs:
       - name: Projekt und Spielbericht-Synchronisierung prüfen
         run: npm run sync:check
 
-      - name: Spielberichte im relevanten Spielzeitfenster synchronisieren
+      - name: Spielberichte synchronisieren
         run: npm run sync:reports

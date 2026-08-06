@@ -1,4 +1,4 @@
-const CACHE_NAME = "tsu-ainet-v18-3-0-rc-10-sponsor-center";
+const CACHE_NAME = "tsu-ainet-v18-3-0-rc-10";
 const APP_SHELL = [
   "/",
   "/index.html",

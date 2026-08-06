@@ -681,12 +681,12 @@ function Teams() {
                     <small>Kopfsponsor des Spielers</small>
                     {selectedPlayer.headSponsorWebsite ? (
                       <a href={selectedPlayer.headSponsorWebsite} target="_blank" rel="noreferrer">
-                        {selectedPlayer.headSponsorImageUrl && <AutoFitLogo src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} className="team-player-head-sponsor-logo" />}
+                        {selectedPlayer.headSponsorImageUrl && <AutoFitLogo src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} className="team-player-head-sponsor-logo" trim={false} />}
                         {selectedPlayer.headSponsorText && <strong>{selectedPlayer.headSponsorText}</strong>}
                       </a>
                     ) : (
                       <div>
-                        {selectedPlayer.headSponsorImageUrl && <AutoFitLogo src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} className="team-player-head-sponsor-logo" />}
+                        {selectedPlayer.headSponsorImageUrl && <AutoFitLogo src={selectedPlayer.headSponsorImageUrl} alt={selectedPlayer.headSponsorText || "Kopfsponsor"} className="team-player-head-sponsor-logo" trim={false} />}
                         {selectedPlayer.headSponsorText && <strong>{selectedPlayer.headSponsorText}</strong>}
                       </div>
                     )}

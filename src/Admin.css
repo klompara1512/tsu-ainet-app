@@ -771,3 +771,30 @@
     padding: 8px;
   }
 }
+
+
+/* RC10 – Kopfsponsor-Vorschau für sehr lange Logos */
+.admin-head-sponsor-preview {
+  overflow: visible;
+}
+.admin-head-sponsor-preview img {
+  display: block;
+  width: 100%;
+  max-width: none;
+  height: auto;
+  min-height: 110px;
+  max-height: 190px;
+  aspect-ratio: 5 / 1;
+  padding: 12px 18px;
+  object-fit: contain !important;
+  object-position: 50% 50% !important;
+  overflow: visible;
+}
+@media (max-width: 700px) {
+  .admin-head-sponsor-preview img {
+    min-height: 96px;
+    max-height: 140px;
+    aspect-ratio: 4 / 1;
+    padding: 10px 12px;
+  }
+}

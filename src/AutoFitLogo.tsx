@@ -6,6 +6,8 @@ type Props = {
   className?: string;
   loading?: "eager" | "lazy";
   decoding?: "sync" | "async" | "auto";
+  /** Deaktiviert das automatische Zuschneiden, z. B. für breite Kopfsponsor-Logos. */
+  trim?: boolean;
 };
 
 const MAX_CANVAS_EDGE = 1400;
@@ -102,24 +104,36 @@ export default function AutoFitLogo({
   className,
   loading = "lazy",
   decoding = "async",
+  trim = true,
 }: Props) {
-  const [displaySource, setDisplaySource] = useState(src);
+  const [trimmedSource, setTrimmedSource] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
 
+    // Breite Logos (z. B. Kopfsponsoren) dürfen nicht automatisch beschnitten
+    // werden. Besonders weiße oder sehr helle Logoelemente könnten sonst als
+    // leerer Rand erkannt und abgeschnitten werden.
+    if (!trim) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
     createTrimmedLogo(src)
       .then((trimmedSource) => {
-        if (!cancelled) setDisplaySource(trimmedSource);
+        if (!cancelled) setTrimmedSource(trimmedSource);
       })
       .catch(() => {
-        if (!cancelled) setDisplaySource(src);
+        if (!cancelled) setTrimmedSource(null);
       });
 
     return () => {
       cancelled = true;
     };
-  }, [src]);
+  }, [src, trim]);
+
+  const displaySource = trim ? (trimmedSource ?? src) : src;
 
   return (
     <img

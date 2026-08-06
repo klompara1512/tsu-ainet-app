@@ -4,8 +4,7 @@ on:
   workflow_dispatch:
 
   schedule:
-    # Zwei vollständige Synchronisierungen täglich.
-    # 04:15 und 16:15 Uhr in Europe/Vienna.
+    # Zweimal täglich um 04:15 und 16:15 Uhr in Österreich.
     - cron: "15 4,16 * * *"
       timezone: "Europe/Vienna"
 
@@ -57,4 +56,3 @@ jobs:
           CI: "true"
           TZ: "Europe/Vienna"
         run: npm run sync:full
-        

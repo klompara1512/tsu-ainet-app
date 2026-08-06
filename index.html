@@ -2,40 +2,43 @@
 <html lang="de-AT">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-    <title>TSU Ainet – Offizielle Homepage</title>
+    <title>TSU Ainet Fußball – Offizielle Vereinswebsite</title>
     <meta
       name="description"
-      content="Offizielle Homepage der TSU Ainet in Osttirol: Spiele, Tabellen, Mannschaften, Ankündigungen, Termine, Sponsoren, Fanshop und Vereinskontakte."
+      content="Offizielle Website der TSU Ainet Fußball in Osttirol: Spiele, Ergebnisse, Tabellen, Mannschaften, Ankündigungen, Sponsoren, Fanshop und Vereinskontakte."
     />
-    <meta name="robots" content="index, follow, max-image-preview:large" />
-    <meta name="googlebot" content="index, follow, max-image-preview:large" />
-    <link rel="canonical" href="https://net-fussball.web.app/" />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1, max-video-preview:-1" />
+    <meta name="author" content="TSU Ainet" />
+    <meta name="application-name" content="TSU Ainet Fußball" />
 
-    <meta property="og:type" content="website" />
-    <meta property="og:locale" content="de_AT" />
-    <meta property="og:site_name" content="TSU Ainet" />
-    <meta property="og:title" content="TSU Ainet – Offizielle Homepage" />
-    <meta
-      property="og:description"
-      content="Spiele, Tabellen, Mannschaften, Ankündigungen, Termine, Sponsoren und Vereinskontakte der TSU Ainet."
-    />
-    <meta property="og:url" content="https://net-fussball.web.app/" />
-    <meta property="og:image" content="https://net-fussball.web.app/tsu-ainet-logo.png" />
-    <meta property="og:image:alt" content="Vereinslogo der TSU Ainet" />
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="TSU Ainet – Offizielle Homepage" />
-    <meta
-      name="twitter:description"
-      content="Die offizielle Homepage der TSU Ainet mit Spielen, Tabellen, Mannschaften, Ankündigungen und Vereinsinformationen."
-    />
-    <meta name="twitter:image" content="https://net-fussball.web.app/tsu-ainet-logo.png" />
-
+    <link rel="canonical" href="https://tsu-ainet-fussball.web.app/" />
     <link rel="icon" type="image/png" href="/favicon-64.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <meta property="og:locale" content="de_AT" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="TSU Ainet Fußball" />
+    <meta property="og:title" content="TSU Ainet Fußball – Offizielle Vereinswebsite" />
+    <meta
+      property="og:description"
+      content="Spiele, Ergebnisse, Tabellen, Mannschaften, Ankündigungen und Vereinsinformationen der TSU Ainet Fußball."
+    />
+    <meta property="og:url" content="https://tsu-ainet-fussball.web.app/" />
+    <meta property="og:image" content="https://tsu-ainet-fussball.web.app/icon-512.png" />
+    <meta property="og:image:alt" content="Vereinslogo der TSU Ainet" />
+
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="TSU Ainet Fußball – Offizielle Vereinswebsite" />
+    <meta
+      name="twitter:description"
+      content="Spiele, Ergebnisse, Tabellen, Mannschaften, Ankündigungen und Vereinsinformationen der TSU Ainet Fußball."
+    />
+    <meta name="twitter:image" content="https://tsu-ainet-fussball.web.app/icon-512.png" />
+
     <meta name="theme-color" content="#07101f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -45,14 +48,45 @@
     <script type="application/ld+json">
       {
         "@context": "https://schema.org",
-        "@type": "SportsOrganization",
-        "name": "TSU Ainet",
-        "alternateName": "Turn- und Sportunion Ainet",
-        "url": "https://net-fussball.web.app/",
-        "logo": "https://net-fussball.web.app/tsu-ainet-logo.png",
-        "foundingDate": "1966",
-        "sport": "Fußball",
-        "description": "Offizielle Homepage der TSU Ainet in Osttirol mit Spielen, Tabellen, Mannschaften, Ankündigungen, Terminen, Sponsoren und Vereinskontakten."
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://tsu-ainet-fussball.web.app/#website",
+            "url": "https://tsu-ainet-fussball.web.app/",
+            "name": "TSU Ainet Fußball",
+            "alternateName": ["TSU Ainet", "TSU Ainet Fußballverein"],
+            "inLanguage": "de-AT",
+            "publisher": {
+              "@id": "https://tsu-ainet-fussball.web.app/#organization"
+            }
+          },
+          {
+            "@type": "SportsOrganization",
+            "@id": "https://tsu-ainet-fussball.web.app/#organization",
+            "name": "TSU Ainet Fußball",
+            "alternateName": "TSU Ainet",
+            "url": "https://tsu-ainet-fussball.web.app/",
+            "logo": "https://tsu-ainet-fussball.web.app/icon-512.png",
+            "image": "https://tsu-ainet-fussball.web.app/icon-512.png",
+            "foundingDate": "1966",
+            "slogan": "Unsere Farben. Unser Stolz.",
+            "sport": "Fußball",
+            "address": {
+              "@type": "PostalAddress",
+              "addressLocality": "Ainet",
+              "addressRegion": "Tirol",
+              "addressCountry": "AT"
+            },
+            "areaServed": {
+              "@type": "AdministrativeArea",
+              "name": "Osttirol"
+            },
+            "sameAs": [
+              "https://www.instagram.com/tsu.ainet/",
+              "https://www.11teamsports.com/at-de/clubshop/tsu-ainet/"
+            ]
+          }
+        ]
       }
     </script>
 
@@ -81,11 +115,24 @@
     </script>
   </head>
   <body>
+    <div id="root">
+      <main>
+        <h1>TSU Ainet Fußball – Offizielle Vereinswebsite</h1>
+        <p>
+          Willkommen bei der TSU Ainet. Hier finden Sie Spiele, Ergebnisse, Tabellen,
+          Mannschaften, Ankündigungen, Sponsoren und offizielle Vereinskontakte.
+        </p>
+      </main>
+    </div>
     <noscript>
-      <h1>TSU Ainet – Offizielle Homepage</h1>
-      <p>Spiele, Tabellen, Mannschaften, Ankündigungen, Termine, Sponsoren und Vereinskontakte der TSU Ainet.</p>
+      <main>
+        <h1>TSU Ainet Fußball</h1>
+        <p>
+          Offizielle Website der TSU Ainet Fußball in Ainet, Osttirol. Für die vollständige
+          Darstellung der Spiele, Tabellen und Mannschaften aktivieren Sie bitte JavaScript.
+        </p>
+      </main>
     </noscript>
-    <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

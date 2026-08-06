@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://net-fussball.web.app/sitemap.xml
+Sitemap: https://tsu-ainet-fussball.web.app/sitemap.xml

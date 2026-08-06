@@ -1,18 +1,61 @@
 <!doctype html>
-<html lang="de">
+<html lang="de-AT">
   <head>
     <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>TSU Ainet – Offizielle Homepage</title>
+    <meta
+      name="description"
+      content="Offizielle Homepage der TSU Ainet in Osttirol: Spiele, Tabellen, Mannschaften, Ankündigungen, Termine, Sponsoren, Fanshop und Vereinskontakte."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large" />
+    <meta name="googlebot" content="index, follow, max-image-preview:large" />
+    <link rel="canonical" href="https://net-fussball.web.app/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="de_AT" />
+    <meta property="og:site_name" content="TSU Ainet" />
+    <meta property="og:title" content="TSU Ainet – Offizielle Homepage" />
+    <meta
+      property="og:description"
+      content="Spiele, Tabellen, Mannschaften, Ankündigungen, Termine, Sponsoren und Vereinskontakte der TSU Ainet."
+    />
+    <meta property="og:url" content="https://net-fussball.web.app/" />
+    <meta property="og:image" content="https://net-fussball.web.app/tsu-ainet-logo.png" />
+    <meta property="og:image:alt" content="Vereinslogo der TSU Ainet" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="TSU Ainet – Offizielle Homepage" />
+    <meta
+      name="twitter:description"
+      content="Die offizielle Homepage der TSU Ainet mit Spielen, Tabellen, Mannschaften, Ankündigungen und Vereinsinformationen."
+    />
+    <meta name="twitter:image" content="https://net-fussball.web.app/tsu-ainet-logo.png" />
+
     <link rel="icon" type="image/png" href="/favicon-64.png" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
-    <meta name="description" content="Offizielle Vereinsplattform der TSU Ainet mit Spielen, Tabellen, Mannschaften, Ankündigungen, Terminen, Sponsoren und Fanshop." />
-    <meta name="theme-color" content="#07101f" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#07101f" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="TSU Ainet" />
     <meta name="mobile-web-app-capable" content="yes" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SportsOrganization",
+        "name": "TSU Ainet",
+        "alternateName": "Turn- und Sportunion Ainet",
+        "url": "https://net-fussball.web.app/",
+        "logo": "https://net-fussball.web.app/tsu-ainet-logo.png",
+        "foundingDate": "1966",
+        "sport": "Fußball",
+        "description": "Offizielle Homepage der TSU Ainet in Osttirol mit Spielen, Tabellen, Mannschaften, Ankündigungen, Terminen, Sponsoren und Vereinskontakten."
+      }
+    </script>
+
     <script>
       // Einmalige Selbstheilung bei veralteten PWA-Dateien nach einem Update.
       window.addEventListener("error", async (event) => {
@@ -36,9 +79,12 @@
         }
       }, true);
     </script>
-    <title>TSU Ainet Fußball</title>
   </head>
   <body>
+    <noscript>
+      <h1>TSU Ainet – Offizielle Homepage</h1>
+      <p>Spiele, Tabellen, Mannschaften, Ankündigungen, Termine, Sponsoren und Vereinskontakte der TSU Ainet.</p>
+    </noscript>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

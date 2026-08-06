@@ -1,7 +1,7 @@
 {
-  "name": "TSU Ainet Fußball",
+  "name": "TSU Ainet – Offizielle Homepage",
   "short_name": "TSU Ainet",
-  "description": "Die offizielle Web-App der TSU Ainet Fußball.",
+  "description": "Offizielle Homepage und Web-App der TSU Ainet mit Spielen, Tabellen, Mannschaften, Ankündigungen und Vereinsinformationen.",
   "lang": "de-AT",
   "start_url": "/",
   "scope": "/",

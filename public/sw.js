@@ -1,4 +1,4 @@
-const CACHE_NAME = "tsu-ainet-v18-3-0-rc-10";
+const CACHE_NAME = "tsu-ainet-v18-3-0-rc-10-seo";
 const APP_SHELL = [
   "/index.html",
   "/manifest.webmanifest",
@@ -6,7 +6,9 @@ const APP_SHELL = [
   "/icon-192.png",
   "/icon-512.png",
   "/tsu-ainet-logo.png",
-  "/tsu-ainet-hero.svg"
+  "/tsu-ainet-hero.svg",
+  "/robots.txt",
+  "/sitemap.xml"
 ];
 
 self.addEventListener("install", (event) => {

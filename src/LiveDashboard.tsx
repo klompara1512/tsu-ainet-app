@@ -100,7 +100,6 @@ function preferDashboardMatch(current: KfvMatch, candidate: KfvMatch) {
 }
 
 function LiveDashboard({
-  displayName,
   onOpenCalendar,
   onOpenTeams,
   onOpenNews,
@@ -339,12 +338,6 @@ function LiveDashboard({
   const days = Math.floor(countdown / 86_400_000);
   const hours = Math.floor((countdown % 86_400_000) / 3_600_000);
 
-  const firstName = displayName.trim().split(/\s+/)[0] || "TSU-Fan";
-  const greeting = clock.getHours() < 11
-    ? "Guten Morgen"
-    : clock.getHours() < 17
-      ? "Guten Nachmittag"
-      : "Guten Abend";
   const isToday = nextMatch
     ? nextMatch.kickoffAt.toDateString() === clock.toDateString()
     : false;
@@ -365,11 +358,14 @@ function LiveDashboard({
 
   return (
     <section className="v101-home">
-      <header className="v101-intro">
-        <div>
-          <span className="v101-overline">TSU Ainet · Saison 2026/27</span>
-          <h1>{greeting}, {firstName}</h1>
-          <p>{dateText} · {matchStatusLabel}</p>
+      <header className={`v101-intro v1825-welcome-hero ${isToday ? "is-matchday" : ""}`}>
+        <div className="v1825-welcome-overlay" />
+        <div className="v1825-welcome-copy">
+          <span className="v101-overline">{isToday ? "Matchday · TSU Ainet" : "Willkommen bei der TSU Ainet"}</span>
+          <h1>{isToday ? "Heute ist Spieltag" : "Willkommen bei der TSU Ainet"}</h1>
+          <p className="v1825-since">Since 1966</p>
+          <strong className="v1825-slogan">Mehr als ein Verein – eine Familie</strong>
+          <small>{dateText} · {matchStatusLabel}</small>
         </div>
         <img src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
       </header>
@@ -470,12 +466,8 @@ function LiveDashboard({
       )}
 
       <section className="v182-shop-card" aria-labelledby="dashboard-shop-title">
-        <div className="v182-shop-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M6 8h12l1 13H5L6 8Z" />
-            <path d="M9 9V6a3 3 0 0 1 6 0v3" />
-            <path d="M9 13h.01M15 13h.01" />
-          </svg>
+        <div className="v182-shop-icon v1825-eleven-logo" aria-label="11teamsports">
+          <span>11</span><strong>teamsports</strong>
         </div>
         <div className="v182-shop-copy">
           <span className="v101-overline">Offizieller Clubshop</span>
@@ -570,11 +562,11 @@ function LiveDashboard({
                 className={isTsuAinet(row.clubName) ? "is-ainet" : ""}
                 onClick={onOpenStandings}
               >
-                <span>{row.position}</span>
-                <b>{row.points}</b>
+                <span className="v1825-table-position">{row.position}</span>
                 <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
                 <strong>{row.clubName}</strong>
                 <small>{row.played} Sp.</small>
+                <b className="v1825-table-points">{row.points}</b>
               </button>
             )) : <div className="v101-empty">Für diese Mannschaft ist noch keine Tabelle verfügbar.</div>}
           </div>

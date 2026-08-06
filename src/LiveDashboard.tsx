@@ -475,7 +475,9 @@ function LiveDashboard({
                   title={sponsor.website ? `${sponsor.name} – Website öffnen` : sponsor.name}
                 >
                   {sponsor.logoUrl ? (
-                    <AutoFitLogo src={sponsor.logoUrl} alt={sponsor.name} className="v101-sponsor-logo" />
+                    <span className="v101-sponsor-logo-frame" aria-hidden="true">
+                      <AutoFitLogo src={sponsor.logoUrl} alt="" className="v101-sponsor-logo" />
+                    </span>
                   ) : (
                     <strong>{sponsor.name}</strong>
                   )}

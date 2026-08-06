@@ -978,3 +978,47 @@
     max-height: 66px;
   }
 }
+
+
+/* Version 18.3.0 RC10 – Sponsorenlogos exakt in der Kachel zentrieren */
+.v101-sponsor-track button {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 0;
+}
+.v101-sponsor-logo-frame {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+.v101-sponsor-track .v101-sponsor-logo,
+.v101-sponsor-track img.v101-sponsor-logo,
+.v101-sponsor-track img.v101-sponsor-logo[src^="data:image"] {
+  display: block;
+  flex: 0 1 auto;
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  margin: auto;
+  object-fit: contain;
+  object-position: 50% 50%;
+  vertical-align: middle;
+  transform: none;
+}
+@media (max-width: 700px) {
+  .v101-sponsor-track .v101-sponsor-logo,
+  .v101-sponsor-track img.v101-sponsor-logo,
+  .v101-sponsor-track img.v101-sponsor-logo[src^="data:image"] {
+    max-width: 100%;
+    max-height: 100%;
+  }
+}

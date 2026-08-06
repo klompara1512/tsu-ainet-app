@@ -93,3 +93,5 @@ self.addEventListener("fetch", (event) => {
 
   event.respondWith(networkFirst(request));
 });
+
+// RC10 mobile hero clear-image update

@@ -1075,3 +1075,37 @@
     object-position: center center;
   }
 }
+
+/* RC10 – Mobile Hero: klares Bild ohne Blur oder doppelte Miniatur */
+@media (max-width: 700px) {
+  .v1825-welcome-hero,
+  .v1825-welcome-hero.is-matchday {
+    background-image: var(--hero-image, url('/tsu-ainet-hero.svg')) !important;
+    background-position: center center !important;
+    background-size: cover !important;
+    background-repeat: no-repeat !important;
+  }
+
+  /* Der unscharfe Füllhintergrund wird mobil nicht benötigt. */
+  .v1825-welcome-hero::before {
+    display: none !important;
+    content: none !important;
+    background-image: none !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  /* Verhindert das doppelte kleine Originalbild links oben in Mobile Safari. */
+  .v183-hero-photo {
+    display: none !important;
+  }
+
+  .v1825-welcome-overlay {
+    background: linear-gradient(
+      180deg,
+      rgba(3, 9, 21, 0.06) 0%,
+      rgba(3, 9, 21, 0.18) 42%,
+      rgba(3, 9, 21, 0.9) 100%
+    ) !important;
+  }
+}

@@ -488,22 +488,33 @@ function LiveDashboard({
         </section>
       )}
 
-      <section className="v182-shop-card" aria-labelledby="dashboard-shop-title">
-        <div className="v182-shop-icon v1825-eleven-logo">
-          <img src="https://www.11teamsports.com/media/3f/b8/52/1639126281/logo.svg" alt="11teamsports" referrerPolicy="no-referrer" />
+      <section className="v182-shop-card v183-shop-showcase" aria-labelledby="dashboard-shop-title">
+        <div className="v183-shop-brand" aria-hidden="true">
+          <div className="v183-shop-brand-glow" />
+          <img
+            src="https://www.11teamsports.com/media/3f/b8/52/1639126281/logo.svg"
+            alt=""
+            referrerPolicy="no-referrer"
+          />
         </div>
-        <div className="v182-shop-copy">
+
+        <div className="v182-shop-copy v183-shop-copy">
           <span className="v101-overline">Offizieller Clubshop</span>
-          <h2 id="dashboard-shop-title">TSU Ainet Shop</h2>
-          <p>Vereinsbekleidung und Ausstattung direkt bei 11teamsports.</p>
+          <h2 id="dashboard-shop-title">
+            <span>TSU Ainet</span>
+            <strong>Vereinsshop</strong>
+          </h2>
+          <p>TSU Ainet – trag, was uns verbindet</p>
         </div>
+
         <a
-          className="v182-shop-button"
+          className="v182-shop-button v183-shop-button"
           href="https://www.11teamsports.com/at-de/clubshop/tsu-ainet/"
           target="_blank"
           rel="noopener noreferrer"
+          aria-label="TSU Ainet Vereinsshop bei 11teamsports öffnen"
         >
-          Shop öffnen <span aria-hidden="true">↗</span>
+          Zum Shop <span aria-hidden="true">↗</span>
         </a>
       </section>
 

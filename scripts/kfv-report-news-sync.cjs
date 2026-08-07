@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "16.1.1-complete-event-ticker";
+const VERSION = "18.3.0-rc.10-smart-prematch-sync";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -23,9 +23,11 @@ const PRE_KICKOFF_MINUTES = Math.max(
   Number(process.env.REPORT_PRE_KICKOFF_MINUTES || 60),
 );
 const POST_KICKOFF_MINUTES = Math.max(
-  120,
-  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 300),
+  0,
+  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 15),
 );
+const FORCE_SYNC = /^(?:1|true|yes)$/i.test(process.env.REPORT_FORCE_SYNC || "");
+const FORCE_WINDOW_MINUTES = Math.max(60, Number(process.env.REPORT_FORCE_WINDOW_MINUTES || 720));
 const CONFIG_PATH = path.join(process.cwd(), "config", "kfv-sync.config.json");
 const SYNC_CONFIG = fs.existsSync(CONFIG_PATH)
   ? JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"))
@@ -310,8 +312,10 @@ async function mapLimit(items, limit, fn) {
 
 async function loadCandidateMatches() {
   const now = Date.now();
-  const fromDate = new Date(now - POST_KICKOFF_MINUTES * 60000);
-  const toDate = new Date(now + PRE_KICKOFF_MINUTES * 60000);
+  const preMinutes = FORCE_SYNC ? FORCE_WINDOW_MINUTES : PRE_KICKOFF_MINUTES;
+  const postMinutes = FORCE_SYNC ? FORCE_WINDOW_MINUTES : POST_KICKOFF_MINUTES;
+  const fromDate = new Date(now - postMinutes * 60000);
+  const toDate = new Date(now + preMinutes * 60000);
 
   const snapshot = await db
     .collection("kfvMatches")
@@ -328,13 +332,40 @@ async function loadCandidateMatches() {
     .filter((match) => match.active !== false)
     .filter((match) => {
       const time = match.kickoffDate.getTime();
-      return time > 0 && now >= time - PRE_KICKOFF_MINUTES * 60000 && now <= time + POST_KICKOFF_MINUTES * 60000;
+      return time > 0 && now >= time - preMinutes * 60000 && now <= time + postMinutes * 60000;
     })
     .filter(
       (match) =>
         isAinet(match.homeTeam) || isAinet(match.awayTeam),
     )
     .sort((a, b) => b.kickoffDate - a.kickoffDate);
+}
+
+async function keepMatchesNeedingPrematchData(matches) {
+  if (FORCE_SYNC || !matches.length) return matches;
+
+  const checked = await mapLimit(matches, 3, async (match) => {
+    const snapshot = await db
+      .collection(REPORT_COLLECTION)
+      .where("matchId", "==", match.id)
+      .limit(1)
+      .get();
+
+    if (snapshot.empty) return match;
+
+    const report = snapshot.docs[0].data() || {};
+    const lineupCount = Number(report.lineupPlayerCount || 0);
+    const hasReferee = Boolean(compact(report.referee || match.referee));
+
+    if (lineupCount > 0 && hasReferee) {
+      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: Aufstellung und Schiedsrichter bereits vorhanden.`);
+      return null;
+    }
+
+    return match;
+  });
+
+  return checked.filter(Boolean);
 }
 
 function localDateKey(date) {
@@ -1561,6 +1592,24 @@ async function main() {
   let browser;
 
   try {
+    let candidateMatches = await loadCandidateMatches();
+    candidateMatches = await keepMatchesNeedingPrematchData(candidateMatches);
+
+    if (!candidateMatches.length) {
+      console.log("Smart-Gate: Kein Spiel benötigt aktuell Aufstellung/Schiedsrichter. Browser und ÖFB-Abrufe werden übersprungen.");
+      await statusRef.set({
+        success: true,
+        running: false,
+        runId,
+        version: VERSION,
+        smartSkipped: true,
+        candidateMatchCount: 0,
+        durationSeconds: Math.round((Date.now() - startedAt) / 1000),
+        finishedAt: admin.firestore.FieldValue.serverTimestamp(),
+      }, { merge: true });
+      return;
+    }
+
     const [
       invalidLegacyDrafts,
       invalidLegacyReports,
@@ -1568,8 +1617,6 @@ async function main() {
       deactivateInvalidLegacyDrafts(),
       deactivateInvalidLegacyReports(),
     ]);
-
-    const candidateMatches = await loadCandidateMatches();
 
     browser = await puppeteer.launch({
       headless: true,

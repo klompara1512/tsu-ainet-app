@@ -1,12 +1,10 @@
-name: KFV / ÖFB Aufstellung und Spielberichte synchronisieren
+name: KFV / ÖFB Aufstellung und Schiedsrichter intelligent synchronisieren
 
 on:
   workflow_dispatch:
-
   schedule:
-    # Freitag, Samstag und Sonntag alle 15 Minuten.
-    # Österreichische Zeit inkl. Sommer-/Winterzeit.
-    # Zeitraum 07:00 bis 22:45 Uhr.
+    # Fr, Sa, So alle 15 Minuten zwischen 07:00 und 22:45 Uhr.
+    # Das Script öffnet ÖFB nur, wenn ein TSU-Ainet-Spiel im relevanten Zeitfenster liegt.
     - cron: "*/15 7-22 * * 5,6,0"
       timezone: "Europe/Vienna"
 
@@ -14,28 +12,23 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: kfv-oefb-report-news-sync
   cancel-in-progress: true
 
 jobs:
   sync:
-    name: Aufstellung und Schiedsrichter prüfen
     runs-on: ubuntu-latest
-    timeout-minutes: 20
-
+    timeout-minutes: 15
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-
-      # Spielbericht ab ca. 30 Minuten vor Spielbeginn berücksichtigen.
       REPORT_PRE_KICKOFF_MINUTES: "35"
-
-      # Bis 15 Minuten nach Anstoß nochmals aktualisieren,
-      # falls Aufstellung oder Schiedsrichter verspätet veröffentlicht wurden.
       REPORT_POST_KICKOFF_MINUTES: "15"
+      REPORT_FORCE_WINDOW_MINUTES: "720"
+      # Ein manueller Start darf das enge Zeitfenster umgehen.
+      REPORT_FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
 
     steps:
       - name: Projekt laden
@@ -55,14 +48,13 @@ jobs:
         shell: bash
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "::error::FIREBASE_SERVICE_ACCOUNT fehlt."
+            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
+          echo "Firebase-Service-Account ist vorhanden."
 
-          echo "Firebase-Service-Account vorhanden."
-
-      - name: Projekt und Spielbericht-Sync prüfen
+      - name: Projekt und Spielbericht-Synchronisierung prüfen
         run: npm run sync:check
 
-      - name: Aufstellung, Schiedsrichter und Spielbericht synchronisieren
+      - name: Aufstellung und Schiedsrichter intelligent synchronisieren
         run: npm run sync:reports

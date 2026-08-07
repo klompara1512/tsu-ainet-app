@@ -1383,3 +1383,58 @@
   .v183-shop-button { grid-column: 1; width: calc(100% - 32px); min-height: 52px; margin: 0 16px 16px; }
 }
 
+
+
+/* RC10 – Matchday-Schriftzug groß und zentral im Hero */
+.v183-matchday-title {
+  position: absolute;
+  z-index: 3;
+  top: 50%;
+  left: 50%;
+  width: min(92%, 900px);
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  pointer-events: none;
+  text-transform: uppercase;
+}
+.v183-matchday-title span {
+  display: block;
+  color: #fff;
+  font-size: clamp(58px, 10vw, 132px);
+  font-weight: 1000;
+  line-height: .82;
+  letter-spacing: -.055em;
+  text-shadow: 0 5px 24px rgba(0,0,0,.72), 0 1px 0 rgba(255,255,255,.18);
+}
+.v183-matchday-title small {
+  display: block;
+  margin-top: 14px;
+  color: #f6c945;
+  font-size: clamp(12px, 1.8vw, 20px);
+  font-weight: 950;
+  line-height: 1;
+  letter-spacing: .28em;
+  text-shadow: 0 3px 14px rgba(0,0,0,.8);
+}
+.v1825-welcome-hero.is-matchday .v1825-welcome-copy {
+  opacity: .9;
+}
+@media (max-width: 700px) {
+  .v183-matchday-title {
+    top: 46%;
+    width: calc(100% - 24px);
+  }
+  .v183-matchday-title span {
+    font-size: clamp(54px, 18vw, 88px);
+    line-height: .86;
+  }
+  .v183-matchday-title small {
+    margin-top: 10px;
+    font-size: 12px;
+    letter-spacing: .24em;
+  }
+}

@@ -382,8 +382,13 @@ function LiveDashboard({
           </div>
         )}
         <div className="v1825-welcome-overlay" />
+        {isToday && (
+          <div className="v183-matchday-title" aria-label="Matchday TSU Ainet">
+            <span>MATCHDAY</span>
+            <small>TSU Ainet</small>
+          </div>
+        )}
         <div className="v1825-welcome-copy">
-          {isToday && <span className="v101-overline">Matchday · TSU Ainet</span>}
           <h1>Willkommen bei der TSU Ainet</h1>
           <p className="v1825-since">Since 1966</p>
           <strong className="v1825-slogan">Unsere Farben. Unser Stolz.</strong>

@@ -1,11 +1,14 @@
-name: KFV / ÖFB Spielberichte Freitag bis Sonntag
+name: KFV / ÖFB Aufstellung und Spielberichte synchronisieren
 
 on:
   workflow_dispatch:
+
   schedule:
-    # Freitag, Samstag und Sonntag um 18:00 UTC.
-    # Das entspricht während der Sommerzeit 20:00 Uhr in Österreich.
-    - cron: "0 18 * * 5,6,0"
+    # Freitag, Samstag und Sonntag alle 15 Minuten.
+    # Österreichische Zeit inkl. Sommer-/Winterzeit.
+    # Zeitraum 07:00 bis 22:45 Uhr.
+    - cron: "*/15 7-22 * * 5,6,0"
+      timezone: "Europe/Vienna"
 
 permissions:
   contents: read
@@ -16,17 +19,23 @@ concurrency:
 
 jobs:
   sync:
-    name: Spielberichte synchronisieren
+    name: Aufstellung und Schiedsrichter prüfen
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-      REPORT_PRE_KICKOFF_MINUTES: "60"
-      REPORT_POST_KICKOFF_MINUTES: "300"
+
+      # Spielbericht ab ca. 30 Minuten vor Spielbeginn berücksichtigen.
+      REPORT_PRE_KICKOFF_MINUTES: "35"
+
+      # Bis 15 Minuten nach Anstoß nochmals aktualisieren,
+      # falls Aufstellung oder Schiedsrichter verspätet veröffentlicht wurden.
+      REPORT_POST_KICKOFF_MINUTES: "15"
 
     steps:
       - name: Projekt laden
@@ -46,13 +55,14 @@ jobs:
         shell: bash
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
-            echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            echo "::error::FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-          echo "Firebase-Service-Account ist vorhanden."
 
-      - name: Projekt und Spielbericht-Synchronisierung prüfen
+          echo "Firebase-Service-Account vorhanden."
+
+      - name: Projekt und Spielbericht-Sync prüfen
         run: npm run sync:check
 
-      - name: Spielberichte synchronisieren
+      - name: Aufstellung, Schiedsrichter und Spielbericht synchronisieren
         run: npm run sync:reports

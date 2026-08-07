@@ -1438,3 +1438,48 @@
     letter-spacing: .24em;
   }
 }
+
+/* RC10 Matchday Hero Fix 2 – Titel wirklich dominant und exakt zentriert */
+.v1825-welcome-hero.is-matchday .v183-matchday-title {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 20 !important;
+  width: 100% !important;
+  height: 100% !important;
+  transform: none !important;
+  display: grid !important;
+  place-content: center !important;
+  justify-items: center !important;
+  padding: 20px !important;
+  box-sizing: border-box !important;
+  text-align: center !important;
+}
+.v1825-welcome-hero.is-matchday .v183-matchday-title span {
+  font-size: clamp(82px, 13vw, 176px) !important;
+  font-weight: 1000 !important;
+  line-height: .78 !important;
+  letter-spacing: -.065em !important;
+  color: #fff !important;
+  text-shadow: 0 8px 34px rgba(0,0,0,.88) !important;
+}
+.v1825-welcome-hero.is-matchday .v183-matchday-title small {
+  margin-top: 22px !important;
+  font-size: clamp(14px, 2vw, 24px) !important;
+  font-weight: 950 !important;
+  letter-spacing: .32em !important;
+  color: #f6c945 !important;
+}
+.v1825-welcome-hero.is-matchday .v1825-welcome-copy {
+  visibility: hidden !important;
+  opacity: 0 !important;
+}
+@media (max-width: 700px) {
+  .v1825-welcome-hero.is-matchday .v183-matchday-title span {
+    font-size: clamp(64px, 20vw, 104px) !important;
+  }
+  .v1825-welcome-hero.is-matchday .v183-matchday-title small {
+    margin-top: 16px !important;
+    font-size: 12px !important;
+    letter-spacing: .26em !important;
+  }
+}

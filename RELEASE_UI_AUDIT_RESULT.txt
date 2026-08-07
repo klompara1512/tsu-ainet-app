@@ -2,7 +2,7 @@ PASS: Mobiler Viewport ist konfiguriert.
 PASS: Hauptnavigation verwendet „Verein“.
 PASS: „Ankündigungen“ ist in Navigation und Dashboard konsistent.
 PASS: Willkommens-Slogan ist eingebaut.
-FAIL: Matchday-Hero fehlt.
+PASS: Matchday-Hero ist eingebaut.
 PASS: Dashboard-Tabelle nutzt Platz → Logo → Verein → Punkte.
 PASS: Offizieller Clubshop ist verlinkt und gekennzeichnet.
 PASS: Fallback-Hero-Bild ist vorhanden.
@@ -11,4 +11,4 @@ PASS: Touch-Ziele mit mindestens ca. 44 px sind vorhanden.
 PASS: Reduzierte Bewegung wird unterstützt.
 PASS: Keine sichtbare alte Navigation „Mehr“ gefunden.
 
-Ergebnis: 11 bestanden, 0 Warnungen, 1 Fehler.
+Ergebnis: 12 bestanden, 0 Warnungen, 0 Fehler.

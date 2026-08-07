@@ -1154,3 +1154,69 @@
       inset -22px 0 34px -22px rgba(1, 7, 17, 1);
   }
 }
+
+/* Version 18.3.0 RC10 – Hero final: bildfüllend und aus einem Guss */
+.v1825-welcome-hero {
+  position: relative;
+  overflow: hidden;
+  min-height: clamp(320px, 38vw, 500px);
+  background: #07101f !important;
+}
+
+/* Kein separates/verschwommenes Auffüllbild mehr hinter dem eigentlichen Foto. */
+.v1825-welcome-hero::before {
+  content: none !important;
+  display: none !important;
+}
+
+.v183-hero-photo {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.v183-hero-photo img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  object-fit: cover;
+  object-position: center center;
+  filter: none;
+  transform: none;
+}
+
+/* Sanfter Abschluss des Fotos zur dunklen Kachel, ohne sichtbare Seitenstreifen. */
+.v1825-welcome-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(3,9,21,.58) 0%, rgba(3,9,21,.12) 18%, rgba(3,9,21,.08) 82%, rgba(3,9,21,.48) 100%),
+    linear-gradient(180deg, rgba(3,9,21,.10) 0%, rgba(3,9,21,.16) 52%, rgba(3,9,21,.82) 100%);
+}
+
+@media (max-width: 700px) {
+  .v1825-welcome-hero {
+    min-height: clamp(350px, 105vw, 500px);
+    padding: 24px 18px calc(24px + env(safe-area-inset-bottom));
+  }
+
+  .v183-hero-photo img {
+    object-fit: cover;
+    object-position: center center;
+  }
+
+  .v1825-welcome-overlay {
+    background:
+      linear-gradient(90deg, rgba(3,9,21,.42) 0%, rgba(3,9,21,.06) 22%, rgba(3,9,21,.06) 78%, rgba(3,9,21,.38) 100%),
+      linear-gradient(180deg, rgba(3,9,21,.06) 0%, rgba(3,9,21,.18) 48%, rgba(3,9,21,.90) 100%);
+  }
+}

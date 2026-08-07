@@ -499,11 +499,7 @@ function LiveDashboard({
         </div>
 
         <div className="v182-shop-copy v183-shop-copy">
-          <span className="v101-overline">Offizieller Clubshop</span>
-          <h2 id="dashboard-shop-title">
-            <span>TSU Ainet</span>
-            <strong>Vereinsshop</strong>
-          </h2>
+          <h2 id="dashboard-shop-title">Offizieller Clubshop</h2>
           <p>TSU Ainet – trag, was uns verbindet</p>
         </div>
 

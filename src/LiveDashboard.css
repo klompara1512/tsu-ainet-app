@@ -1221,93 +1221,82 @@
   }
 }
 
-/* Version 18.3.0 RC10 – moderner TSU Ainet Vereinsshop */
+/* Version 18.3.0 RC10 – offizieller Clubshop mit Goldverlauf */
 .v183-shop-showcase {
   position: relative;
   isolation: isolate;
   min-height: 176px;
-  grid-template-columns: minmax(250px, .9fr) minmax(310px, 1.15fr) auto;
+  grid-template-columns: minmax(300px, 1.05fr) minmax(300px, 1fr) auto;
   gap: 0;
   padding: 0;
   overflow: hidden;
-  border: 1px solid rgba(246, 201, 69, .38);
+  border: 1px solid rgba(246, 201, 69, .42);
   border-radius: 28px;
-  background:
-    radial-gradient(circle at 66% 32%, rgba(246, 201, 69, .18), transparent 30%),
-    linear-gradient(106deg, #050b14 0%, #08111f 46%, #121928 74%, #08101c 100%);
-  box-shadow: 0 22px 54px rgba(0, 0, 0, .28), inset 0 1px 0 rgba(255,255,255,.025);
+  background: linear-gradient(100deg,
+    #f6c945 0%,
+    #e8b82d 19%,
+    rgba(164, 119, 24, .82) 32%,
+    rgba(29, 30, 28, .96) 49%,
+    #0b1422 65%,
+    #08101c 100%);
+  box-shadow: 0 22px 54px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.08);
 }
 
 .v183-shop-showcase::before {
   content: "";
   position: absolute;
-  z-index: -1;
+  z-index: 0;
   inset: 0;
   pointer-events: none;
   background:
-    linear-gradient(90deg, transparent 0 31%, rgba(246, 201, 69, .06) 42%, transparent 57%),
-    repeating-linear-gradient(90deg, transparent 0 28px, rgba(246, 201, 69, .018) 29px 30px);
-  opacity: .95;
+    radial-gradient(circle at 18% 50%, rgba(255,239,170,.44), transparent 31%),
+    linear-gradient(90deg, rgba(255,255,255,.08), transparent 38%);
 }
 
 .v183-shop-showcase::after {
   content: "";
   position: absolute;
   z-index: 0;
-  top: 50%;
-  left: 27%;
-  width: 32%;
-  height: 150%;
+  top: -30%;
+  left: 28%;
+  width: 28%;
+  height: 160%;
   pointer-events: none;
-  transform: translateY(-50%) skewX(-13deg);
-  background: linear-gradient(90deg, transparent, rgba(246,201,69,.12) 47%, transparent 88%);
-  filter: blur(16px);
-  opacity: .75;
+  transform: skewX(-12deg);
+  background: linear-gradient(90deg, rgba(246,201,69,.22), rgba(8,16,28,.12));
+  filter: blur(24px);
 }
 
 .v183-shop-brand {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   align-self: stretch;
   display: flex;
   align-items: center;
   justify-content: center;
   min-width: 0;
-  padding: 30px 42px 30px 34px;
-  overflow: hidden;
-}
-
-.v183-shop-brand::after {
-  content: "";
-  position: absolute;
-  top: 24%;
-  right: 0;
-  width: 1px;
-  height: 52%;
-  background: linear-gradient(180deg, transparent, rgba(255,255,255,.34), transparent);
-  box-shadow: 16px 0 34px rgba(246,201,69,.28);
+  padding: 30px 46px 30px 34px;
+  overflow: visible;
 }
 
 .v183-shop-brand-glow {
   position: absolute;
-  right: -55px;
-  width: 190px;
-  height: 120px;
+  inset: 12% -8% 12% 0;
   border-radius: 50%;
-  background: rgba(246,201,69,.15);
-  filter: blur(42px);
+  background: radial-gradient(circle at 40% 50%, rgba(255,245,201,.45), transparent 67%);
+  filter: blur(20px);
   pointer-events: none;
 }
 
 .v183-shop-brand img {
   position: relative;
-  z-index: 1;
+  z-index: 2;
   display: block;
-  width: min(100%, 310px);
-  max-height: 86px;
+  width: min(100%, 330px);
+  max-height: 92px;
   object-fit: contain;
   object-position: center;
-  filter: drop-shadow(0 8px 22px rgba(0,0,0,.35));
+  filter: drop-shadow(0 3px 1px rgba(255,255,255,.9)) drop-shadow(0 8px 18px rgba(0,0,0,.24));
 }
 
 .v183-shop-copy {
@@ -1317,43 +1306,23 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  padding: 28px 30px 28px 42px;
-}
-
-.v183-shop-copy .v101-overline {
-  margin-bottom: 5px;
-  color: #f6c945;
-  letter-spacing: .16em;
+  padding: 30px 30px 30px 30px;
 }
 
 .v183-shop-copy h2 {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
   margin: 0;
-  line-height: .96;
-  letter-spacing: -.045em;
-}
-
-.v183-shop-copy h2 > span {
   color: #fff;
-  font-size: clamp(24px, 3vw, 36px);
-  font-weight: 900;
-}
-
-.v183-shop-copy h2 > strong {
-  margin-top: 2px;
-  color: #f6c945;
-  font-size: clamp(34px, 4.7vw, 58px);
+  font-size: clamp(31px, 3.8vw, 52px);
   font-weight: 1000;
-  letter-spacing: -.055em;
-  text-shadow: 0 10px 34px rgba(246,201,69,.12);
+  line-height: .98;
+  letter-spacing: -.045em;
+  text-shadow: 0 8px 28px rgba(0,0,0,.32);
 }
 
 .v183-shop-copy p {
-  margin-top: 14px;
-  color: rgba(255,255,255,.86);
-  font-size: clamp(13px, 1.4vw, 17px);
+  margin: 13px 0 0;
+  color: rgba(255,255,255,.88);
+  font-size: clamp(13px, 1.35vw, 17px);
   font-weight: 650;
 }
 
@@ -1365,7 +1334,7 @@
   min-width: 138px;
   min-height: 54px;
   padding: 0 23px;
-  border: 1px solid rgba(255, 225, 125, .5);
+  border: 1px solid rgba(255,225,125,.5);
   border-radius: 17px;
   background: linear-gradient(115deg, #f4c638, #ffe27d 70%, #f4c638);
   box-shadow: 0 14px 30px rgba(246,201,69,.18), inset 0 1px 0 rgba(255,255,255,.38);
@@ -1380,34 +1349,17 @@
 @media (max-width: 820px) {
   .v183-shop-showcase {
     min-height: 0;
-    grid-template-columns: 42% 58%;
+    grid-template-columns: 45% 55%;
     grid-template-rows: auto auto;
     border-radius: 24px;
+    background: linear-gradient(105deg, #f6c945 0%, #d6a62a 30%, #18202a 53%, #08101c 100%);
   }
-
-  .v183-shop-brand {
-    min-height: 148px;
-    padding: 28px 24px;
-  }
-
-  .v183-shop-brand img {
-    width: min(100%, 250px);
-    max-height: 72px;
-  }
-
-  .v183-shop-copy {
-    padding: 24px 20px 22px 25px;
-  }
-
-  .v183-shop-copy h2 > span { font-size: clamp(20px, 4.2vw, 28px); }
-  .v183-shop-copy h2 > strong { font-size: clamp(30px, 6.2vw, 43px); }
+  .v183-shop-brand { min-height: 148px; padding: 28px 24px; }
+  .v183-shop-brand img { width: min(100%, 270px); max-height: 78px; }
+  .v183-shop-copy { padding: 24px 20px 22px 25px; }
+  .v183-shop-copy h2 { font-size: clamp(28px, 5.8vw, 42px); }
   .v183-shop-copy p { margin-top: 10px; font-size: 13px; }
-
-  .v183-shop-button {
-    grid-column: 1 / -1;
-    width: auto;
-    margin: 0 18px 18px;
-  }
+  .v183-shop-button { grid-column: 1 / -1; width: auto; margin: 0 18px 18px; }
 }
 
 @media (max-width: 560px) {
@@ -1416,56 +1368,18 @@
     grid-template-columns: 1fr;
     grid-template-rows: auto auto auto;
     border-radius: 22px;
-    background:
-      radial-gradient(circle at 50% 10%, rgba(246,201,69,.17), transparent 30%),
-      linear-gradient(165deg, #060d17 0%, #0a1423 60%, #101727 100%);
+    background: linear-gradient(180deg, #f6c945 0%, #d6a62a 24%, #4b4028 39%, #0c1521 56%, #08101c 100%);
   }
-
   .v183-shop-showcase::after {
-    top: 31%;
-    left: -8%;
-    width: 116%;
-    height: 38%;
-    transform: none;
-    background: linear-gradient(180deg, transparent, rgba(246,201,69,.1), transparent);
-    filter: blur(18px);
+    top: 22%; left: -10%; width: 120%; height: 38%; transform: none;
+    background: linear-gradient(180deg, rgba(246,201,69,.16), rgba(8,16,28,.08));
+    filter: blur(20px);
   }
-
-  .v183-shop-brand {
-    min-height: 105px;
-    padding: 22px 24px 12px;
-  }
-
-  .v183-shop-brand::after {
-    top: auto;
-    right: 18%;
-    bottom: 0;
-    left: 18%;
-    width: auto;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,.3), transparent);
-  }
-
-  .v183-shop-brand img {
-    width: min(82%, 255px);
-    max-height: 66px;
-  }
-
-  .v183-shop-copy {
-    align-items: center;
-    padding: 18px 20px 17px;
-    text-align: center;
-  }
-
-  .v183-shop-copy .v101-overline { margin-bottom: 7px; }
-  .v183-shop-copy h2 > span { font-size: 23px; }
-  .v183-shop-copy h2 > strong { font-size: clamp(36px, 10vw, 47px); }
-  .v183-shop-copy p { margin-top: 11px; font-size: 12.5px; }
-
-  .v183-shop-button {
-    grid-column: 1;
-    width: calc(100% - 32px);
-    min-height: 52px;
-    margin: 0 16px 16px;
-  }
+  .v183-shop-brand { min-height: 112px; padding: 24px 24px 14px; }
+  .v183-shop-brand img { width: min(86%, 270px); max-height: 72px; }
+  .v183-shop-copy { align-items: center; padding: 18px 20px 18px; text-align: center; }
+  .v183-shop-copy h2 { font-size: clamp(31px, 9vw, 43px); }
+  .v183-shop-copy p { margin-top: 10px; font-size: 12.5px; }
+  .v183-shop-button { grid-column: 1; width: calc(100% - 32px); min-height: 52px; margin: 0 16px 16px; }
 }
+

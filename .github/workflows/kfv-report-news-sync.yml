@@ -3,9 +3,10 @@ name: KFV / ÖFB Aufstellung und Schiedsrichter intelligent synchronisieren
 on:
   workflow_dispatch:
   schedule:
-    # Fr, Sa, So alle 15 Minuten zwischen 07:00 und 22:45 Uhr.
+    # Täglich alle 30 Minuten zwischen 07:00 und 22:30 Uhr.
+    # So werden auch Nachtrags-, Cup- und Wochentagsspiele erfasst.
     # Das Script öffnet ÖFB nur, wenn ein TSU-Ainet-Spiel im relevanten Zeitfenster liegt.
-    - cron: "*/15 7-22 * * 5,6,0"
+    - cron: "*/30 7-22 * * *"
       timezone: "Europe/Vienna"
 
 permissions:
@@ -24,8 +25,8 @@ jobs:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-      REPORT_PRE_KICKOFF_MINUTES: "35"
-      REPORT_POST_KICKOFF_MINUTES: "15"
+      REPORT_PRE_KICKOFF_MINUTES: "60"
+      REPORT_POST_KICKOFF_MINUTES: "30"
       REPORT_FORCE_WINDOW_MINUTES: "720"
       # Ein manueller Start darf das enge Zeitfenster umgehen.
       REPORT_FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}

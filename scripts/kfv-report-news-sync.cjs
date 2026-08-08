@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-smart-prematch-sync";
+const VERSION = "18.3.0-beta.1-reliable-match-info-sync";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -24,7 +24,7 @@ const PRE_KICKOFF_MINUTES = Math.max(
 );
 const POST_KICKOFF_MINUTES = Math.max(
   0,
-  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 15),
+  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 30),
 );
 const FORCE_SYNC = /^(?:1|true|yes)$/i.test(process.env.REPORT_FORCE_SYNC || "");
 const FORCE_WINDOW_MINUTES = Math.max(60, Number(process.env.REPORT_FORCE_WINDOW_MINUTES || 720));
@@ -356,9 +356,10 @@ async function keepMatchesNeedingPrematchData(matches) {
     const report = snapshot.docs[0].data() || {};
     const lineupCount = Number(report.lineupPlayerCount || 0);
     const hasReferee = Boolean(compact(report.referee || match.referee));
+    const hasVenue = Boolean(compact(report.venue || match.venue));
 
-    if (lineupCount > 0 && hasReferee) {
-      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: Aufstellung und Schiedsrichter bereits vorhanden.`);
+    if (lineupCount > 0 && hasReferee && hasVenue) {
+      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: Aufstellung, Spielort und Schiedsrichter bereits vorhanden.`);
       return null;
     }
 
@@ -1373,6 +1374,11 @@ async function updateMatchFromReport(report) {
   if (report.venue) patch.venue = report.venue;
   if (report.venueAddress) patch.venueAddress = report.venueAddress;
   if (report.referee) patch.referee = report.referee;
+  if (Array.isArray(report.homeLineup) && report.homeLineup.length) patch.homeLineup = report.homeLineup;
+  if (Array.isArray(report.awayLineup) && report.awayLineup.length) patch.awayLineup = report.awayLineup;
+  if (Array.isArray(report.homeBench) && report.homeBench.length) patch.homeBench = report.homeBench;
+  if (Array.isArray(report.awayBench) && report.awayBench.length) patch.awayBench = report.awayBench;
+  if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
 
   await ref.set(patch, { merge: true });

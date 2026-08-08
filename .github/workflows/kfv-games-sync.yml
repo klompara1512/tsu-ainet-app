@@ -1,20 +1,32 @@
-name: KFV / ÖFB Voll-Synchronisierung manuell
+name: KFV / ÖFB Spieltermine und Kalender synchronisieren
 
 on:
   workflow_dispatch:
+  schedule:
+    # Dreimal täglich in österreichischer Lokalzeit.
+    # GitHub berücksichtigt damit Sommer- und Winterzeit automatisch.
+    - cron: "15 6,13,19 * * *"
+      timezone: "Europe/Vienna"
 
 permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: kfv-oefb-games-sync
   cancel-in-progress: true
 
 jobs:
   sync:
-    name: KFV / ÖFB Daten synchronisieren
+    name: Spieltermine und Kalender aktualisieren
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      CI: "true"
+      SYNC_MODE: games
+      RUN_DAILY_TASKS: "false"
+      RUN_DUPLICATE_CLEANUP: "false"
 
     steps:
       - name: Projekt laden
@@ -30,13 +42,11 @@ jobs:
       - name: Abhängigkeiten installieren
         run: npm ci
 
-      - name: Projekt und Synchronisierung prüfen
+      - name: Projekt und Spieltermin-Sync prüfen
         run: npm run sync:check
 
       - name: Firebase-Zugang prüfen
         shell: bash
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
         run: |
           if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
@@ -44,9 +54,5 @@ jobs:
           fi
           echo "Firebase-Service-Account ist vorhanden."
 
-      - name: KFV / ÖFB synchronisieren
-        env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-          CI: "true"
-          TZ: "Europe/Vienna"
-        run: npm run sync:full
+      - name: Spieltermine und Kalender synchronisieren
+        run: npm run sync:games

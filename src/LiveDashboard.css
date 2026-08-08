@@ -1483,3 +1483,87 @@
     letter-spacing: .26em !important;
   }
 }
+
+/* Beta 18.3.0 – Mobile Hero Fix: echtes Hero-Bild anzeigen + kompakter Matchday */
+@media (max-width: 700px) {
+  .v1825-welcome-hero,
+  .v1825-welcome-hero.is-matchday {
+    position: relative !important;
+    overflow: hidden !important;
+    background: #07101f !important;
+    background-image: none !important;
+  }
+
+  /* Auf Mobilgeräten immer das echte <img> verwenden. Das ist zuverlässiger
+     als ein CSS-Custom-Property-Hintergrund in iOS/Android-WebViews. */
+  .v183-hero-photo {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: inherit !important;
+    overflow: hidden !important;
+    pointer-events: none !important;
+  }
+
+  .v183-hero-photo img {
+    display: block !important;
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: none !important;
+    max-height: none !important;
+    padding: 0 !important;
+    object-fit: cover !important;
+    object-position: center center !important;
+    filter: none !important;
+    transform: none !important;
+  }
+
+  .v1825-welcome-hero::before {
+    display: none !important;
+    content: none !important;
+  }
+
+  .v1825-welcome-overlay {
+    position: absolute !important;
+    inset: 0 !important;
+    z-index: 1 !important;
+    background: linear-gradient(
+      180deg,
+      rgba(3, 9, 21, .06) 0%,
+      rgba(3, 9, 21, .18) 42%,
+      rgba(3, 9, 21, .88) 100%
+    ) !important;
+    pointer-events: none !important;
+  }
+
+  .v1825-welcome-copy,
+  .v183-hero-club-logo,
+  .v183-matchday-title {
+    position: relative;
+    z-index: 3;
+  }
+
+  /* Matchday auf Smartphones bewusst kompakter, damit Bild und übrige
+     Hero-Inhalte genug Platz behalten. */
+  .v1825-welcome-hero.is-matchday .v183-matchday-title {
+    padding: 18px 14px !important;
+  }
+
+  .v1825-welcome-hero.is-matchday .v183-matchday-title span {
+    font-size: clamp(44px, 14vw, 72px) !important;
+    line-height: .88 !important;
+    letter-spacing: -.045em !important;
+    white-space: nowrap !important;
+  }
+
+  .v1825-welcome-hero.is-matchday .v183-matchday-title small {
+    margin-top: 10px !important;
+    font-size: 10px !important;
+    letter-spacing: .22em !important;
+  }
+}

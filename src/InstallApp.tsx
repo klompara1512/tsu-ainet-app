@@ -14,10 +14,11 @@ function isStandalone() {
 export default function InstallApp() {
   const [installEvent, setInstallEvent] = useState<BeforeInstallPromptEvent | null>(null);
   const [installed, setInstalled] = useState(() => isStandalone());
-  const [showIosHelp, setShowIosHelp] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
   const [dismissed, setDismissed] = useState(() => sessionStorage.getItem("tsu-install-dismissed") === "1");
 
   const isIos = useMemo(() => /iphone|ipad|ipod/i.test(navigator.userAgent), []);
+  const isAndroid = useMemo(() => /android/i.test(navigator.userAgent), []);
 
   useEffect(() => {
     const onBeforeInstall = (event: Event) => {
@@ -28,7 +29,7 @@ export default function InstallApp() {
     const onInstalled = () => {
       setInstalled(true);
       setInstallEvent(null);
-      setShowIosHelp(false);
+      setShowHelp(false);
     };
 
     window.addEventListener("beforeinstallprompt", onBeforeInstall);
@@ -39,14 +40,13 @@ export default function InstallApp() {
     };
   }, []);
 
-  if (installed || dismissed || (!installEvent && !isIos)) return null;
+  if (installed || dismissed || (!installEvent && !isIos && !isAndroid)) return null;
 
   const install = async () => {
-    if (isIos && !installEvent) {
-      setShowIosHelp(true);
+    if (!installEvent) {
+      setShowHelp(true);
       return;
     }
-    if (!installEvent) return;
     await installEvent.prompt();
     const choice = await installEvent.userChoice;
     if (choice.outcome === "accepted") setInstalled(true);
@@ -58,19 +58,33 @@ export default function InstallApp() {
     setDismissed(true);
   };
 
+  const helpText = isIos
+    ? <>In <b>Safari</b> auf <b>Teilen</b> tippen und anschließend <b>„Zum Home-Bildschirm“</b> wählen.</>
+    : <>In <b>Chrome</b> oben rechts auf <b>⋮</b> tippen und <b>„App installieren“</b> oder <b>„Zum Startbildschirm hinzufügen“</b> wählen.</>;
+
   return (
     <div className="install-app" role="dialog" aria-label="TSU Ainet App installieren">
       <button className="install-app-close" onClick={close} aria-label="Schließen">×</button>
-      <img src="/icon-192.png" alt="" />
+      <img src="/icon-192.png" alt="TSU Ainet" />
       <div className="install-app-copy">
+        <span className="install-app-platform">{isIos ? "iPhone / iPad" : "Android"}</span>
         <strong>TSU Ainet als App installieren</strong>
-        {showIosHelp ? (
-          <p>Tippe in Safari unten auf <b>Teilen</b> und danach auf <b>„Zum Home-Bildschirm“</b>.</p>
+        {showHelp ? (
+          <p className="install-app-help">{helpText}</p>
         ) : (
           <p>Schneller Zugriff direkt über den Startbildschirm – wie eine normale App.</p>
         )}
       </div>
-      {!showIosHelp && <button className="install-app-button" onClick={install}>Installieren</button>}
+      {!showHelp && (
+        <button className="install-app-button" onClick={install}>
+          {installEvent ? "Installieren" : "So geht’s"}
+        </button>
+      )}
+      {showHelp && (
+        <button className="install-app-button install-app-button-secondary" onClick={() => setShowHelp(false)}>
+          Verstanden
+        </button>
+      )}
     </div>
   );
 }

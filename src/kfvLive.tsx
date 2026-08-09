@@ -253,13 +253,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
             : "Geplant";
 
 
-    const reportEvents = (matchReport?.events ?? []).filter((event) => {
-      const type = String(event.type || "");
-      const text = `${event.playerName || ""} ${event.secondaryPlayerName || ""} ${event.description || ""}`.toLowerCase();
-      const allowedTypes = new Set(["goal", "yellow", "yellowRed", "red", "substitution", "halfTime", "fullTime"]);
-      const editorialNoise = /\b(?:vorbericht|vorschau|spielvorschau|nachbericht|spielbericht|bericht|analyse|interview|trainerstimme|news|präsentiert|praesentiert|sponsor|werbung)\b/i;
-      return allowedTypes.has(type) && !editorialNoise.test(text);
-    });
+    const reportEvents = matchReport?.events ?? [];
     const eventLabel = (type: string) => ({
       goal: "Tor", yellow: "Gelbe Karte", yellowRed: "Gelb-Rote Karte", red: "Rote Karte",
       substitution: "Wechsel", halfTime: "Halbzeit", fullTime: "Spielende", other: "Ereignis",

@@ -131,23 +131,47 @@ export function subscribeKfvMatchReport(
   const reportQuery = query(
     collection(db, "kfvMatchReports"),
     where("matchId", "==", matchId),
-    limit(1),
+    limit(10),
   );
 
   return onSnapshot(
     reportQuery,
     (snapshot) => {
-      const reportDocument = snapshot.docs[0];
-      if (!reportDocument) {
+      // Für dieselbe Match-ID können aus älteren Sync-Versionen mehrere
+      // Berichtsdokumente existieren (z. B. alte Hash-ID + neue ÖFB-ID).
+      // limit(1) konnte dadurch zufällig einen bereits deaktivierten oder
+      // unvollständigen Altbericht liefern, obwohl der aktuelle ÖFB-Bericht
+      // die komplette Aufstellung enthält.
+      const reports = snapshot.docs
+        .map((document) => mapMatchReportDocument(document.id, document.data()))
+        .filter((report) => report.active);
+
+      if (!reports.length) {
         onData(null);
         return;
       }
 
-      const report = mapMatchReportDocument(
-        reportDocument.id,
-        reportDocument.data(),
-      );
-      onData(report.active ? report : null);
+      const reportScore = (report: KfvMatchReport) => {
+        const lineupCount =
+          report.homeLineup.length +
+          report.awayLineup.length +
+          report.homeBench.length +
+          report.awayBench.length;
+        const coreData =
+          (report.homeLineup.length >= 7 && report.awayLineup.length >= 7 ? 1000 : 0) +
+          (report.referee ? 100 : 0) +
+          (report.venue ? 50 : 0) +
+          (report.oefbMatchId ? 25 : 0);
+        return coreData + lineupCount;
+      };
+
+      reports.sort((a, b) => {
+        const scoreDifference = reportScore(b) - reportScore(a);
+        if (scoreDifference !== 0) return scoreDifference;
+        return (b.sourceUpdatedAt?.getTime() ?? 0) - (a.sourceUpdatedAt?.getTime() ?? 0);
+      });
+
+      onData(reports[0]);
     },
     (error) => {
       console.error("Fehler beim Laden des Spielberichts:", error);

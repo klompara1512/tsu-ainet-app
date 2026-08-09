@@ -20,7 +20,7 @@ concurrency:
 jobs:
   sync:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
@@ -30,7 +30,7 @@ jobs:
       REPORT_POST_KICKOFF_MINUTES: "720"
       REPORT_FORCE_WINDOW_MINUTES: "720"
       # Ein manueller Start darf das enge Zeitfenster umgehen.
-      REPORT_FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' && 'true' || 'false' }}
+      REPORT_FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' }}
 
     steps:
       - name: Projekt laden

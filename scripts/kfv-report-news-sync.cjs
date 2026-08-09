@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-oefb-report-direct-fix";
+const VERSION = "18.3.0-beta.1-smart-gate-manual-bypass";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -27,6 +27,7 @@ const POST_KICKOFF_MINUTES = Math.max(
   Number(process.env.REPORT_POST_KICKOFF_MINUTES || 720),
 );
 const FORCE_SYNC = /^(?:1|true|yes)$/i.test(process.env.REPORT_FORCE_SYNC || "");
+const MANUAL_RUN = FORCE_SYNC || process.env.GITHUB_EVENT_NAME === "workflow_dispatch";
 const FORCE_WINDOW_MINUTES = Math.max(60, Number(process.env.REPORT_FORCE_WINDOW_MINUTES || 720));
 const CONFIG_PATH = path.join(process.cwd(), "config", "kfv-sync.config.json");
 const SYNC_CONFIG = fs.existsSync(CONFIG_PATH)
@@ -321,8 +322,8 @@ async function mapLimit(items, limit, fn) {
 
 async function loadCandidateMatches() {
   const now = Date.now();
-  const preMinutes = FORCE_SYNC ? FORCE_WINDOW_MINUTES : PRE_KICKOFF_MINUTES;
-  const postMinutes = FORCE_SYNC ? FORCE_WINDOW_MINUTES : POST_KICKOFF_MINUTES;
+  const preMinutes = MANUAL_RUN ? FORCE_WINDOW_MINUTES : PRE_KICKOFF_MINUTES;
+  const postMinutes = MANUAL_RUN ? FORCE_WINDOW_MINUTES : POST_KICKOFF_MINUTES;
   const fromDate = new Date(now - postMinutes * 60000);
   const toDate = new Date(now + preMinutes * 60000);
 
@@ -351,7 +352,12 @@ async function loadCandidateMatches() {
 }
 
 async function keepMatchesNeedingPrematchData(matches) {
-  if (FORCE_SYNC || !matches.length) return matches;
+  if (MANUAL_RUN || !matches.length) {
+    if (MANUAL_RUN && matches.length) {
+      console.log(`Smart-Gate: Manueller Lauf – Gate wird für ${matches.length} relevante Spiele vollständig umgangen.`);
+    }
+    return matches;
+  }
 
   const checked = await mapLimit(matches, 3, async (match) => {
     const snapshot = await db
@@ -363,12 +369,17 @@ async function keepMatchesNeedingPrematchData(matches) {
     if (snapshot.empty) return match;
 
     const report = snapshot.docs[0].data() || {};
-    const lineupCount = Number(report.lineupPlayerCount || 0);
-    const hasLineup = lineupCount > 0 ||
-      (Array.isArray(report.homeLineup) && report.homeLineup.length > 0) ||
-      (Array.isArray(report.awayLineup) && report.awayLineup.length > 0) ||
-      (Array.isArray(match.homeLineup) && match.homeLineup.length > 0) ||
-      (Array.isArray(match.awayLineup) && match.awayLineup.length > 0);
+    const reportHomeCount = Array.isArray(report.homeLineup) ? report.homeLineup.length : 0;
+    const reportAwayCount = Array.isArray(report.awayLineup) ? report.awayLineup.length : 0;
+    const matchHomeCount = Array.isArray(match.homeLineup) ? match.homeLineup.length : 0;
+    const matchAwayCount = Array.isArray(match.awayLineup) ? match.awayLineup.length : 0;
+    const homeLineupCount = Math.max(reportHomeCount, matchHomeCount);
+    const awayLineupCount = Math.max(reportAwayCount, matchAwayCount);
+
+    // Eine einzelne erkannte Person oder nur eine Mannschaft darf das Smart-Gate
+    // niemals als vollständige Aufstellung werten. Für den automatischen Skip
+    // müssen auf BEIDEN Seiten mindestens sieben Startspieler vorhanden sein.
+    const hasLineup = homeLineupCount >= 7 && awayLineupCount >= 7;
     const hasReferee = Boolean(compact(report.referee || match.referee));
     const hasVenue = Boolean(compact(report.venue || match.venue));
     const hasResult =
@@ -382,7 +393,7 @@ async function keepMatchesNeedingPrematchData(matches) {
     const complete = hasLineup && hasReferee && hasVenue && (!hasStarted || hasResult);
 
     if (complete) {
-      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: benötigte Spieldaten vollständig vorhanden.`);
+      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: Kerndaten vollständig (Heim ${homeLineupCount}, Gast ${awayLineupCount}, Schiedsrichter, Spielort${hasStarted ? ", Ergebnis" : ""}).`);
       return null;
     }
 
@@ -1560,7 +1571,8 @@ async function upsertReport(report, runId) {
       reportComplete: Boolean(
         Number.isInteger(homeScore) &&
         Number.isInteger(awayScore) &&
-        lineupPlayerCount > 0 &&
+        homeLineup.length >= 7 &&
+        awayLineup.length >= 7 &&
         referee &&
         venue
       ),
@@ -1603,11 +1615,15 @@ async function updateMatchFromReport(report) {
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
 
   const snapshotData = snapshot.data() || {};
-  const lineupAvailable =
-    (Array.isArray(report.homeLineup) && report.homeLineup.length > 0) ||
-    (Array.isArray(report.awayLineup) && report.awayLineup.length > 0) ||
-    (Array.isArray(snapshotData.homeLineup) && snapshotData.homeLineup.length > 0) ||
-    (Array.isArray(snapshotData.awayLineup) && snapshotData.awayLineup.length > 0);
+  const homeLineupAvailable = Math.max(
+    Array.isArray(report.homeLineup) ? report.homeLineup.length : 0,
+    Array.isArray(snapshotData.homeLineup) ? snapshotData.homeLineup.length : 0,
+  ) >= 7;
+  const awayLineupAvailable = Math.max(
+    Array.isArray(report.awayLineup) ? report.awayLineup.length : 0,
+    Array.isArray(snapshotData.awayLineup) ? snapshotData.awayLineup.length : 0,
+  ) >= 7;
+  const lineupAvailable = homeLineupAvailable && awayLineupAvailable;
   const refereeAvailable = Boolean(report.referee || snapshotData.referee);
   const venueAvailable = Boolean(report.venue || snapshotData.venue);
   const resultAvailable =
@@ -1834,7 +1850,9 @@ async function main() {
 
   try {
     let candidateMatches = await loadCandidateMatches();
+    console.log(`Smart-Gate Eingang: ${candidateMatches.length} relevante Spiele im Zeitfenster; manual=${MANUAL_RUN}.`);
     candidateMatches = await keepMatchesNeedingPrematchData(candidateMatches);
+    console.log(`Smart-Gate Ausgang: ${candidateMatches.length} Spiele werden tatsächlich über ÖFB geprüft.`);
 
     if (!candidateMatches.length) {
       console.log("Smart-Gate: Kein Spiel benötigt aktuell Aufstellung/Schiedsrichter. Browser und ÖFB-Abrufe werden übersprungen.");

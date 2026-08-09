@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-complete-match-sync";
+const VERSION = "18.3.0-beta.1-oefb-report-direct-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -41,6 +41,15 @@ const REPORT_OVERRIDES = [
     home: "Lurnfeld",
     away: "TSU Ainet",
     url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?Lurnfeld-vs-Ainet&:s=4074032",
+  },
+  {
+    // Offizielle ÖFB-Spielberichtseite als verbindliche Quelle für dieses Spiel.
+    // Aufstellung, Schiedsrichter, Zuschauer, Spielort und Liveticker kommen
+    // direkt von derselben Seite mit der eindeutigen ÖFB-Spiel-ID.
+    date: "2026-08-09",
+    home: "SPG TSU Ainet/SU Oberlienz U17",
+    away: "SPG Lienzer Talboden U15 A",
+    url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?SPG-TSU-Ainet-SU-Oberlienz-U17-vs-SPG-Lienzer-Talboden-U15-A&:s=4173991",
   },
 ];
 
@@ -773,8 +782,36 @@ async function extractReport(browser, match) {
           ? assistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4)
           : [];
 
-        const venue = labelledValue(["Spielort", "Stadion", "Sportplatz"], 180);
-        const venueAddress = labelledValue(["Adresse", "Anschrift"], 220);
+        const textValueAfterLabel = (labels, maxLength = 220) => {
+          const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+          const pattern = new RegExp(`(?:^|\\n|\\|)\\s*(?:${escaped.join("|")})\\s*:?\\s*([^\\n|]{1,${maxLength}})`, "i");
+          return compact(String(document.body?.innerText || "").match(pattern)?.[1] || "");
+        };
+
+        // ÖFB verändert das Markup der Infobox gelegentlich. Die Werte werden
+        // deshalb zusätzlich direkt aus dem sichtbaren Text ausgelesen.
+        let robustReferee = referee || textValueAfterLabel(["Schiedsrichter", "Referee"], 160);
+        robustReferee = cleanOfficial(robustReferee);
+        const robustAssistantText = assistantText || textValueAfterLabel([
+          "Schiedsrichter-Assistenten",
+          "Schiedsrichterassistenten",
+          "Assistenten",
+          "Linienrichter",
+        ], 220);
+        const robustRefereeAssistants = refereeAssistants.length
+          ? refereeAssistants
+          : robustAssistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4);
+
+        let venue = labelledValue(["Spielort", "Stadion", "Sportplatz"], 180) ||
+          textValueAfterLabel(["Spielort", "Stadion", "Sportplatz"], 180);
+        let venueAddress = labelledValue(["Adresse", "Anschrift"], 220) ||
+          textValueAfterLabel(["Adresse", "Anschrift"], 220);
+
+        let robustAttendance = attendance;
+        if (!Number.isInteger(robustAttendance)) {
+          const fallbackAttendance = textValueAfterLabel(["Zuschauer", "Besucher"], 40).match(/(\d{1,6})/);
+          robustAttendance = fallbackAttendance ? Number(fallbackAttendance[1]) : null;
+        }
 
         const invalidPlayerText = /^(?:aufstellung(?:en)?|startelf|ersatzbank|bank|trainer(?:\s*&\s*betreuer)?|betreuer|tore|karten|wechsel|spieler|heim|gast|kader|zu-?\s*&\s*abgänge|keine einträge verfügbar|tsu ainet|eine seite des öfb dachangebotes)$/i;
 
@@ -972,10 +1009,82 @@ async function extractReport(browser, match) {
           return result;
         };
 
+        // Direkter ÖFB-Fallback: Auf der sichtbaren Aufstellungsansicht alle
+        // Spielerprofile erfassen. Das funktioniert auch dann, wenn ÖFB die
+        // bisherigen CSS-Klassennamen ändert oder keine Startelf-Überschrift
+        // im direkten DOM-Elternknoten vorhanden ist.
+        const profileAnchors = [...document.querySelectorAll(
+          "a[href*='Spielerdetails'],a[href*='spielerdetails'],a[href*='/Spieler/'],a[href*='/spieler/']",
+        )];
+        const directSides = { home: [], away: [] };
+        const directSeen = new Set();
+        for (const anchor of profileAnchors) {
+          const img = anchor.querySelector("img");
+          const card = anchor.closest("li,tr,[class*='player'],[class*='spieler'],article,section,div") || anchor;
+          const possibleNames = [
+            anchor.textContent,
+            anchor.getAttribute("aria-label"),
+            anchor.getAttribute("title"),
+            img?.getAttribute("alt"),
+            img?.getAttribute("title"),
+            card.textContent,
+          ];
+          let name = "";
+          for (const candidateName of possibleNames) {
+            name = cleanPlayerName(candidateName);
+            if (name) break;
+          }
+          if (!name) continue;
+          const playerUrl = absolute(anchor.href);
+          const profileKey = String(playerUrl).match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalize(name);
+          if (!profileKey || directSeen.has(profileKey)) continue;
+          directSeen.add(profileKey);
+          const rect = card.getBoundingClientRect();
+          const side = rect.left + rect.width / 2 < window.innerWidth / 2 ? "home" : "away";
+          directSides[side].push({
+            name,
+            number: extractNumber(compact(card.textContent)),
+            playerUrl,
+            captain: /kapitän|captain|\(c\)/i.test(compact(card.textContent)),
+            goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(compact(card.textContent)),
+            top: rect.top + window.scrollY,
+          });
+        }
+        directSides.home.sort((a, b) => a.top - b.top);
+        directSides.away.sort((a, b) => a.top - b.top);
+
         let homeLineup = uniquePlayers(buckets.homeStarter, 30);
         let awayLineup = uniquePlayers(buckets.awayStarter, 30);
         let homeBench = uniquePlayers(buckets.homeBench, 20);
         let awayBench = uniquePlayers(buckets.awayBench, 20);
+
+        if (homeLineup.length < 7 && directSides.home.length >= 7) {
+          homeLineup = uniquePlayers(directSides.home.slice(0, 11), 11);
+          if (!homeBench.length && directSides.home.length > 11) {
+            homeBench = uniquePlayers(directSides.home.slice(11), 15);
+          }
+        }
+        if (awayLineup.length < 7 && directSides.away.length >= 7) {
+          awayLineup = uniquePlayers(directSides.away.slice(0, 11), 11);
+          if (!awayBench.length && directSides.away.length > 11) {
+            awayBench = uniquePlayers(directSides.away.slice(11), 15);
+          }
+        }
+
+        // Wenn das responsive ÖFB-Layout beide Mannschaften untereinander
+        // anordnet, kann die Links/Rechts-Erkennung versagen. In diesem Fall
+        // wird die offizielle Reihenfolge der Profile verwendet: zuerst Heim,
+        // danach Gast.
+        if ((homeLineup.length < 7 || awayLineup.length < 7) && directSeen.size >= 18) {
+          const combinedDirect = uniquePlayers(
+            [...directSides.home, ...directSides.away].sort((a, b) => a.top - b.top),
+            40,
+          );
+          if (combinedDirect.length >= 18) {
+            if (homeLineup.length < 7) homeLineup = combinedDirect.slice(0, 11);
+            if (awayLineup.length < 7) awayLineup = combinedDirect.slice(11, 22);
+          }
+        }
 
         // ÖFB rendert beide Startelf-Spalten teilweise in einem gemeinsamen
         // DOM-Container. Dann landen beide Mannschaften im selben Bucket.
@@ -1179,9 +1288,9 @@ async function extractReport(browser, match) {
           topText,
           bodyLength: bodyText.length,
           result,
-          attendance,
-          referee,
-          refereeAssistants,
+          attendance: robustAttendance,
+          referee: robustReferee,
+          refereeAssistants: robustRefereeAssistants,
           venue: compact(venue),
           venueAddress: compact(venueAddress),
           homeLineup,
@@ -1191,6 +1300,7 @@ async function extractReport(browser, match) {
           events,
           heroImage,
           playerCandidateCount: candidates.length,
+          directProfileCount: directSeen.size,
           preview: textLines.slice(0, 35).join(" | ").slice(0, 1800),
         };
       },
@@ -1297,6 +1407,7 @@ async function extractReport(browser, match) {
         homeBenchPlayers: (raw.homeBench || []).length,
         awayBenchPlayers: (raw.awayBench || []).length,
         playerCandidateCount: raw.playerCandidateCount || 0,
+        directProfileCount: raw.directProfileCount || 0,
         events: report.eventCount,
         hasResult: Boolean(raw.result),
         venue: raw.venue || "",

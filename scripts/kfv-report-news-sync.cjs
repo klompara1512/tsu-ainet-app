@@ -1086,6 +1086,68 @@ async function extractReport(browser, match) {
           }
         }
 
+        // Letzter robuster ÖFB-Fallback: Die aktuelle Aufstellungsansicht wird
+        // visuell ausgewertet. Das ist absichtlich NICHT von ÖFB-CSS-Klassen
+        // abhängig. Sichtbare Namenselemente werden anhand ihrer Bildschirm-
+        // position der Heim- bzw. Gastspalte zugeordnet. Damit funktionieren
+        // auch Spielberichte, bei denen die Spielernamen nur als Text und nicht
+        // als verlinkte Spielerprofile ausgegeben werden.
+        if (homeLineup.length < 7 || awayLineup.length < 7) {
+          const visible = (node) => {
+            const style = getComputedStyle(node);
+            const rect = node.getBoundingClientRect();
+            return style.display !== "none" && style.visibility !== "hidden" &&
+              Number(style.opacity || 1) > 0 && rect.width > 0 && rect.height > 0;
+          };
+          const leafNodes = [...document.querySelectorAll("[role='tabpanel'] *, main *, article *, section *")]
+            .filter((node) => visible(node) && node.children.length === 0);
+          const visual = [];
+          const visualSeen = new Set();
+          for (const node of leafNodes) {
+            const rawValue = compact(node.innerText || node.textContent || "");
+            const name = cleanPlayerName(rawValue);
+            if (!name) continue;
+            if (/schiedsrichter|trainer|betreuer|co-trainer|leiter|funktionär|beobachter/i.test(contextText(node, 2))) continue;
+            const rect = node.getBoundingClientRect();
+            // Navigation/Footer und extrem breite Textzeilen sind keine Spieler.
+            if (rect.top < 0 || rect.width > window.innerWidth * 0.72) continue;
+            const key = `${normalize(name)}:${Math.round(rect.left / 10)}:${Math.round((rect.top + window.scrollY) / 10)}`;
+            if (visualSeen.has(key)) continue;
+            visualSeen.add(key);
+            visual.push({
+              name,
+              number: extractNumber(contextText(node, 2)),
+              playerUrl: absolute(node.closest("a[href]")?.href || ""),
+              captain: /kapitän|captain|\(c\)/i.test(contextText(node, 2)),
+              goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(contextText(node, 2)),
+              x: rect.left + rect.width / 2,
+              y: rect.top + window.scrollY,
+            });
+          }
+          visual.sort((a, b) => a.y - b.y || a.x - b.x);
+          const midpoint = window.innerWidth / 2;
+          let visualHome = uniquePlayers(visual.filter((item) => item.x < midpoint), 30);
+          let visualAway = uniquePlayers(visual.filter((item) => item.x >= midpoint), 30);
+
+          // Im mobilen/gestapelten Layout gibt es keine zwei X-Spalten. Dort
+          // wird die Reihenfolge verwendet, sobald mindestens zwei vollständige
+          // Startelfen erkennbar sind.
+          if ((visualHome.length < 7 || visualAway.length < 7) && visual.length >= 20) {
+            const allVisual = uniquePlayers(visual, 40);
+            visualHome = allVisual.slice(0, 11);
+            visualAway = allVisual.slice(11, 22);
+          }
+          if (homeLineup.length < 7 && visualHome.length >= 7) homeLineup = visualHome.slice(0, 11);
+          if (awayLineup.length < 7 && visualAway.length >= 7) awayLineup = visualAway.slice(0, 11);
+
+          window.__TSU_VISUAL_LINEUP_DEBUG__ = {
+            candidateCount: visual.length,
+            homeCount: visualHome.length,
+            awayCount: visualAway.length,
+            sample: visual.slice(0, 30).map((item) => item.name),
+          };
+        }
+
         // ÖFB rendert beide Startelf-Spalten teilweise in einem gemeinsamen
         // DOM-Container. Dann landen beide Mannschaften im selben Bucket.
         // Eine Startelf hat regulär elf Spieler: Ist nur eine Seite gefüllt
@@ -1301,6 +1363,7 @@ async function extractReport(browser, match) {
           heroImage,
           playerCandidateCount: candidates.length,
           directProfileCount: directSeen.size,
+          visualLineupDebug: window.__TSU_VISUAL_LINEUP_DEBUG__ || null,
           preview: textLines.slice(0, 35).join(" | ").slice(0, 1800),
         };
       },
@@ -1408,6 +1471,7 @@ async function extractReport(browser, match) {
         awayBenchPlayers: (raw.awayBench || []).length,
         playerCandidateCount: raw.playerCandidateCount || 0,
         directProfileCount: raw.directProfileCount || 0,
+        visualLineupDebug: raw.visualLineupDebug || null,
         events: report.eventCount,
         hasResult: Boolean(raw.result),
         venue: raw.venue || "",

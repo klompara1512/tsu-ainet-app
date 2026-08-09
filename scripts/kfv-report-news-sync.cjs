@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-manual-candidate-fix";
+const VERSION = "18.3.0-beta.1-oefb-deep-frame-parser-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -663,16 +663,40 @@ async function waitForReport(page) {
       };
 
       const clickTab = async (labels) => {
-        const candidates = [
-          ...document.querySelectorAll("button,a,[role='tab'],[data-toggle='tab']"),
+        const normalized = labels.map((label) => label.toLowerCase());
+        // ÖFB rendert die Reiter je nach Breakpoint nicht immer als <a>/<button>.
+        // Deshalb zuerst echte Controls, danach sichtbare Elemente mit passendem Text.
+        const all = [
+          ...document.querySelectorAll("button,a,[role='tab'],[data-toggle='tab'],[role='button'],li,span,div"),
         ];
-        const target = candidates.find((node) => {
-          const text = compact(node.textContent).toLowerCase();
-          return labels.some((label) => text === label || text.includes(label));
-        });
+        const visible = (node) => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        };
+        const ranked = all
+          .filter(visible)
+          .map((node) => {
+            const text = compact(node.textContent).toLowerCase();
+            let score = 0;
+            for (const label of normalized) {
+              if (text === label) score = Math.max(score, 100);
+              else if (text.startsWith(label)) score = Math.max(score, 80);
+              else if (text.includes(label) && text.length < 80) score = Math.max(score, 60);
+            }
+            if (/^(A|BUTTON)$/.test(node.tagName) || node.getAttribute("role") === "tab") score += 20;
+            return { node, score };
+          })
+          .filter((entry) => entry.score > 0)
+          .sort((a, b) => b.score - a.score);
+        const target = ranked[0]?.node;
         if (!target) return false;
+        target.scrollIntoView({ block: "center", inline: "center" });
+        await sleep(150);
+        target.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, cancelable: true, view: window }));
+        target.dispatchEvent(new MouseEvent("mouseup", { bubbles: true, cancelable: true, view: window }));
         target.click();
-        await sleep(850);
+        await sleep(1800);
         rememberVisibleEventContent();
         return true;
       };
@@ -706,10 +730,14 @@ async function waitForReport(page) {
         await sleep(90);
       }
       window.scrollTo(0, 0);
+      // Nach dem Scrollen den Aufstellungsreiter nochmals aktivieren. Einige
+      // ÖFB-Seiten mounten dessen Inhalt erst nach dem ersten Layout-/Lazy-Load.
+      await clickTab(["aufstellung", "aufstellungen", "lineup"]);
+      await sleep(1200);
     })
     .catch(() => {});
 
-  await new Promise((resolve) => setTimeout(resolve, 1400));
+  await new Promise((resolve) => setTimeout(resolve, 1800));
 }
 
 async function extractReport(browser, match) {
@@ -1430,6 +1458,93 @@ async function extractReport(browser, match) {
       },
     );
 
+    // Deep-Fallback für die aktuelle ÖFB-Vereinsseite: Aufstellungen können
+    // in einem nachgeladenen Frame/Widget liegen. page.evaluate() sieht nur den
+    // Hauptframe. Deshalb werden bei unvollständiger Startelf ALLE Frames direkt
+    // nach offiziellen Spielerprofilen durchsucht. Dieser Fallback ist bewusst
+    // eng: Es werden nur ÖFB-Spielerlinks akzeptiert und niemals freie Namen erfunden.
+    if ((raw.homeLineup?.length || 0) < 7 || (raw.awayLineup?.length || 0) < 7) {
+      const framePlayers = [];
+      const frameDiagnostics = [];
+      for (const frame of page.frames()) {
+        try {
+          const data = await frame.evaluate(() => {
+            const compact = (value) => String(value || "").replace(/\s+/g, " ").trim();
+            const cleanName = (value) => {
+              const text = compact(value)
+                .replace(/^#?\s*\d{1,3}\s*/, "")
+                .replace(/\s*\([^)]*(?:kapitän|captain|tw|gk)[^)]*\)\s*$/i, "")
+                .trim();
+              if (text.length < 3 || text.length > 80 || !/\s/.test(text)) return "";
+              if (!/^[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß .'-]+$/.test(text)) return "";
+              if (/^(?:aufstellung|startelf|ersatzbank|trainer|betreuer|heim|gast|spieler)$/i.test(text)) return "";
+              return text;
+            };
+            const anchors = [...document.querySelectorAll(
+              "a[href*='Spielerdetails'],a[href*='spielerdetails'],a[href*='/Spieler/'],a[href*='/spieler/'],a[href*='Player'],a[href*='player']"
+            )];
+            const players = [];
+            for (const anchor of anchors) {
+              const card = anchor.closest("li,tr,article,section,[class*='player'],[class*='spieler'],div") || anchor;
+              const img = anchor.querySelector("img");
+              const values = [anchor.textContent, anchor.getAttribute("title"), anchor.getAttribute("aria-label"), img?.alt, card.textContent];
+              let name = "";
+              for (const value of values) { name = cleanName(value); if (name) break; }
+              if (!name) continue;
+              const href = anchor.href || "";
+              const rect = card.getBoundingClientRect();
+              const context = compact(card.textContent || "");
+              players.push({
+                name,
+                playerUrl: href,
+                number: Number(context.match(/(?:^|\s|#)(\d{1,2})(?=\s|$|[.)])/)?.[1] || 0) || null,
+                captain: /kapitän|captain|\(c\)/i.test(context),
+                goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(context),
+                x: rect.left + rect.width / 2,
+                y: rect.top + window.scrollY,
+              });
+            }
+            return {
+              url: location.href,
+              title: document.title,
+              bodyLength: (document.body?.innerText || "").length,
+              playerCount: players.length,
+              players,
+            };
+          });
+          frameDiagnostics.push({ url: data.url, title: data.title, bodyLength: data.bodyLength, playerCount: data.playerCount });
+          framePlayers.push(...data.players.map((player) => ({ ...player, frameUrl: data.url })));
+        } catch (error) {
+          frameDiagnostics.push({ url: frame.url(), error: error.message || String(error) });
+        }
+      }
+
+      const normalized = (value) => String(value || "").toLocaleLowerCase("de-AT")
+        .replace(/ä/g,"ae").replace(/ö/g,"oe").replace(/ü/g,"ue").replace(/ß/g,"ss")
+        .replace(/[^a-z0-9]+/g," ").trim();
+      const unique = [];
+      const seenPlayers = new Set();
+      for (const player of framePlayers.sort((a,b) => a.y - b.y || a.x - b.x)) {
+        const id = String(player.playerUrl || "").match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalized(player.name);
+        if (!id || seenPlayers.has(id)) continue;
+        seenPlayers.add(id);
+        unique.push(player);
+      }
+
+      // Eine veröffentlichte ÖFB-Startelf besteht aus 11 + 11 Spielern. Nur
+      // wenn mindestens 18 eindeutige offizielle Profile gefunden wurden, darf
+      // dieser Fallback die vorhandene Erkennung ersetzen.
+      if (unique.length >= 18) {
+        if ((raw.homeLineup?.length || 0) < 7) raw.homeLineup = unique.slice(0, 11).map(({x,y,frameUrl,...player}) => player);
+        if ((raw.awayLineup?.length || 0) < 7) raw.awayLineup = unique.slice(11, 22).map(({x,y,frameUrl,...player}) => player);
+        if ((!raw.homeBench || raw.homeBench.length === 0) && unique.length > 22) {
+          raw.homeBench = unique.slice(22, Math.min(29, unique.length)).map(({x,y,frameUrl,...player}) => player);
+        }
+      }
+      raw.deepFramePlayerCount = unique.length;
+      raw.frameDiagnostics = frameDiagnostics;
+    }
+
     const validation = validateReportPage(match, raw);
 
     const report = {
@@ -1528,6 +1643,8 @@ async function extractReport(browser, match) {
         awayBenchPlayers: (raw.awayBench || []).length,
         playerCandidateCount: raw.playerCandidateCount || 0,
         directProfileCount: raw.directProfileCount || 0,
+        deepFramePlayerCount: raw.deepFramePlayerCount || 0,
+        frameDiagnostics: raw.frameDiagnostics || [],
         visualLineupDebug: raw.visualLineupDebug || null,
         events: report.eventCount,
         hasResult: Boolean(raw.result),
@@ -1896,6 +2013,7 @@ async function main() {
 
   try {
     let candidateMatches = await loadCandidateMatches();
+    console.log(`Spielbericht-Sync Parser-Version: ${VERSION}`);
     console.log(`Smart-Gate Eingang: ${candidateMatches.length} relevante Spiele im Zeitfenster; manual=${MANUAL_RUN}.`);
     candidateMatches = await keepMatchesNeedingPrematchData(candidateMatches);
     console.log(`Smart-Gate Ausgang: ${candidateMatches.length} Spiele werden tatsächlich über ÖFB geprüft.`);
@@ -1974,6 +2092,21 @@ async function main() {
     const failedCount = results.filter(
       (result) => !result.ok,
     ).length;
+
+    for (const diagnostic of diagnostics) {
+      console.log(
+        `ÖFB Parser ${diagnostic.finalGameId || diagnostic.requestedGameId || diagnostic.matchId}: ` +
+        `Startelf Heim=${diagnostic.homeStarters || 0}, Gast=${diagnostic.awayStarters || 0}, ` +
+        `Bank Heim=${diagnostic.homeBenchPlayers || 0}, Gast=${diagnostic.awayBenchPlayers || 0}, ` +
+        `Profile=${diagnostic.directProfileCount || 0}, DeepFrames=${diagnostic.deepFramePlayerCount || 0}, Kandidaten=${diagnostic.playerCandidateCount || 0}, ` +
+        `SR=${diagnostic.referee ? "ja" : "nein"}, Ort=${diagnostic.venue ? "ja" : "nein"}, ` +
+        `Zuschauer=${Number.isInteger(diagnostic.attendance) ? diagnostic.attendance : "-"}, ` +
+        `gültig=${diagnostic.valid ? "ja" : "nein"}`
+      );
+      if (diagnostic.validationErrors?.length) {
+        console.log(`ÖFB Parser Hinweise: ${diagnostic.validationErrors.join(" | ")}`);
+      }
+    }
 
     await statusRef.set(
       {

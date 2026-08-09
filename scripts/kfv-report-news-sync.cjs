@@ -6,9 +6,11 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-oefb-match-id-mapping-fix";
+const VERSION = "18.3.0-beta.1-canonical-match-report-link-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
+const MATCH_COLLECTION = "oefbV12Matches";
+const LEGACY_MATCH_COLLECTION = "kfvMatches";
 const NEWS_COLLECTION = "news";
 const CONCURRENCY = Math.max(
   1,
@@ -350,9 +352,9 @@ async function loadCandidateMatches() {
   // werden konnte. Manuell laden wir deshalb eine bewusst begrenzte Menge der
   // Match-Dokumente und filtern erst danach in JavaScript.
   const snapshot = MANUAL_RUN
-    ? await db.collection("kfvMatches").limit(500).get()
+    ? await db.collection(MATCH_COLLECTION).limit(500).get()
     : await db
-        .collection("kfvMatches")
+        .collection(MATCH_COLLECTION)
         .where("kickoffAt", ">=", admin.firestore.Timestamp.fromDate(fromDate))
         .where("kickoffAt", "<=", admin.firestore.Timestamp.fromDate(toDate))
         .get();
@@ -618,7 +620,7 @@ async function resolveMatchReports(browser, matches) {
 
     if (changed) {
       corrected += 1;
-      await db.collection("kfvMatches").doc(match.id).set({
+      await db.collection(MATCH_COLLECTION).doc(match.id).set({
         reportUrl: url,
         gameId,
         oefbMatchId: gameId,
@@ -1781,7 +1783,7 @@ async function upsertReport(report, runId) {
 
 async function updateMatchFromReport(report) {
   if (!report.matchId) return;
-  const ref = db.collection("kfvMatches").doc(report.matchId);
+  const ref = db.collection(MATCH_COLLECTION).doc(report.matchId);
   const snapshot = await ref.get();
   if (!snapshot.exists) return;
 

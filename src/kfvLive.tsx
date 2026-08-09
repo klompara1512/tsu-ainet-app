@@ -101,7 +101,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
     setLoadingMatchReport(true);
     setMatchReportError("");
     return subscribeKfvMatchReport(
-      selectedMatch.id,
+      selectedMatch,
       (report) => {
         setMatchReport(report);
         setLoadingMatchReport(false);

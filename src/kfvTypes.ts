@@ -22,6 +22,8 @@ export type KfvMatch = {
   liveUrl: string;
   status: KfvMatchStatus;
   reportUrl: string;
+  gameId: string;
+  oefbMatchId: string;
   sourceUpdatedAt: Date | null;
   active: boolean;
 };

@@ -117,67 +117,109 @@ function mapMatchReportDocument(
 }
 
 export function subscribeKfvMatchReport(
-  matchId: string,
+  match: Pick<KfvMatch, "id" | "gameId" | "oefbMatchId" | "reportUrl">,
   onData: (report: KfvMatchReport | null) => void,
   onError: (message: string) => void,
 ) {
-  if (!matchId) {
+  if (!match.id) {
     onData(null);
     return () => undefined;
   }
 
-  // Die Berichtsdokument-ID ist nicht immer identisch mit der Match-ID.
-  // Deshalb wird über das gespeicherte Feld matchId gesucht.
-  const reportQuery = query(
+  const extractGameId = (value: string) => {
+    const decoded = (() => { try { return decodeURIComponent(value || ""); } catch { return value || ""; } })();
+    return decoded.match(/(?:[?&](?::s|s)=|\b:s=)(\d{5,12})/i)?.[1] || "";
+  };
+
+  // WICHTIG: Der Bericht-Sync lief historisch auf `kfvMatches`, die App zeigt
+  // aber `oefbV12Matches`. Dadurch können Dokument-IDs für dasselbe ÖFB-Spiel
+  // verschieden sein. Die eindeutige ÖFB-Spiel-ID ist deshalb die kanonische
+  // Verbindung zwischen Match und Spielbericht.
+  const oefbMatchId = match.oefbMatchId || match.gameId || extractGameId(match.reportUrl);
+  const byMatchId = query(
     collection(db, "kfvMatchReports"),
-    where("matchId", "==", matchId),
+    where("matchId", "==", match.id),
     limit(10),
   );
+  const byOefbId = oefbMatchId
+    ? query(
+        collection(db, "kfvMatchReports"),
+        where("oefbMatchId", "==", oefbMatchId),
+        limit(10),
+      )
+    : null;
 
-  return onSnapshot(
-    reportQuery,
-    (snapshot) => {
-      // Für dieselbe Match-ID können aus älteren Sync-Versionen mehrere
-      // Berichtsdokumente existieren (z. B. alte Hash-ID + neue ÖFB-ID).
-      // limit(1) konnte dadurch zufällig einen bereits deaktivierten oder
-      // unvollständigen Altbericht liefern, obwohl der aktuelle ÖFB-Bericht
-      // die komplette Aufstellung enthält.
-      const reports = snapshot.docs
-        .map((document) => mapMatchReportDocument(document.id, document.data()))
-        .filter((report) => report.active);
+  let matchReports: KfvMatchReport[] = [];
+  let oefbReports: KfvMatchReport[] = [];
+  let matchReady = false;
+  let oefbReady = byOefbId === null;
 
-      if (!reports.length) {
-        onData(null);
-        return;
-      }
+  const publishBest = () => {
+    if (!matchReady || !oefbReady) return;
+    const merged = new Map<string, KfvMatchReport>();
+    [...matchReports, ...oefbReports].forEach((report) => {
+      if (report.active) merged.set(report.id, report);
+    });
+    const reports = [...merged.values()];
+    if (!reports.length) {
+      onData(null);
+      return;
+    }
 
-      const reportScore = (report: KfvMatchReport) => {
-        const lineupCount =
-          report.homeLineup.length +
-          report.awayLineup.length +
-          report.homeBench.length +
-          report.awayBench.length;
-        const coreData =
-          (report.homeLineup.length >= 7 && report.awayLineup.length >= 7 ? 1000 : 0) +
-          (report.referee ? 100 : 0) +
-          (report.venue ? 50 : 0) +
-          (report.oefbMatchId ? 25 : 0);
-        return coreData + lineupCount;
-      };
+    const reportScore = (report: KfvMatchReport) => {
+      const lineupCount = report.homeLineup.length + report.awayLineup.length + report.homeBench.length + report.awayBench.length;
+      const coreData =
+        (report.oefbMatchId && report.oefbMatchId === oefbMatchId ? 5000 : 0) +
+        (report.homeLineup.length >= 7 && report.awayLineup.length >= 7 ? 1000 : 0) +
+        (report.referee ? 100 : 0) +
+        (report.venue ? 50 : 0) +
+        (report.oefbMatchId ? 25 : 0);
+      return coreData + lineupCount;
+    };
 
-      reports.sort((a, b) => {
-        const scoreDifference = reportScore(b) - reportScore(a);
-        if (scoreDifference !== 0) return scoreDifference;
-        return (b.sourceUpdatedAt?.getTime() ?? 0) - (a.sourceUpdatedAt?.getTime() ?? 0);
-      });
+    reports.sort((a, b) => {
+      const scoreDifference = reportScore(b) - reportScore(a);
+      if (scoreDifference !== 0) return scoreDifference;
+      return (b.sourceUpdatedAt?.getTime() ?? 0) - (a.sourceUpdatedAt?.getTime() ?? 0);
+    });
+    onData(reports[0]);
+  };
 
-      onData(reports[0]);
-    },
-    (error) => {
-      console.error("Fehler beim Laden des Spielberichts:", error);
-      onError("Der offizielle Spielbericht konnte nicht geladen werden.");
-    },
-  );
+  const unsubs = [
+    onSnapshot(
+      byMatchId,
+      (snapshot) => {
+        matchReports = snapshot.docs.map((document) => mapMatchReportDocument(document.id, document.data()));
+        matchReady = true;
+        publishBest();
+      },
+      (error) => {
+        console.error("Fehler beim Laden des Spielberichts über Match-ID:", error);
+        onError("Der offizielle Spielbericht konnte nicht geladen werden.");
+      },
+    ),
+  ];
+
+  if (byOefbId) {
+    unsubs.push(
+      onSnapshot(
+        byOefbId,
+        (snapshot) => {
+          oefbReports = snapshot.docs.map((document) => mapMatchReportDocument(document.id, document.data()));
+          oefbReady = true;
+          publishBest();
+        },
+        (error) => {
+          console.error("Fehler beim Laden des Spielberichts über ÖFB-ID:", error);
+          // Match-ID-Abfrage darf trotzdem weiter funktionieren.
+          oefbReady = true;
+          publishBest();
+        },
+      ),
+    );
+  }
+
+  return () => unsubs.forEach((unsubscribe) => unsubscribe());
 }
 
 function normalizeMatchPart(value: string) {
@@ -271,6 +313,8 @@ function deduplicateMatches(matches: KfvMatch[]) {
         best.referee ||= match.referee;
         best.liveUrl ||= match.liveUrl;
         best.reportUrl ||= match.reportUrl;
+        best.gameId ||= match.gameId;
+        best.oefbMatchId ||= match.oefbMatchId;
       }
       return best;
     })
@@ -315,6 +359,8 @@ export function subscribeKfvMatches(
             liveUrl: typeof data.liveUrl === "string" ? data.liveUrl : "",
             status: readStatus(data.status),
             reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
+            gameId: typeof data.gameId === "string" ? data.gameId : "",
+            oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : (typeof data.gameId === "string" ? data.gameId : ""),
             sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),
             active: typeof data.active === "boolean" ? data.active : true,
           } satisfies KfvMatch;

@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-smart-gate-manual-bypass";
+const VERSION = "18.3.0-beta.1-manual-candidate-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -96,8 +96,25 @@ const absoluteUrl = (value, base) => {
   }
 };
 
-const isAinet = (name) =>
-  /(?:^|\s)(?:tsu\s+)?ainet(?:\s|$)/i.test(compact(name));
+const isAinet = (name) => {
+  // Auch SPG-Namen wie „SPG TSU Ainet/SU Oberlienz U17“ müssen erkannt werden.
+  // Die frühere Prüfung verlangte nach „Ainet“ ein Leerzeichen oder String-Ende
+  // und scheiterte deshalb am Slash direkt hinter „Ainet“.
+  const normalized = normalizeTextForClubDetection(name);
+  return /(?:^|\s)ainet(?:\s|$)/i.test(normalized);
+};
+
+function normalizeTextForClubDetection(value) {
+  return compact(value)
+    .toLocaleLowerCase("de-AT")
+    .replace(/ä/g, "ae")
+    .replace(/ö/g, "oe")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 function normalizeText(value) {
   return compact(value)
@@ -327,28 +344,57 @@ async function loadCandidateMatches() {
   const fromDate = new Date(now - postMinutes * 60000);
   const toDate = new Date(now + preMinutes * 60000);
 
-  const snapshot = await db
-    .collection("kfvMatches")
-    .where("kickoffAt", ">=", admin.firestore.Timestamp.fromDate(fromDate))
-    .where("kickoffAt", "<=", admin.firestore.Timestamp.fromDate(toDate))
-    .get();
+  // WICHTIG: Ein manueller workflow_dispatch darf NICHT bereits durch die
+  // Firestore-Zeitbereichsabfrage leer laufen. Genau das ist beim U17-Spiel
+  // 4173991 passiert: manual=true, aber 0 Kandidaten, bevor das Gate umgangen
+  // werden konnte. Manuell laden wir deshalb eine bewusst begrenzte Menge der
+  // Match-Dokumente und filtern erst danach in JavaScript.
+  const snapshot = MANUAL_RUN
+    ? await db.collection("kfvMatches").limit(500).get()
+    : await db
+        .collection("kfvMatches")
+        .where("kickoffAt", ">=", admin.firestore.Timestamp.fromDate(fromDate))
+        .where("kickoffAt", "<=", admin.firestore.Timestamp.fromDate(toDate))
+        .get();
 
-  return snapshot.docs
+  const all = snapshot.docs
     .map((doc) => ({ id: doc.id, ...doc.data() }))
     .map((match) => ({
       ...match,
       kickoffDate: asDate(match.kickoffAt),
     }))
     .filter((match) => match.active !== false)
-    .filter((match) => {
-      const time = match.kickoffDate.getTime();
-      return time > 0 && now >= time - preMinutes * 60000 && now <= time + postMinutes * 60000;
-    })
-    .filter(
-      (match) =>
-        isAinet(match.homeTeam) || isAinet(match.awayTeam),
-    )
-    .sort((a, b) => b.kickoffDate - a.kickoffDate);
+    .filter((match) => isAinet(match.homeTeam) || isAinet(match.awayTeam));
+
+  const forcedGameIds = new Set(REPORT_OVERRIDES.map((item) => extractOefbGameId(item.url)).filter(Boolean));
+
+  const relevant = all.filter((match) => {
+    const time = match.kickoffDate.getTime();
+    const storedGameId = compact(match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl));
+    const forcedByKnownOfficialReport = storedGameId && forcedGameIds.has(storedGameId);
+
+    // Bekannte offizielle Einzelberichte dürfen bei einem manuellen Lauf nie
+    // wegen eines fehlerhaften/verschobenen kickoffAt verloren gehen.
+    if (MANUAL_RUN && forcedByKnownOfficialReport) return true;
+
+    return time > 0 && now >= time - preMinutes * 60000 && now <= time + postMinutes * 60000;
+  });
+
+  if (MANUAL_RUN) {
+    console.log(`Manual-Candidate-Scan: ${snapshot.size} Match-Dokumente geladen, ${all.length} Ainet/SPG-Ainet-Spiele erkannt, ${relevant.length} im manuellen Prüfbereich.`);
+    if (!relevant.length) {
+      const sample = all.slice(0, 12).map((match) => ({
+        id: match.id,
+        home: match.homeTeam,
+        away: match.awayTeam,
+        kickoff: match.kickoffDate?.toISOString?.() || "",
+        gameId: compact(match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl)),
+      }));
+      console.log("Manual-Candidate-Diagnose:", JSON.stringify(sample));
+    }
+  }
+
+  return relevant.sort((a, b) => b.kickoffDate - a.kickoffDate);
 }
 
 async function keepMatchesNeedingPrematchData(matches) {

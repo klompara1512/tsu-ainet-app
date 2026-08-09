@@ -1310,7 +1310,7 @@ async function extractReport(browser, match) {
           ? window.__TSU_EVENT_SNAPSHOTS__.filter((value) => typeof value === "string")
           : [];
 
-        const eventNoise = /(?:leaflet|openstreetmap|sportplatz\s+möllbrücke|waldweg\s+1|programm\s+(?:sa|so|mo|di|mi|do|fr)\.?|tabellen?|resultate|torverteilung|vereins-homepage|datenschutz|impressum|cookie|navigation|spielort\s+sportplatz|\+\s*−)/i;
+        const eventNoise = /(?:leaflet|openstreetmap|sportplatz\s+möllbrücke|waldweg\s+1|programm\s+(?:sa|so|mo|di|mi|do|fr)\.?|tabellen?|resultate|torverteilung|vereins-homepage|datenschutz|impressum|cookie|navigation|spielort\s+sportplatz|vorbericht|vorschau|spielvorschau|nachbericht|spielbericht|analyse|interview|trainerstimme|news|präsentiert|praesentiert|sponsor|werbung|\+\s*−)/i;
         const eventKeyword = /(?:tor\b|trifft|spielstand|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
 
         const cleanEventDescription = (value) => compact(value)

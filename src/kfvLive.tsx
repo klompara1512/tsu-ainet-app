@@ -253,11 +253,29 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
             : "Geplant";
 
 
-    const reportEvents = matchReport?.events ?? [];
+    const reportEvents = (matchReport?.events ?? []).filter((event) => {
+      const type = String(event.type || "");
+      const text = `${event.playerName || ""} ${event.secondaryPlayerName || ""} ${event.description || ""}`.toLowerCase();
+      const allowedTypes = new Set(["goal", "yellow", "yellowRed", "red", "substitution", "halfTime", "fullTime"]);
+      const editorialNoise = /\b(?:vorbericht|vorschau|spielvorschau|nachbericht|spielbericht|bericht|analyse|interview|trainerstimme|news|präsentiert|praesentiert|sponsor|werbung)\b/i;
+      return allowedTypes.has(type) && !editorialNoise.test(text);
+    });
     const eventLabel = (type: string) => ({
       goal: "Tor", yellow: "Gelbe Karte", yellowRed: "Gelb-Rote Karte", red: "Rote Karte",
       substitution: "Wechsel", halfTime: "Halbzeit", fullTime: "Spielende", other: "Ereignis",
     }[type] || "Ereignis");
+
+    const EventSymbol = ({ type }: { type: string }) => {
+      const svgProps = { viewBox: "0 0 24 24", width: 19, height: 19, fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
+      if (type === "goal") return <span className="event-symbol event-symbol-goal" aria-label="Tor"><svg {...svgProps}><circle cx="12" cy="12" r="9"/><path d="m12 7 3.2 2.3-1.2 3.8h-4l-1.2-3.8L12 7Z"/><path d="m8.8 9.3-3.6-.2M15.2 9.3l3.6-.2M10 13.1l-2.1 3M14 13.1l2.1 3M7.9 16.1l.8 3.1M16.1 16.1l-.8 3.1"/></svg></span>;
+      if (type === "yellow") return <span className="event-symbol event-symbol-card event-symbol-yellow" aria-label="Gelbe Karte"><i /></span>;
+      if (type === "red") return <span className="event-symbol event-symbol-card event-symbol-red" aria-label="Rote Karte"><i /></span>;
+      if (type === "yellowRed") return <span className="event-symbol event-symbol-double-card" aria-label="Gelb-Rote Karte"><i /><b /></span>;
+      if (type === "substitution") return <span className="event-symbol event-symbol-substitution" aria-label="Wechsel"><svg {...svgProps}><path d="M7 7h10"/><path d="m14 4 3 3-3 3"/><path d="M17 17H7"/><path d="m10 20-3-3 3-3"/></svg></span>;
+      if (type === "halfTime") return <span className="event-symbol event-symbol-time" aria-label="Halbzeit"><svg {...svgProps}><circle cx="12" cy="12" r="9"/><path d="M9 8v8M15 8v8"/></svg></span>;
+      if (type === "fullTime") return <span className="event-symbol event-symbol-time" aria-label="Spielende"><svg {...svgProps}><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></span>;
+      return <span className="event-symbol event-symbol-other" aria-label="Ereignis"><svg {...svgProps}><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="8"/></svg></span>;
+    };
 
     const LineupList = ({ title, players, coach }: { title: string; players: KfvMatchReport["homeLineup"]; coach?: string }) => (
       <article className="official-lineup-card">
@@ -427,7 +445,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                   {reportEvents.map((event) => (
                     <article key={event.id} className={`event-${event.type} event-${event.team}`}>
                       <time>{event.minuteText || (event.minute !== null ? `${event.minute}'` : "")}</time>
-                      <span className="event-dot" />
+                      <span className="event-marker"><EventSymbol type={event.type} /></span>
                       <div><small>{eventLabel(event.type)}</small><strong>{event.playerName || event.description || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</div>
                     </article>
                   ))}

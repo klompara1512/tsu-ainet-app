@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-reliable-match-info-sync";
+const VERSION = "18.3.0-beta.1-complete-match-sync";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -24,7 +24,7 @@ const PRE_KICKOFF_MINUTES = Math.max(
 );
 const POST_KICKOFF_MINUTES = Math.max(
   0,
-  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 30),
+  Number(process.env.REPORT_POST_KICKOFF_MINUTES || 720),
 );
 const FORCE_SYNC = /^(?:1|true|yes)$/i.test(process.env.REPORT_FORCE_SYNC || "");
 const FORCE_WINDOW_MINUTES = Math.max(60, Number(process.env.REPORT_FORCE_WINDOW_MINUTES || 720));
@@ -355,11 +355,25 @@ async function keepMatchesNeedingPrematchData(matches) {
 
     const report = snapshot.docs[0].data() || {};
     const lineupCount = Number(report.lineupPlayerCount || 0);
+    const hasLineup = lineupCount > 0 ||
+      (Array.isArray(report.homeLineup) && report.homeLineup.length > 0) ||
+      (Array.isArray(report.awayLineup) && report.awayLineup.length > 0) ||
+      (Array.isArray(match.homeLineup) && match.homeLineup.length > 0) ||
+      (Array.isArray(match.awayLineup) && match.awayLineup.length > 0);
     const hasReferee = Boolean(compact(report.referee || match.referee));
     const hasVenue = Boolean(compact(report.venue || match.venue));
+    const hasResult =
+      (Number.isInteger(report.homeScore) && Number.isInteger(report.awayScore)) ||
+      (Number.isInteger(match.homeScore) && Number.isInteger(match.awayScore));
+    const kickoffMs = match.kickoffDate?.getTime?.() || asDate(match.kickoffAt).getTime();
+    const hasStarted = kickoffMs > 0 && Date.now() >= kickoffMs;
 
-    if (lineupCount > 0 && hasReferee && hasVenue) {
-      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: Aufstellung, Spielort und Schiedsrichter bereits vorhanden.`);
+    // Vor Anpfiff reichen Aufstellung, Spielort und Schiedsrichter. Nach Anpfiff
+    // bleibt das Spiel so lange im Sync, bis zusätzlich ein Ergebnis vorliegt.
+    const complete = hasLineup && hasReferee && hasVenue && (!hasStarted || hasResult);
+
+    if (complete) {
+      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: benötigte Spieldaten vollständig vorhanden.`);
       return null;
     }
 
@@ -1246,7 +1260,9 @@ async function extractReport(browser, match) {
             raw.awayLineup.length ||
             (raw.homeBench || []).length ||
             (raw.awayBench || []).length ||
-            raw.result,
+            raw.result ||
+            raw.referee ||
+            raw.venue,
         ),
       active: true,
       source: "oefb-official-report",
@@ -1328,31 +1344,55 @@ async function upsertReport(report, runId) {
   const existing = await ref.get();
   const old = existing.exists ? existing.data() : {};
 
+  const homeScore = Number.isInteger(report.homeScore)
+    ? report.homeScore
+    : (Number.isInteger(old.homeScore) ? old.homeScore : null);
+  const awayScore = Number.isInteger(report.awayScore)
+    ? report.awayScore
+    : (Number.isInteger(old.awayScore) ? old.awayScore : null);
+  const homeLineup = report.homeLineup.length ? report.homeLineup : old.homeLineup || [];
+  const awayLineup = report.awayLineup.length ? report.awayLineup : old.awayLineup || [];
+  const homeBench = report.homeBench.length ? report.homeBench : old.homeBench || [];
+  const awayBench = report.awayBench.length ? report.awayBench : old.awayBench || [];
+  const referee = report.referee || old.referee || "";
+  const venue = report.venue || old.venue || "";
+  const refereeAssistants = report.refereeAssistants.length
+    ? report.refereeAssistants
+    : old.refereeAssistants || [];
+  const lineupPlayerCount =
+    homeLineup.length + awayLineup.length + homeBench.length + awayBench.length;
+
   await ref.set(
     {
       ...old,
       ...report,
-      imageUrl:
-        report.imageUrl || old.imageUrl || "",
-      homeLineup: report.homeLineup.length
-        ? report.homeLineup
-        : old.homeLineup || [],
-      awayLineup: report.awayLineup.length
-        ? report.awayLineup
-        : old.awayLineup || [],
-      homeBench: report.homeBench.length
-        ? report.homeBench
-        : old.homeBench || [],
-      awayBench: report.awayBench.length
-        ? report.awayBench
-        : old.awayBench || [],
-      events: report.events.length
-        ? report.events
-        : old.events || [],
+      homeScore,
+      awayScore,
+      imageUrl: report.imageUrl || old.imageUrl || "",
+      venue,
+      venueAddress: report.venueAddress || old.venueAddress || "",
+      referee,
+      refereeAssistants,
+      attendance: Number.isInteger(report.attendance)
+        ? report.attendance
+        : (Number.isInteger(old.attendance) ? old.attendance : null),
+      homeLineup,
+      awayLineup,
+      homeBench,
+      awayBench,
+      events: report.events.length ? report.events : old.events || [],
+      lineupPlayerCount,
+      reportComplete: Boolean(
+        Number.isInteger(homeScore) &&
+        Number.isInteger(awayScore) &&
+        lineupPlayerCount > 0 &&
+        referee &&
+        venue
+      ),
       active: true,
       lastSeenRunId: runId,
-      updatedAt:
-        admin.firestore.FieldValue.serverTimestamp(),
+      reportLastCheckedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     },
     { merge: true },
   );
@@ -1374,12 +1414,32 @@ async function updateMatchFromReport(report) {
   if (report.venue) patch.venue = report.venue;
   if (report.venueAddress) patch.venueAddress = report.venueAddress;
   if (report.referee) patch.referee = report.referee;
+  if (Number.isInteger(report.homeScore) && Number.isInteger(report.awayScore)) {
+    patch.homeScore = report.homeScore;
+    patch.awayScore = report.awayScore;
+    patch.resultText = `${report.homeScore}:${report.awayScore}`;
+    patch.status = "finished";
+  }
   if (Array.isArray(report.homeLineup) && report.homeLineup.length) patch.homeLineup = report.homeLineup;
   if (Array.isArray(report.awayLineup) && report.awayLineup.length) patch.awayLineup = report.awayLineup;
   if (Array.isArray(report.homeBench) && report.homeBench.length) patch.homeBench = report.homeBench;
   if (Array.isArray(report.awayBench) && report.awayBench.length) patch.awayBench = report.awayBench;
   if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
+
+  const snapshotData = snapshot.data() || {};
+  const lineupAvailable =
+    (Array.isArray(report.homeLineup) && report.homeLineup.length > 0) ||
+    (Array.isArray(report.awayLineup) && report.awayLineup.length > 0) ||
+    (Array.isArray(snapshotData.homeLineup) && snapshotData.homeLineup.length > 0) ||
+    (Array.isArray(snapshotData.awayLineup) && snapshotData.awayLineup.length > 0);
+  const refereeAvailable = Boolean(report.referee || snapshotData.referee);
+  const venueAvailable = Boolean(report.venue || snapshotData.venue);
+  const resultAvailable =
+    (Number.isInteger(report.homeScore) && Number.isInteger(report.awayScore)) ||
+    (Number.isInteger(snapshotData.homeScore) && Number.isInteger(snapshotData.awayScore));
+  patch.reportComplete = Boolean(lineupAvailable && refereeAvailable && venueAvailable && resultAvailable);
+  patch.reportLastCheckedAt = admin.firestore.FieldValue.serverTimestamp();
 
   await ref.set(patch, { merge: true });
 }

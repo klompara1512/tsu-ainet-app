@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-oefb-deep-frame-parser-fix";
+const VERSION = "18.3.0-beta.1-oefb-match-id-mapping-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const NEWS_COLLECTION = "news";
@@ -366,16 +366,23 @@ async function loadCandidateMatches() {
     .filter((match) => match.active !== false)
     .filter((match) => isAinet(match.homeTeam) || isAinet(match.awayTeam));
 
-  const forcedGameIds = new Set(REPORT_OVERRIDES.map((item) => extractOefbGameId(item.url)).filter(Boolean));
-
   const relevant = all.filter((match) => {
     const time = match.kickoffDate.getTime();
-    const storedGameId = compact(match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl));
-    const forcedByKnownOfficialReport = storedGameId && forcedGameIds.has(storedGameId);
 
-    // Bekannte offizielle Einzelberichte dürfen bei einem manuellen Lauf nie
-    // wegen eines fehlerhaften/verschobenen kickoffAt verloren gehen.
-    if (MANUAL_RUN && forcedByKnownOfficialReport) return true;
+    // Manueller Reparaturlauf: eine bekannte offizielle Paarung darf auch dann
+    // aufgenommen werden, wenn kickoffAt in Firestore fehlt/falsch ist. Aber nur,
+    // wenn das Override selbst im aktuellen manuellen Zeitfenster liegt. Dadurch
+    // wird z.B. 4173991 am 09.08. aufgenommen, während das alte Spiel 4074032 vom
+    // 01.08. nicht dauerhaft jeden manuellen Lauf kapert.
+    if (MANUAL_RUN) {
+      const override = matchingOverride(match, { allowTeamOnly: true });
+      if (override) {
+        const overrideMs = overrideDateMs(override);
+        if (overrideMs > 0 && now >= overrideMs - postMinutes * 60000 && now <= overrideMs + preMinutes * 60000) {
+          return true;
+        }
+      }
+    }
 
     return time > 0 && now >= time - preMinutes * 60000 && now <= time + postMinutes * 60000;
   });
@@ -471,13 +478,31 @@ function sameClubName(a, b) {
     (Math.min(at.length, bt.length) === 1 && common.length === 1);
 }
 
-function matchingOverride(match) {
+function matchingOverride(match, { allowTeamOnly = false } = {}) {
   const date = localDateKey(match.kickoffDate || match.kickoffAt);
-  return REPORT_OVERRIDES.find((item) =>
-    item.date === date &&
+  const byTeams = REPORT_OVERRIDES.filter((item) =>
     sameClubName(item.home, match.homeTeam) &&
     sameClubName(item.away, match.awayTeam)
-  ) || null;
+  );
+
+  if (!byTeams.length) return null;
+
+  // Exaktes Datum hat immer Vorrang.
+  const exact = byTeams.find((item) => item.date === date);
+  if (exact) return exact;
+
+  // Bei manuellen Reparaturläufen kann kickoffAt in Firestore fehlen oder falsch
+  // sein. Ist die Paarung unter den Overrides eindeutig, darf die offizielle
+  // ÖFB-ID trotzdem anhand Heim/Gast zugeordnet werden.
+  if (allowTeamOnly && byTeams.length === 1) return byTeams[0];
+
+  return null;
+}
+
+function overrideDateMs(item) {
+  if (!item?.date) return 0;
+  const parsed = new Date(`${item.date}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? 0 : parsed.getTime();
 }
 
 async function collectReportCandidates(browser) {
@@ -549,7 +574,7 @@ async function resolveMatchReports(browser, matches) {
   const resolved = [];
 
   for (const match of matches) {
-    const override = matchingOverride(match);
+    const override = matchingOverride(match, { allowTeamOnly: MANUAL_RUN });
     let url = override?.url || "";
     let source = override ? "official-override" : "";
     let score = override ? 999 : 0;
@@ -583,6 +608,12 @@ async function resolveMatchReports(browser, matches) {
       _reportResolutionSource: source,
       _reportResolutionScore: score,
     };
+
+    console.log(
+      `ÖFB-Zuordnung: ${compact(match.homeTeam)} - ${compact(match.awayTeam)} | ` +
+      `kickoff=${localDateKey(match.kickoffDate || match.kickoffAt) || "unbekannt"} | ` +
+      `ÖFB-ID=${gameId || "keine"} | Quelle=${source || "keine"}`,
+    );
     resolved.push(next);
 
     if (changed) {

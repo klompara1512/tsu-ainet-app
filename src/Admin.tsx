@@ -152,54 +152,6 @@ async function compressMemberPhoto(file: File): Promise<string> {
   }
 }
 
-async function compressSponsorLogo(file: File): Promise<string> {
-  if (!file.type.startsWith("image/")) {
-    throw new Error("Bitte wähle eine Bilddatei aus.");
-  }
-  if (file.size > 12 * 1024 * 1024) {
-    throw new Error("Das Originalbild darf maximal 12 MB groß sein.");
-  }
-
-  const sourceUrl = URL.createObjectURL(file);
-  try {
-    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () => reject(new Error("Das Logo konnte nicht gelesen werden."));
-      element.src = sourceUrl;
-    });
-
-    const naturalWidth = Math.max(1, image.naturalWidth);
-    const naturalHeight = Math.max(1, image.naturalHeight);
-    const maxWidth = 1200;
-    const maxHeight = 420;
-    const scale = Math.min(1, maxWidth / naturalWidth, maxHeight / naturalHeight);
-    const width = Math.max(1, Math.round(naturalWidth * scale));
-    const height = Math.max(1, Math.round(naturalHeight * scale));
-
-    // Kopfsponsor-Logos dürfen niemals wie Spielerfotos quadratisch zugeschnitten
-    // werden. Das komplette Original-Seitenverhältnis bleibt erhalten.
-    const canvas = document.createElement("canvas");
-    canvas.width = width;
-    canvas.height = height;
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Das Logo konnte nicht verarbeitet werden.");
-
-    context.clearRect(0, 0, width, height);
-    context.drawImage(image, 0, 0, naturalWidth, naturalHeight, 0, 0, width, height);
-
-    let result = canvas.toDataURL("image/webp", 0.9);
-    if (result.length > 750_000) result = canvas.toDataURL("image/webp", 0.76);
-    if (result.length > 750_000) result = canvas.toDataURL("image/jpeg", 0.8);
-    if (result.length > 750_000) {
-      throw new Error("Das komprimierte Logo ist noch zu groß. Bitte verwende eine kleinere Bilddatei.");
-    }
-    return result;
-  } finally {
-    URL.revokeObjectURL(sourceUrl);
-  }
-}
-
 function Admin({ onBack }: AdminProps) {
   const [teams, setTeams] = useState<Team[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("");
@@ -401,7 +353,7 @@ function Admin({ onBack }: AdminProps) {
 
     clearMessages();
     try {
-      const imageUrl = await compressSponsorLogo(file);
+      const imageUrl = await compressMemberPhoto(file);
       setFormData((current) => ({ ...current, headSponsorImageUrl: imageUrl }));
       setSuccessMessage("Das Kopfsponsor-Bild wurde vorbereitet. Speichere jetzt die Änderungen.");
     } catch (error) {

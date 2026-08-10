@@ -1317,6 +1317,9 @@ function parseResource(text, contentType, sourceUrl) {
   if (descriptor.kind === "games") {
     parseDomMatchCards($, matches, sourceUrl, title);
     parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title);
+    // ÖFB zeigt kommende Spiele teilweise nur als „16.08. 10:00“ ohne Jahr.
+    // Dieser Parser existierte bereits, wurde bisher aber nicht aufgerufen.
+    parseCompactVisibleMatches(bodyText, matches, sourceUrl, title);
     parseTables($, matches, [], sourceUrl, title);
   } else if (descriptor.kind === "table") {
     parseTables($, [], standings, sourceUrl, title);
@@ -1580,7 +1583,8 @@ async function collectWithBrowser(startUrls) {
         const compact = (value) => String(value || "").replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
         const exactScore = /^\d{1,2}\s*:\s*\d{1,2}(?:\s*(?:\([^)]*\)|i\.?\s*E\.?|n\.?\s*V\.?))?$/i;
         const exactTime = /^([01]?\d|2[0-3])[:.]([0-5]\d)(?:\s*Uhr)?$/i;
-        const dateRx = /(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{2,4})/;
+        // Jahr ist auf ÖFB-Spielkarten nicht immer sichtbar (z. B. „16.08. 10:00“).
+        const dateRx = /(\d{1,2})[.\/-](\d{1,2})(?:[.\/-](\d{2,4}))?/;
         const all = Array.from(document.querySelectorAll("article, li, tr, [class*='match'], [class*='spiel'], [class*='fixture'], [class*='game']"));
         const matches = [];
         const seen = new Set();
@@ -1635,8 +1639,18 @@ async function collectWithBrowser(startUrls) {
           const timeText = compact(timeNode?.textContent || context.match(/\b(?:[01]?\d|2[0-3])[:.]([0-5]\d)\s*(?:Uhr)?\b/i)?.[0] || "00:00");
           const timeMatch = timeText.match(/(\d{1,2})[:.](\d{2})/);
           if (!dateMatch || !timeMatch) continue;
-          let year = Number(dateMatch[3]); if (year < 100) year += 2000;
-          const kickoff = new Date(year, Number(dateMatch[2]) - 1, Number(dateMatch[1]), Number(timeMatch[1]), Number(timeMatch[2]));
+          const month = Number(dateMatch[2]);
+          let year;
+          if (dateMatch[3]) {
+            year = Number(dateMatch[3]);
+            if (year < 100) year += 2000;
+          } else {
+            // Saisonpfad liefert die korrekte Jahreszuordnung über den Jahreswechsel.
+            const seasonMatch = location.pathname.match(/Saison-(\d{4})-(\d{2})/i);
+            const seasonStart = seasonMatch ? Number(seasonMatch[1]) : new Date().getFullYear();
+            year = month >= 7 ? seasonStart : seasonStart + 1;
+          }
+          const kickoff = new Date(year, month - 1, Number(dateMatch[1]), Number(timeMatch[1]), Number(timeMatch[2]));
           if (Number.isNaN(kickoff.getTime())) continue;
 
           const scoreText = scoreNodes.length ? compact(scoreNodes[0].getAttribute("data-score") || scoreNodes[0].getAttribute("data-result") || scoreNodes[0].textContent) : "";

@@ -1453,6 +1453,39 @@ async function extractReport(browser, match) {
         }
 
         events.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
+
+        // ÖFB liefert in manchen Ansichten einen Ereignisblock mit mehreren bereits
+        // gefallenen Toren. Dadurch konnten mehrere Tore derselben Spielminute
+        // zugeordnet werden. Für den Liveticker wird pro Spielminute genau das
+        // spezifischste Torereignis übernommen. Karten und Wechsel bleiben
+        // davon unberührt.
+        const goalByMinute = new Map();
+        const filteredEvents = [];
+        for (const event of events) {
+          if (event.type !== "goal") {
+            filteredEvents.push(event);
+            continue;
+          }
+
+          const minuteKey = event.minuteText || String(event.minute ?? "");
+          const existing = goalByMinute.get(minuteKey);
+          if (!existing) {
+            goalByMinute.set(minuteKey, event);
+            continue;
+          }
+
+          // Kürzere Texte sind auf der ÖFB-Seite fast immer das einzelne
+          // Torereignis; lange Texte enthalten häufig mehrere vorherige Tore.
+          const eventScore = event.description.length;
+          const existingScore = existing.description.length;
+          if (eventScore < existingScore) goalByMinute.set(minuteKey, event);
+        }
+
+        filteredEvents.push(...goalByMinute.values());
+        filteredEvents.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
+        events.length = 0;
+        events.push(...filteredEvents);
+
         for (const event of events) delete event._sortValue;
 
         const images = [...document.images]

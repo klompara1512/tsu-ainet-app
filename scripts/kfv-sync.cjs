@@ -662,8 +662,12 @@ function addMatch(target, data, sourceUrl, context = "") {
   }
 
   const urlTeam = teamFromUrl(sourceUrl);
-  const teamName = urlTeam?.teamName || data.teamName || teamFromText(`${data.competitionName || ""} ${context}`);
-  const teamKey = urlTeam?.teamKey || data.teamKey || slug(teamName).toUpperCase();
+  const configuredSource = sourceDescriptor(sourceUrl);
+  // Die KFV-Freundschaftsspiel-Seite enthält Spiele vieler Altersklassen.
+  // Als U17-Fallback dürfen ausschließlich Blöcke mit explizitem U17-Hinweis importiert werden.
+  if (/\/Freundschaftsspiele\/?$/i.test(String(sourceUrl || "")) && configuredSource?.teamKey === "U17" && !/\bU\s*17\b/i.test(`${homeTeam} ${awayTeam} ${context}`)) return;
+  const teamName = configuredSource?.teamName || urlTeam?.teamName || data.teamName || teamFromText(`${data.competitionName || ""} ${context}`);
+  const teamKey = configuredSource?.teamKey || urlTeam?.teamKey || data.teamKey || slug(teamName).toUpperCase();
   const season = seasonFromUrl(sourceUrl);
   const hasScore = Number.isInteger(homeScore) && Number.isInteger(awayScore);
   const status = normalizeMatchStatus(data.status, context, hasScore);
@@ -1031,6 +1035,17 @@ function isPlausibleTeamLine(value) {
   return true;
 }
 
+function isAinetTeamName(value) {
+  const text = oneLine(value);
+  if (!text || !/\bainet\b/i.test(text)) return false;
+  // Akzeptiert auch Spielgemeinschaften wie
+  // "SPG TSU Ainet / SU Oberlienz U17" bzw. "SPG TSU Ainet/SU Oberlienz U17".
+  if (/^(?:SPG\s+|SG\s+)?(?:TSU\s+)?Ainet(?:\s*\/\s*[^|]{2,70})?(?:\s+U\s*\d{1,2}(?:\+\d+)?)?(?:\s+(?:1b|II|Reserve|Challenge))?$/i.test(text)) return true;
+  // ÖFB/KFV können bei SPG-Bezeichnungen Präfixe oder Partnervereine ergänzen.
+  // Metadatenzeilen mit Ainet im Titel sollen dagegen nicht als Team gelten.
+  return /\b(?:SPG|SG|TSU)\b/i.test(text) && !/\b(?:Spielbericht|Tabelle|Spielplan|Kalender|Sportplatz|Stadion|Schiedsrichter|Runde|Bewerb)\b/i.test(text);
+}
+
 function parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title) {
   const rawLines = clean(bodyText).split("\n").map(oneLine).filter(Boolean);
   const dateStartRx = /(?:\b(?:Mo|Di|Mi|Do|Fr|Sa|So)\.?[,]?\s*)?\d{1,2}\.\d{1,2}\.?[,]?\s+\d{1,2}:\d{2}(?:\s*Uhr)?/i;
@@ -1062,7 +1077,7 @@ function parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title) {
       if (parsed) { scoreIndex = i; scoreData = parsed; break; }
     }
 
-    const ainetIndex = lines.findIndex((line) => /^(?:TSU\s+)?Ainet(?:\s+(?:1b|II|Reserve|Challenge))?$/i.test(line));
+    const ainetIndex = lines.findIndex((line) => isAinetTeamName(line));
     if (ainetIndex < 0) continue;
 
     let homeTeam = "";
@@ -1071,8 +1086,8 @@ function parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title) {
     if (scoreIndex >= 0) {
       const before = lines.slice(0, scoreIndex).filter(isPlausibleTeamLine);
       const after = lines.slice(scoreIndex + 1).filter(isPlausibleTeamLine);
-      const ainetBefore = before.findLast?.((line) => /\bainet\b/i.test(line)) || [...before].reverse().find((line) => /\bainet\b/i.test(line));
-      const ainetAfter = after.find((line) => /\bainet\b/i.test(line));
+      const ainetBefore = before.findLast?.((line) => isAinetTeamName(line)) || [...before].reverse().find((line) => isAinetTeamName(line));
+      const ainetAfter = after.find((line) => isAinetTeamName(line));
       if (ainetBefore) {
         homeTeam = ainetBefore;
         awayTeam = after.find((line) => !/\bainet\b/i.test(line)) || "";
@@ -1084,16 +1099,16 @@ function parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title) {
       // Geplantes Spiel: Auf der ÖFB-Seite stehen die beiden Teamnamen typischerweise
       // direkt beieinander. Wir nehmen den nächsten plausiblen Gegner rund um Ainet.
       const candidates = lines.map((line, index) => ({ line, index })).filter(({ line }) => isPlausibleTeamLine(line));
-      const ainetCandidateIndex = candidates.findIndex(({ line }) => /\bainet\b/i.test(line));
+      const ainetCandidateIndex = candidates.findIndex(({ line }) => isAinetTeamName(line));
       if (ainetCandidateIndex >= 0) {
         const previous = candidates[ainetCandidateIndex - 1]?.line || "";
         const next = candidates[ainetCandidateIndex + 1]?.line || "";
         // Reihenfolge im DOM bleibt Heim vor Auswärts. Ist Ainet der erste Teamname,
         // ist der folgende Kandidat der Gegner, sonst der vorherige.
-        if (next && !/\bainet\b/i.test(next)) {
+        if (next && !isAinetTeamName(next)) {
           homeTeam = candidates[ainetCandidateIndex].line;
           awayTeam = next;
-        } else if (previous && !/\bainet\b/i.test(previous)) {
+        } else if (previous && !isAinetTeamName(previous)) {
           homeTeam = previous;
           awayTeam = candidates[ainetCandidateIndex].line;
         }
@@ -2714,7 +2729,11 @@ async function main() {
     for (const team of ACTIVE_TEAMS) {
       const status = teamSyncStatus[team.key];
       console.log(`${team.name}: ${status.matches || 0} Spiele | ${status.standings || 0} Tabellenzeilen | Tabelle ${status.tableReliable ? "OK" : "beibehalten"}`);
-      console.log(`  Spiele: ${team.gamesUrl}`);
+      {
+        const gameSources = (Array.isArray(team.gamesUrls) && team.gamesUrls.length ? team.gamesUrls : [team.gamesUrl]).filter(Boolean);
+        gameSources.forEach((url, index) => console.log(`  Spiele${gameSources.length > 1 ? ` [Quelle ${index + 1}]` : ""}: ${url}`));
+        if ((status.matches || 0) === 0 && gameSources.length) console.log(`  WARNUNG: ${team.name} lieferte 0 Spiele aus ${gameSources.length} konfigurierter Quelle(n).`);
+      }
       if (team.tableUrl) console.log(`  Tabelle: ${team.tableUrl}`);
       if (team.squadUrl) console.log(`  Kader: ${team.squadUrl} | ${squadTeamCounts[team.key] || 0} Spieler`);
     }

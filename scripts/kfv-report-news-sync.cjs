@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-canonical-match-report-link-fix";
+const VERSION = "18.3.0-beta.1-prematch-metadata-player-photo-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -889,7 +889,7 @@ async function extractReport(browser, match) {
           .replace(/\s+(?:Assistent(?:en)?|Zuschauer|Besucher|Spielort|Stadion|Adresse).*$/i, "")
           .trim();
 
-        const referee = cleanOfficial(labelledValue(["Schiedsrichter", "Referee"], 160));
+        const referee = cleanOfficial(labelledValue(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160));
         const assistantText = labelledValue([
           "Schiedsrichter-Assistenten",
           "Schiedsrichterassistenten",
@@ -908,7 +908,7 @@ async function extractReport(browser, match) {
 
         // ÖFB verändert das Markup der Infobox gelegentlich. Die Werte werden
         // deshalb zusätzlich direkt aus dem sichtbaren Text ausgelesen.
-        let robustReferee = referee || textValueAfterLabel(["Schiedsrichter", "Referee"], 160);
+        let robustReferee = referee || textValueAfterLabel(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160);
         robustReferee = cleanOfficial(robustReferee);
         const robustAssistantText = assistantText || textValueAfterLabel([
           "Schiedsrichter-Assistenten",
@@ -920,8 +920,8 @@ async function extractReport(browser, match) {
           ? refereeAssistants
           : robustAssistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4);
 
-        let venue = labelledValue(["Spielort", "Stadion", "Sportplatz"], 180) ||
-          textValueAfterLabel(["Spielort", "Stadion", "Sportplatz"], 180);
+        let venue = labelledValue(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180) ||
+          textValueAfterLabel(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180);
         let venueAddress = labelledValue(["Adresse", "Anschrift"], 220) ||
           textValueAfterLabel(["Adresse", "Anschrift"], 220);
 
@@ -1047,6 +1047,8 @@ async function extractReport(browser, match) {
 
           const linkNode = node.closest("a[href]") || card.querySelector("a[href]");
           const playerUrl = linkNode ? absolute(linkNode.href) : "";
+          const imageNode = card.querySelector("img[src],img[data-src],img[data-lazy-src]") || node.querySelector?.("img[src],img[data-src],img[data-lazy-src]");
+          const imageUrl = imageNode ? absolute(imageNode.getAttribute("src") || imageNode.getAttribute("data-src") || imageNode.getAttribute("data-lazy-src") || "") : "";
           const number = extractNumber(rawText);
           const captain = /kapitän|captain|\(c\)|\bc\b/i.test(rawText);
           const goalkeeper = /torwart|goalkeeper|\btw\b|\bgk\b/i.test(rawText);
@@ -1054,7 +1056,7 @@ async function extractReport(browser, match) {
           if (seen.has(key)) continue;
           seen.add(key);
 
-          const item = { name, number, playerUrl, captain, goalkeeper };
+          const item = { name, number, playerUrl, imageUrl, captain, goalkeeper };
           buckets[`${side}${role === "starter" ? "Starter" : "Bench"}`].push(item);
         }
 
@@ -1084,6 +1086,7 @@ async function extractReport(browser, match) {
               name,
               number: extractNumber(rowText),
               playerUrl: linkNode ? absolute(linkNode.href) : "",
+              imageUrl: (() => { const img = row.querySelector?.("img[src],img[data-src],img[data-lazy-src]"); return img ? absolute(img.getAttribute("src") || img.getAttribute("data-src") || img.getAttribute("data-lazy-src") || "") : ""; })(),
               captain: /kapitän|captain|\(c\)/i.test(rowText),
               goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(rowText),
             });

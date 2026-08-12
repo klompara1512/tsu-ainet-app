@@ -88,6 +88,7 @@ export type KfvLineupPlayer = {
   number: number | null;
   position: string;
   playerUrl: string;
+  imageUrl: string;
   captain: boolean;
 };
 

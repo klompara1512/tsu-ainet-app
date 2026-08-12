@@ -6,7 +6,7 @@ on:
     # Täglich alle 30 Minuten zwischen 07:00 und 22:30 Uhr.
     # So werden auch Nachtrags-, Cup- und Wochentagsspiele erfasst.
     # Das Script öffnet ÖFB nur, wenn ein TSU-Ainet-Spiel unvollständige Daten hat.
-    # Nach Anpfiff wird bis zu 12 Stunden lang Ergebnis/Aufstellung nachgeholt.
+    # Spielort/Schiedsrichter werden bis zu 7 Tage vor Anpfiff abgeholt; nach Anpfiff wird bis zu 12 Stunden nachgeholt.
     - cron: "*/30 7-22 * * *"
       timezone: "Europe/Vienna"
 
@@ -26,7 +26,7 @@ jobs:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-      REPORT_PRE_KICKOFF_MINUTES: "60"
+      REPORT_PRE_KICKOFF_MINUTES: "10080"
       REPORT_POST_KICKOFF_MINUTES: "720"
       REPORT_FORCE_WINDOW_MINUTES: "720"
       # Ein manueller Start umgeht das Smart-Gate; SPG-Namen mit „Ainet/…“ werden korrekt erkannt.

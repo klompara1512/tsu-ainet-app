@@ -271,11 +271,36 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
       return <span className="event-symbol event-symbol-other" aria-label="Ereignis"><svg {...svgProps}><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="8"/></svg></span>;
     };
 
+    const normalizePlayerName = (value: string) => value
+      .toLocaleLowerCase("de-AT")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    const resolvePlayerImage = (player: KfvMatchReport["homeLineup"][number]) => {
+      if (player.imageUrl) return player.imageUrl;
+      const wanted = normalizePlayerName(player.name);
+      const exact = squad.find((candidate) => normalizePlayerName(candidate.name) === wanted && candidate.imageUrl);
+      if (exact?.imageUrl) return exact.imageUrl;
+      const wantedTokens = wanted.split(" ").filter(Boolean);
+      const partial = squad.find((candidate) => {
+        if (!candidate.imageUrl) return false;
+        const candidateTokens = normalizePlayerName(candidate.name).split(" ").filter(Boolean);
+        return wantedTokens.length >= 2 && candidateTokens.length >= 2 && wantedTokens.every((token) => candidateTokens.includes(token));
+      });
+      return partial?.imageUrl || "";
+    };
+
     const LineupList = ({ title, players, coach }: { title: string; players: KfvMatchReport["homeLineup"]; coach?: string }) => (
       <article className="official-lineup-card">
         <header><Icon name="users" /><strong>{title}</strong><span>{players.length || "–"}</span></header>
         {players.length ? (
-          <ol>{players.map((player, index) => <li key={`${player.name}-${index}`}><b>{player.number ?? "–"}</b><div><strong>{player.name}{player.captain ? " (C)" : ""}</strong>{player.position && <small>{player.position}</small>}</div></li>)}</ol>
+          <ol>{players.map((player, index) => {
+            const imageUrl = resolvePlayerImage(player);
+            return <li key={`${player.name}-${index}`}><b>{player.number ?? "–"}</b><span className="official-player-photo">{imageUrl ? <img src={imageUrl} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <Icon name="person" />}</span><div><strong>{player.name}{player.captain ? " (C)" : ""}</strong>{player.position && <small>{player.position}</small>}</div></li>;
+          })}</ol>
         ) : <p>Noch nicht veröffentlicht.</p>}
         {coach && <footer><small>Trainer</small><strong>{coach}</strong></footer>}
       </article>

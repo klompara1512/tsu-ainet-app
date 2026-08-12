@@ -54,6 +54,7 @@ function readLineupPlayers(value: unknown): KfvLineupPlayer[] {
         number: typeof data.number === "number" ? data.number : null,
         position: typeof data.position === "string" ? data.position : "",
         playerUrl: typeof data.playerUrl === "string" ? data.playerUrl : "",
+        imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
         captain: data.captain === true,
       } satisfies KfvLineupPlayer;
     })

@@ -1048,8 +1048,12 @@ function isAinetTeamName(value) {
 
 function parseVisibleMatchBlocks(bodyText, matches, sourceUrl, title) {
   const rawLines = clean(bodyText).split("\n").map(oneLine).filter(Boolean);
-  const dateStartRx = /(?:\b(?:Mo|Di|Mi|Do|Fr|Sa|So)\.?[,]?\s*)?\d{1,2}\.\d{1,2}\.?[,]?\s+\d{1,2}:\d{2}(?:\s*Uhr)?/i;
-  const dateOnlyRx = /^(?:\b(?:Mo|Di|Mi|Do|Fr|Sa|So)\.?[,]?\s*)?\d{1,2}\.\d{1,2}\.?[,]?$/i;
+  // KFV verwendet auf Freundschaftsspielseiten u. a.
+  // „Anpfiff: 16.08.2026 10:00 Uhr“ bzw. „Sonntag, 16.08.2026 10:00 Uhr“.
+  // Die frühere Erkennung akzeptierte nur Kurzdatum ohne Jahr und übersah
+  // dadurch genau solche offiziellen U17-Termine.
+  const dateStartRx = /(?:Anpfiff\s*:\s*)?(?:(?:Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So)\.?[,]?\s*)?\d{1,2}\.\d{1,2}\.(?:\d{2,4}\s+)?\d{1,2}:\d{2}(?:\s*Uhr)?/i;
+  const dateOnlyRx = /^(?:Anpfiff\s*:\s*)?(?:(?:Montag|Dienstag|Mittwoch|Donnerstag|Freitag|Samstag|Sonntag|Mo|Di|Mi|Do|Fr|Sa|So)\.?[,]?\s*)?\d{1,2}\.\d{1,2}\.(?:\d{2,4})?[,]?$/i;
   const timeOnlyRx = /^(?:[01]?\d|2[0-3]):[0-5]\d(?:\s*Uhr)?$/i;
 
   const starts = [];
@@ -2725,6 +2729,25 @@ async function main() {
     console.log(`  Verschoben: ${matchStatusCounts.postponed || 0}`);
     console.log(`  Abgesagt: ${matchStatusCounts.cancelled || 0}`);
     console.log(`Tabellenzeilen: ${standingsReliable ? uniqueStandings.length : "übersprungen (unvollständig)"}`);
+
+    // U17-Diagnose: einzelne importierte Spiele sichtbar machen. So ist im
+    // GitHub-Log sofort erkennbar, ob ein bestimmter Termin vor Firestore
+    // vorhanden ist und aus welcher offiziellen Quelle er stammt.
+    const u17DiagnosticMatches = uniqueMatches.filter((item) => item.teamKey === "U17");
+    if (u17DiagnosticMatches.length) {
+      console.log("----- U17 importierte Spiele -----");
+      for (const item of u17DiagnosticMatches) {
+        const kickoff = item.kickoffAt?.toDate ? item.kickoffAt.toDate() : new Date(item.kickoffAt);
+        const stamp = Number.isNaN(kickoff.getTime())
+          ? "Datum unbekannt"
+          : new Intl.DateTimeFormat("de-AT", {
+              timeZone: "Europe/Vienna", day: "2-digit", month: "2-digit", year: "numeric",
+              hour: "2-digit", minute: "2-digit", hour12: false,
+            }).format(kickoff);
+        console.log(`  ${stamp} | ${item.homeTeam} - ${item.awayTeam} | ${item.status} | ${item.sourceUrl || "Quelle unbekannt"}`);
+      }
+      console.log("----- Ende U17 -----");
+    }
     if (!GAMES_ONLY && standingsReliable) console.log(`Tabellen Delta: ${standingWriteStats.changed} geändert/neu, ${standingWriteStats.unchanged} unverändert übersprungen.`);
     for (const team of ACTIVE_TEAMS) {
       const status = teamSyncStatus[team.key];

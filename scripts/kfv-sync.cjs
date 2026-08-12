@@ -179,7 +179,7 @@ function clubKey(value) {
   return lower(value)
     // Kein optionales Präfix: die frühere Regex konnte auch leere Treffer bilden
     // und dadurch Clubnamen unzuverlässig normalisieren.
-    .replace(/\b(?:tsu|sg|sv|fc|sc|usv|askö|asko|union|atv)\b/g, " ")
+    .replace(/\b(?:tsu|sg|spg|sv|fc|sc|usv|askö|asko|union|atv|osk|sk|liga)\b/g, " ")
     .replace(/\b(?:1b|ii|reserve|challenge|kampfmannschaft|km)\b/g, " ")
     .replace(/[^a-z0-9äöüß]+/g, " ")
     .replace(/\s+/g, " ")
@@ -413,13 +413,19 @@ function canonicalTeamBucket(item) {
   return "KM";
 }
 
+function canonicalFixtureClubKey(clubId, clubName) {
+  const officialId = oneLine(clubId || "");
+  if (officialId) return `club:${officialId}`;
+  return clubKey(clubName) || slug(clubName);
+}
+
 function canonicalMatchKey(item) {
   return [
     canonicalTeamBucket(item),
     oneLine(item.season),
     localDateKey(item.kickoffAt),
-    clubKey(item.homeTeam) || slug(item.homeTeam),
-    clubKey(item.awayTeam) || slug(item.awayTeam),
+    canonicalFixtureClubKey(item.homeClubId, item.homeTeam),
+    canonicalFixtureClubKey(item.awayClubId, item.awayTeam),
   ].join("|");
 }
 
@@ -2246,7 +2252,10 @@ async function cleanupExistingMatchDuplicates(runId) {
   for (const document of snapshot.docs) {
     const data = document.data();
     if (data.source !== "oefb-public" || data.active === false) continue;
-    const key = buildMatchUid(data);
+    // Alte Dubletten können unterschiedliche/fehlende ÖFB-IDs besitzen. Für die
+    // Bereinigung deshalb die reale Paarung am Spieltag verwenden. Vereins-IDs
+    // haben Vorrang, sonst normalisierte Vereinsnamen.
+    const key = canonicalMatchKey(data);
     if (!key || key.includes("||")) continue;
     const group = groups.get(key) || [];
     group.push({ id: document.id, ref: document.ref, ...data });
@@ -2652,10 +2661,12 @@ async function main() {
     if (!LEAN_SYNC && uniqueMatchReports.length) await writeCollection("kfvMatchReports", uniqueMatchReports, runId);
     // Zuerst alte IDs auf die neue stabile matchUid migrieren und als Dubletten
     // markieren. Erst danach werden nicht mehr vorhandene Spiele deaktiviert.
-    const duplicateDocumentsDeactivated = RUN_DUPLICATE_CLEANUP
+    // Die Spielquellen können dieselbe Begegnung mit und ohne ÖFB-ID liefern.
+    // Deshalb wird bei jedem Spielplan-Sync bereinigt; sonst bleiben alte aktive
+    // Dubletten im Kalender und auf dem Dashboard sichtbar.
+    const duplicateDocumentsDeactivated = !TABLES_ONLY && uniqueMatches.length
       ? await cleanupExistingMatchDuplicates(runId)
       : 0;
-    if (!RUN_DUPLICATE_CLEANUP) console.log("Dublettenbereinigung: heute übersprungen.");
     // Spiele werden bei einem teilweise geladenen ÖFB-Spielplan nicht deaktiviert.
     // Echte Dubletten wurden bereits durch cleanupExistingMatchDuplicates bereinigt.
     const deactivatedMatches = 0;

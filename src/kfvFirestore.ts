@@ -228,7 +228,7 @@ function normalizeMatchPart(value: string) {
     .toLocaleLowerCase("de-AT")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\b(?:tsu|sg|sv|fc|sc|usv|asko|askö|union|atv)\b/g, " ")
+    .replace(/\b(?:tsu|sg|spg|sv|fc|sc|usv|asko|askö|union|atv|osk|sk|liga)\b/g, " ")
     .replace(/\b(?:1b|ii|reserve|challenge|kampfmannschaft|km)\b/g, " ")
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
@@ -266,8 +266,8 @@ function deduplicateMatches(matches: KfvMatch[]) {
     const key = [
       canonicalTeamBucket(match),
       matchDayKey(match.kickoffAt),
-      normalizeMatchPart(match.homeTeam),
-      normalizeMatchPart(match.awayTeam),
+      match.homeClubId ? `club:${match.homeClubId}` : normalizeMatchPart(match.homeTeam),
+      match.awayClubId ? `club:${match.awayClubId}` : normalizeMatchPart(match.awayTeam),
     ].join("|");
     const group = groups.get(key) || [];
     group.push(match);

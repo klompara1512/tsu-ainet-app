@@ -93,8 +93,23 @@ function getStandingTeamLabel(key: DashboardStandingTeamKey) {
 function canonicalMatchKey(match: KfvMatch) {
   const day = match.kickoffAt.toISOString().slice(0, 10);
   const normalize = (value: string) =>
-    value.toLocaleLowerCase("de-AT").replace(/[^a-z0-9äöüß]+/g, " ").trim();
-  return [match.teamId || match.teamName, day, normalize(match.homeTeam), normalize(match.awayTeam)].join("|");
+    value
+      .toLocaleLowerCase("de-AT")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\b(?:tsu|sg|spg|sv|fc|sc|usv|asko|askö|union|atv|osk|sk|liga)\b/g, " ")
+      .replace(/\b(?:1b|ii|reserve|challenge|kampfmannschaft|km)\b/g, " ")
+      .replace(/[^a-z0-9]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const teamBucket = getStandingTeamKey({
+    teamId: match.teamId,
+    teamName: match.teamName,
+    competitionName: match.competitionName,
+  } as KfvStandingRow);
+  const home = match.homeClubId ? `club:${match.homeClubId}` : normalize(match.homeTeam);
+  const away = match.awayClubId ? `club:${match.awayClubId}` : normalize(match.awayTeam);
+  return [teamBucket, day, home, away].join("|");
 }
 
 function preferDashboardMatch(current: KfvMatch, candidate: KfvMatch) {
@@ -277,7 +292,10 @@ function LiveDashboard({
     if (todayCandidate) return todayCandidate;
 
     return uniqueMatches.find(
-      (match) => match.status === "scheduled" && match.kickoffAt.getTime() >= now,
+      (match) =>
+        match.kickoffAt.getTime() >= now &&
+        match.status !== "cancelled" &&
+        match.status !== "postponed",
     ) ?? null;
   }, [uniqueMatches, clock]);
 

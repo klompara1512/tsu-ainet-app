@@ -28,7 +28,7 @@ jobs:
       REPORT_NAVIGATION_TIMEOUT: "45000"
       REPORT_PRE_KICKOFF_MINUTES: "10080"
       REPORT_POST_KICKOFF_MINUTES: "720"
-      REPORT_FORCE_WINDOW_MINUTES: "720"
+      REPORT_FORCE_WINDOW_MINUTES: "10080"
       # Ein manueller Start umgeht das Smart-Gate; SPG-Namen mit „Ainet/…“ werden korrekt erkannt.
       REPORT_FORCE_SYNC: ${{ github.event_name == 'workflow_dispatch' }}
 

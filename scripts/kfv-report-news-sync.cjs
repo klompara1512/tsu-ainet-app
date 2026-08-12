@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-prematch-metadata-player-photo-fix";
+const VERSION = "18.3.0-beta.1-prematch-manual-7day-gate-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -30,7 +30,7 @@ const POST_KICKOFF_MINUTES = Math.max(
 );
 const FORCE_SYNC = /^(?:1|true|yes)$/i.test(process.env.REPORT_FORCE_SYNC || "");
 const MANUAL_RUN = FORCE_SYNC || process.env.GITHUB_EVENT_NAME === "workflow_dispatch";
-const FORCE_WINDOW_MINUTES = Math.max(60, Number(process.env.REPORT_FORCE_WINDOW_MINUTES || 720));
+const FORCE_WINDOW_MINUTES = Math.max(60, Number(process.env.REPORT_FORCE_WINDOW_MINUTES || 10080));
 const CONFIG_PATH = path.join(process.cwd(), "config", "kfv-sync.config.json");
 const SYNC_CONFIG = fs.existsSync(CONFIG_PATH)
   ? JSON.parse(fs.readFileSync(CONFIG_PATH, "utf8"))

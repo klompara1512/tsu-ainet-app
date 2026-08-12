@@ -380,7 +380,7 @@ function KitManager({ onBack }: Props) {
               <div className="kit-manager-upload wide">
                 <span>Foto des Trikotsatzes</span>
                 <div className="kit-manager-preview">{preview ? <img src={preview} alt="Trikot-Vorschau" /> : <span>Foto auswählen</span>}</div>
-                <label className="kit-manager-file-button"><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => selectPhoto(event.target.files?.[0] || null)} />{preview ? "Foto ersetzen" : "Foto auswählen"}</label>
+                <label className="kit-manager-file-button"><input type="file" accept="image/jpeg,image/png,image/webp" capture="environment" onChange={(event) => selectPhoto(event.target.files?.[0] || null)} />{preview ? "Foto ersetzen" : "Foto aufnehmen / auswählen"}</label>
                 <small>JPG, PNG oder WebP · wird automatisch verkleinert</small>
               </div>
 

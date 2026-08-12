@@ -105,6 +105,11 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
               <span className="quick-icon"><Icon name="location" /></span><strong>Vereinsinfo</strong><span>›</span>
             </button>
           )}
+          {canManageKits && (
+            <button type="button" className="mobile-kit-entry" onClick={() => setActivePage("kit-manager")}>
+              <span className="quick-icon"><Icon name="shirt" /></span><strong>Trikotsätze</strong><span>›</span>
+            </button>
+          )}
         </div>
 
         {hasInternalAccess && (
@@ -314,6 +319,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     activePage === "notifications-admin" ||
     activePage === "logo-manager" ||
     activePage === "sponsor-manager" ||
+    activePage === "kit-manager" ||
     activePage === "visual-manager" ||
     activePage === "board-manager" ||
     activePage === "trainer-manager" ||

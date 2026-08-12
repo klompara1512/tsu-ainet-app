@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-prematch-manual-7day-gate-fix";
+const VERSION = "18.3.0-beta.1-direct-official-report-metadata-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -53,6 +53,14 @@ const REPORT_OVERRIDES = [
     home: "SPG TSU Ainet/SU Oberlienz U17",
     away: "SPG Lienzer Talboden U15 A",
     url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?SPG-TSU-Ainet-SU-Oberlienz-U17-vs-SPG-Lienzer-Talboden-U15-A&:s=4173991",
+  },
+  {
+    // Challenge 15.08.2026: Metadaten (insbesondere Spielort) verbindlich
+    // aus der offiziellen Einzel-Spielberichtseite beziehen.
+    date: "2026-08-15",
+    home: "SG OSK Kötschach - Mauthen / SK Grafendorf",
+    away: "TSU Ainet",
+    url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?SG-OSK-Koetschach-Mauthen-SK-Grafendorf-vs-Ainet&:s=4074039",
   },
 ];
 
@@ -581,6 +589,19 @@ async function resolveMatchReports(browser, matches) {
     let source = override ? "official-override" : "";
     let score = override ? 999 : 0;
 
+    // Wenn Firestore bereits eine eindeutige ÖFB-Spiel-ID kennt, ist diese
+    // stärker als jede heuristische Suche über Mannschafts-/Spielplanseiten.
+    // Dadurch werden Spielort, Schiedsrichter und Aufstellung direkt von der
+    // offiziellen Einzel-Spielberichtseite desselben Spiels gelesen.
+    if (!url) {
+      const storedGameId = compact(match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl));
+      if (storedGameId) {
+        url = `https://vereine.oefb.at/TsuAinet/Spielbericht/?spiel-vs-spiel&:s=${encodeURIComponent(storedGameId)}`;
+        score = 500;
+        source = "stored-game-id-direct";
+      }
+    }
+
     if (!url) {
       const ranked = index
         .map((candidate) => ({ candidate, score: scoreReportCandidate(match, candidate) }))
@@ -924,6 +945,27 @@ async function extractReport(browser, match) {
           textValueAfterLabel(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180);
         let venueAddress = labelledValue(["Adresse", "Anschrift"], 220) ||
           textValueAfterLabel(["Adresse", "Anschrift"], 220);
+
+        // Zusätzlicher DOM-Fallback: ÖFB rendert den Spielort je nach Bericht
+        // teilweise als eigene Location-/Venue-/Map-Komponente ohne sichtbares
+        // Label. Nur kompakte, plausible Ortsangaben übernehmen.
+        if (!venue) {
+          const venueNodes = [...document.querySelectorAll(
+            "[class*='venue'],[class*='location'],[class*='stadion'],[class*='sportplatz'],[class*='spielort'],[data-testid*='venue'],[data-testid*='location'],a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap']"
+          )];
+          const venueCandidates = venueNodes
+            .map((node) => compact(node.innerText || node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || ''))
+            .filter((value) => value && value.length >= 3 && value.length <= 180)
+            .filter((value) => !/^(?:karte|map|route|navigation|mehr|details)$/i.test(value));
+          venue = venueCandidates[0] || "";
+        }
+
+        if (!venueAddress) {
+          const mapLink = document.querySelector("a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap']");
+          const mapContainer = mapLink?.closest("li,p,div,section,article");
+          const mapText = compact(mapContainer?.innerText || mapContainer?.textContent || "");
+          if (mapText && mapText.length <= 220 && mapText !== venue) venueAddress = mapText;
+        }
 
         let robustAttendance = attendance;
         if (!Number.isInteger(robustAttendance)) {

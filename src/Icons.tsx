@@ -1,5 +1,5 @@
 import type { SVGProps } from "react";
-export type IconName = "ball"|"shield"|"users"|"target"|"rocket"|"sparkles"|"bell"|"calendar"|"clock"|"location"|"map"|"weather"|"send"|"news"|"settings"|"sync"|"table"|"person"|"document"|"star"|"video"|"gallery"|"sponsor"|"live";
+export type IconName = "ball"|"shield"|"users"|"target"|"rocket"|"sparkles"|"bell"|"calendar"|"clock"|"location"|"map"|"weather"|"send"|"news"|"settings"|"sync"|"table"|"person"|"document"|"star"|"video"|"gallery"|"sponsor"|"live"|"shirt";
 const paths: Record<IconName, React.ReactNode> = {
 ball:<><circle cx="12" cy="12" r="9"/><path d="m12 7 3 2-1 4h-4L9 9l3-2Z"/><path d="m5 9 4 .2M15 9.2 19 9M10 13l-2.5 4M14 13l2.5 4M8 17h8"/></>,
 shield:<><path d="M12 3 20 6v5c0 5-3.5 8-8 10-4.5-2-8-5-8-10V6l8-3Z"/><path d="m9 12 2 2 4-5"/></>,
@@ -24,6 +24,7 @@ star:<><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3l-5.6 2.9 1.1-6.2L3 9
 video:<><rect x="3" y="5" width="14" height="14" rx="3"/><path d="m17 10 4-2v8l-4-2"/></>,
 gallery:<><rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="2"/><path d="m3 17 5-5 4 4 3-3 6 6"/></>,
 sponsor:<><path d="M8 12h8M12 8v8"/><path d="M5 5h14v14H5z"/></>,
-live:<><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13"/></>
+live:<><circle cx="12" cy="12" r="2"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.5 5.5a9 9 0 0 0 0 13M18.5 5.5a9 9 0 0 1 0 13"/></>,
+shirt:<><path d="M8 4 5 5 2 9l3 2 1-1v10h12V10l1 1 3-2-3-4-3-1c-.8 1.2-2.2 2-4 2S8.8 5.2 8 4Z"/></>
 };
 export function Icon({name,...props}:{name:IconName}&SVGProps<SVGSVGElement>){return <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" {...props}>{paths[name]}</svg>}

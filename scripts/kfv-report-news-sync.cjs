@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-direct-official-report-metadata-fix";
+const VERSION = "18.3.0-beta.1-report-metadata-only-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -1673,16 +1673,19 @@ async function extractReport(browser, match) {
       ),
       homeTeam: compact(match.homeTeam),
       awayTeam: compact(match.awayTeam),
+      // Bei zukünftigen Spielen niemals Uhrzeiten wie 15:00 als Ergebnis werten.
+      // ÖFB-Seiten enthalten die Anstoßzeit in denselben DOM-Bereichen wie
+      // Ergebnis-/Score-Elemente; ohne diese Sperre wurde z. B. 15:00 als 15:0 erkannt.
       homeScore:
-        raw.result?.home ??
-        (Number.isFinite(match.homeScore)
-          ? match.homeScore
-          : null),
+        match.kickoffDate && match.kickoffDate.getTime() > Date.now()
+          ? null
+          : (raw.result?.home ??
+            (Number.isFinite(match.homeScore) ? match.homeScore : null)),
       awayScore:
-        raw.result?.away ??
-        (Number.isFinite(match.awayScore)
-          ? match.awayScore
-          : null),
+        match.kickoffDate && match.kickoffDate.getTime() > Date.now()
+          ? null
+          : (raw.result?.away ??
+            (Number.isFinite(match.awayScore) ? match.awayScore : null)),
       kickoffAt:
         match.kickoffAt ||
         admin.firestore.Timestamp.fromDate(
@@ -1875,12 +1878,13 @@ async function updateMatchFromReport(report) {
   if (report.venue) patch.venue = report.venue;
   if (report.venueAddress) patch.venueAddress = report.venueAddress;
   if (report.referee) patch.referee = report.referee;
-  if (Number.isInteger(report.homeScore) && Number.isInteger(report.awayScore)) {
-    patch.homeScore = report.homeScore;
-    patch.awayScore = report.awayScore;
-    patch.resultText = `${report.homeScore}:${report.awayScore}`;
-    patch.status = "finished";
-  }
+
+  const snapshotData = snapshot.data() || {};
+
+  // WICHTIG: Der Spielbericht-Sync darf NIEMALS Ergebnis oder Spielstatus
+  // im zentralen Spiel-Dokument verändern. Diese Felder gehören ausschließlich
+  // dem offiziellen Spielplan-Sync (kfv-games-sync.cjs). Dadurch können Uhrzeiten
+  // wie 15:00, 12:30 oder 13:45 nicht mehr als Resultate interpretiert werden.
   if (Array.isArray(report.homeLineup) && report.homeLineup.length) patch.homeLineup = report.homeLineup;
   if (Array.isArray(report.awayLineup) && report.awayLineup.length) patch.awayLineup = report.awayLineup;
   if (Array.isArray(report.homeBench) && report.homeBench.length) patch.homeBench = report.homeBench;
@@ -1888,7 +1892,6 @@ async function updateMatchFromReport(report) {
   if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
 
-  const snapshotData = snapshot.data() || {};
   const homeLineupAvailable = Math.max(
     Array.isArray(report.homeLineup) ? report.homeLineup.length : 0,
     Array.isArray(snapshotData.homeLineup) ? snapshotData.homeLineup.length : 0,

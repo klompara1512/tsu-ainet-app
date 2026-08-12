@@ -289,6 +289,7 @@ function LiveDashboard({
         .filter(
           (match) =>
             match.status === "finished" &&
+            match.kickoffAt.getTime() < Date.now() &&
             match.homeScore !== null &&
             match.awayScore !== null,
         )

@@ -2062,10 +2062,20 @@ async function writeCollection(name, items, runId) {
         payload.liveUrl = item.liveUrl || existing.liveUrl || "";
       }
 
+      const kickoffMs = item.kickoffAt?.toMillis?.() ?? null;
+      const isFutureOfficialMatch = Number.isFinite(kickoffMs) && kickoffMs > Date.now();
+
       if (item.status === "cancelled" || item.status === "postponed") {
         payload.homeScore = null;
         payload.awayScore = null;
         payload.resultText = "";
+      } else if (isFutureOfficialMatch) {
+        // Reparatur/Sicherheitsregel: Ein zukünftiges offizielles Spiel darf niemals
+        // einen alten oder versehentlich aus Uhrzeiten erzeugten Endstand behalten.
+        payload.homeScore = null;
+        payload.awayScore = null;
+        payload.resultText = "";
+        payload.status = "scheduled";
       } else if (!incomingHasScore && existingHasScore && existing?.status === "finished") {
         payload.homeScore = existing.homeScore;
         payload.awayScore = existing.awayScore;

@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-exact-official-match-source-fix";
+const VERSION = "18.3.0-beta.1-official-report-runtime-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -280,6 +280,10 @@ function validateReportPage(match, raw) {
   const requestedGameId = extractOefbGameId(requestedUrl);
   const finalGameId = extractOefbGameId(finalUrl);
   const storedGameId = compact(match._resolvedGameId || match.gameId || match.oefbMatchId);
+  const expectedCanonicalGameId = storedGameId || requestedGameId;
+  const exactIdVerified = Boolean(
+    expectedCanonicalGameId && finalGameId && expectedCanonicalGameId === finalGameId
+  );
 
   if (requestedGameId && finalGameId && requestedGameId !== finalGameId) {
     reasons.push(
@@ -299,19 +303,25 @@ function validateReportPage(match, raw) {
     raw.topText,
   ].join(" ");
 
-  if (!pageContainsClub(identityText, match.homeTeam)) {
-    reasons.push(`Heimverein "${match.homeTeam}" nicht eindeutig erkannt`);
-  }
+  // Die ÖFB-Spiel-ID ist die kanonische Identität. Wenn sie exakt passt,
+  // dürfen wechselnde Überschriften/Abkürzungen auf der Webseite den Bericht
+  // nicht fälschlich verwerfen. Team-/Datumsabgleich dient nur als Fallback,
+  // wenn keine eindeutige ID verifiziert werden konnte.
+  if (!exactIdVerified) {
+    if (!pageContainsClub(identityText, match.homeTeam)) {
+      reasons.push(`Heimverein "${match.homeTeam}" nicht eindeutig erkannt`);
+    }
 
-  if (!pageContainsClub(identityText, match.awayTeam)) {
-    reasons.push(`Gastverein "${match.awayTeam}" nicht eindeutig erkannt`);
+    if (!pageContainsClub(identityText, match.awayTeam)) {
+      reasons.push(`Gastverein "${match.awayTeam}" nicht eindeutig erkannt`);
+    }
   }
 
   // Zusätzlich zum Paarungsabgleich muss auch der Spieltag zur geladenen
   // Einzel-Spielberichtseite passen. So können Daten eines anderen Spiels mit
   // denselben/ähnlichen Vereinsnamen nicht auf dieses Match übertragen werden.
   const expectedDate = asDate(match.kickoffDate || match.kickoffAt);
-  if (expectedDate.getTime() > 0) {
+  if (!exactIdVerified && expectedDate.getTime() > 0) {
     const dd = String(expectedDate.getDate()).padStart(2, "0");
     const mm = String(expectedDate.getMonth() + 1).padStart(2, "0");
     const yyyy = expectedDate.getFullYear();
@@ -476,7 +486,7 @@ async function keepMatchesNeedingPrematchData(matches) {
     // müssen auf BEIDEN Seiten mindestens sieben Startspieler vorhanden sein.
     const hasLineup = homeLineupCount >= 7 && awayLineupCount >= 7;
     const hasReferee = Boolean(compact(report.referee || match.referee));
-    const hasVenue = Boolean(compact(report.venue || match.venue));
+    const hasVenue = Boolean(cleanVenueValue(report.venue) || cleanVenueValue(match.venue));
     const hasResult =
       (Number.isInteger(report.homeScore) && Number.isInteger(report.awayScore)) ||
       (Number.isInteger(match.homeScore) && Number.isInteger(match.awayScore));
@@ -941,32 +951,6 @@ async function extractReport(browser, match) {
           return compact(bodyText.match(linePattern)?.[1] || "");
         };
 
-        const attendanceText = labelledValue(["Zuschauer", "Besucher"], 40);
-        const attendanceMatch = attendanceText.match(/(\d{1,6})/);
-        const attendance = attendanceMatch ? Number(attendanceMatch[1]) : null;
-
-        const cleanOfficial = (value) => compact(value)
-          .replace(/\s+(?:Spiele seit|Spiele mit|Erstes Spiel|Letztes Spiel).*$/i, "")
-          .replace(/\s+(?:Assistent(?:en)?|Zuschauer|Besucher|Spielort|Stadion|Adresse).*$/i, "")
-          .trim();
-
-        const referee = cleanOfficial(strictLabelValue(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160));
-        const assistantText = labelledValue([
-          "Schiedsrichter-Assistenten",
-          "Schiedsrichterassistenten",
-          "Assistenten",
-          "Linienrichter",
-        ], 220);
-        const refereeAssistants = assistantText
-          ? assistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4)
-          : [];
-
-        const textValueAfterLabel = (labels, maxLength = 220) => {
-          const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
-          const pattern = new RegExp(`(?:^|\\n|\\|)\\s*(?:${escaped.join("|")})\\s*:?\\s*([^\\n|]{1,${maxLength}})`, "i");
-          return compact(String(document.body?.innerText || "").match(pattern)?.[1] || "");
-        };
-
         // Strikte Label/Wert-Auswertung für die offizielle Einzel-Spielberichtseite.
         // Es werden nur Werte aus derselben Tabellen-/Definitions-/Info-Zeile akzeptiert.
         // Dadurch können Navigationstexte wie „Termine“ oder Daten anderer Bereiche
@@ -996,6 +980,32 @@ async function extractReport(browser, match) {
             }
           }
           return "";
+        };
+
+        const attendanceText = labelledValue(["Zuschauer", "Besucher"], 40);
+        const attendanceMatch = attendanceText.match(/(\d{1,6})/);
+        const attendance = attendanceMatch ? Number(attendanceMatch[1]) : null;
+
+        const cleanOfficial = (value) => compact(value)
+          .replace(/\s+(?:Spiele seit|Spiele mit|Erstes Spiel|Letztes Spiel).*$/i, "")
+          .replace(/\s+(?:Assistent(?:en)?|Zuschauer|Besucher|Spielort|Stadion|Adresse).*$/i, "")
+          .trim();
+
+        const referee = cleanOfficial(strictLabelValue(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160));
+        const assistantText = labelledValue([
+          "Schiedsrichter-Assistenten",
+          "Schiedsrichterassistenten",
+          "Assistenten",
+          "Linienrichter",
+        ], 220);
+        const refereeAssistants = assistantText
+          ? assistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4)
+          : [];
+
+        const textValueAfterLabel = (labels, maxLength = 220) => {
+          const escaped = labels.map((label) => label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"));
+          const pattern = new RegExp(`(?:^|\\n|\\|)\\s*(?:${escaped.join("|")})\\s*:?\\s*([^\\n|]{1,${maxLength}})`, "i");
+          return compact(String(document.body?.innerText || "").match(pattern)?.[1] || "");
         };
 
         // ÖFB verändert das Markup der Infobox gelegentlich. Die Werte werden

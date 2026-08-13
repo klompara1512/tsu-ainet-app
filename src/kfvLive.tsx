@@ -262,6 +262,11 @@ function formatDate(date: Date) {
 
 
     const reportEvents = matchReport?.events ?? [];
+    // Die exakt über die ÖFB-Spiel-ID zugeordnete Berichtseite ist für
+    // Spielort/Schiedsrichter die höchste Priorität. So zeigt das Spielcenter
+    // keine älteren Match-Felder, wenn bereits offizielle Berichtsdaten vorliegen.
+    const authoritativeVenue = matchReport?.venue || displayVenue(selectedMatch);
+    const authoritativeReferee = matchReport ? matchReport.referee : selectedMatch.referee;
     const lineupPublished = Boolean(
       matchReport && matchReport.homeLineup.length >= 10 && matchReport.awayLineup.length >= 10
     );
@@ -370,7 +375,7 @@ function formatDate(date: Date) {
           <div className="match-detail-meta premium-match-meta">
             <span><Icon name="calendar" /> {formatDate(selectedMatch.kickoffAt)}</span>
             <span><Icon name="clock" /> {formatTime(selectedMatch.kickoffAt)} Uhr</span>
-            <span><Icon name="location" /> {displayVenue(selectedMatch) || "Spielort noch offen"}</span>
+            <span><Icon name="location" /> {authoritativeVenue || "Spielort noch offen"}</span>
           </div>
 
           <div className="premium-match-actions">
@@ -414,10 +419,10 @@ function formatDate(date: Date) {
                   </div>
                 </header>
                 <div className="premium-info-grid">
-                  <article><Icon name="location" /><small>Spielort</small><strong>{displayVenue(selectedMatch) || "Noch nicht bekannt"}</strong></article>
+                  <article><Icon name="location" /><small>Spielort</small><strong>{authoritativeVenue || "Noch nicht bekannt"}</strong></article>
                   <article><Icon name="calendar" /><small>Datum</small><strong>{formatDate(selectedMatch.kickoffAt)}</strong></article>
                   <article><Icon name="clock" /><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></article>
-                  <article><Icon name="users" /><small>Schiedsrichter</small><strong>{selectedMatch.referee || "Noch nicht veröffentlicht"}</strong></article>
+                  <article><Icon name="users" /><small>Schiedsrichter</small><strong>{authoritativeReferee || "Noch nicht veröffentlicht"}</strong></article>
                   {matchReport?.attendance !== null && matchReport?.attendance !== undefined && <article><Icon name="users" /><small>Zuschauer</small><strong>{matchReport.attendance}</strong></article>}
                   <article><Icon name="table" /><small>TSU Tabellenplatz</small><strong>{tsuRow ? `${tsuRow.position}. Platz` : "Noch offen"}</strong></article>
                   <article><Icon name="sync" /><small>Letzte Aktualisierung</small><strong>{selectedMatch.sourceUpdatedAt ? `${formatDate(selectedMatch.sourceUpdatedAt)} · ${formatTime(selectedMatch.sourceUpdatedAt)}` : "Noch nicht verfügbar"}</strong></article>

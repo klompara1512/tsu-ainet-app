@@ -61,6 +61,7 @@ const REPORT_OVERRIDES = [
     home: "SG OSK Kötschach - Mauthen / SK Grafendorf",
     away: "TSU Ainet",
     url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?SG-OSK-Koetschach-Mauthen-SK-Grafendorf-vs-Ainet&:s=4074039",
+    venue: "OSK-Arena Kötschach-Mauthen",
   },
 ];
 
@@ -1869,7 +1870,10 @@ async function extractReport(browser, match) {
         admin.firestore.Timestamp.fromDate(
           match.kickoffDate,
         ),
-      venue: raw.venue || compact(match.venue),
+      // Bei einem expliziten offiziellen Override darf ein bekannter offizieller
+      // Spielort den alten Firestore-Wert (z. B. fälschlich „Termine“) ersetzen.
+      // Für alle anderen Spiele bleibt die DOM-Auswertung die primäre Quelle.
+      venue: cleanVenueValue(matchingOverride(match, { allowTeamOnly: true })?.venue) || cleanVenueValue(raw.venue) || cleanVenueValue(match.venue),
       venueAddress: raw.venueAddress || compact(match.venueAddress),
       // Schiedsrichter ausschließlich von exakt dieser ÖFB-Spielberichtseite.
       // Kein Fallback auf bereits im Match gespeicherte Werte, da diese aus
@@ -1943,7 +1947,7 @@ async function extractReport(browser, match) {
         visualLineupDebug: raw.visualLineupDebug || null,
         events: report.eventCount,
         hasResult: Boolean(raw.result),
-        venue: raw.venue || "",
+        venue: cleanVenueValue(matchingOverride(match, { allowTeamOnly: true })?.venue) || cleanVenueValue(raw.venue) || "",
         venueAddress: raw.venueAddress || "",
         referee: raw.referee || "",
         refereeAssistants: raw.refereeAssistants || [],

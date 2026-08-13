@@ -51,6 +51,26 @@ const TEAM_SYNC_SOURCES = ACTIVE_TEAMS.flatMap((team) => [
     .filter(Boolean)
     .map((url, sourcePriority) => ({ teamKey: team.key, teamName: team.name, kind: "table", url, sourcePriority })),
 ]).filter((entry) => entry.url);
+
+// Version 16.2: feste ÖFB-Tabellenquelle pro Mannschaft.
+const EXACT_TABLE_SOURCES = new Map(
+  ACTIVE_TEAMS.filter((team) => team.tableUrl).map((team) => [
+    String(team.tableUrl).split("#")[0].split("?")[0].replace(/\/$/, ""),
+    { teamKey: team.key, teamName: team.name, teamId: slug(team.name), kind: "table", url: team.tableUrl },
+  ]),
+);
+function canonicalTableSourceForTeam(teamKey) {
+  return ACTIVE_TEAMS.find((entry) => entry.key === teamKey)?.tableUrl || "";
+}
+function exactTableDescriptor(sourceUrl) {
+  const raw = String(sourceUrl || "");
+  const normalized = raw.split("#")[0].split("?")[0].replace(/\/$/, "");
+  for (const [configured, descriptor] of EXACT_TABLE_SOURCES.entries()) {
+    if (normalized === configured) return descriptor;
+  }
+  return null;
+}
+
 const SQUAD_URLS = ACTIVE_TEAMS.map((team) => team.squadUrl).filter(Boolean);
 const SQUAD_URL = SQUAD_URLS[0] || `https://vereine.oefb.at/${SYNC_CONFIG.clubSlug}/Mannschaften/Saison-${SEASON_SLUG}/KM/Kader/`;
 const RUN_DAILY_TASKS = process.env.RUN_DAILY_TASKS === "true";
@@ -79,7 +99,7 @@ const MAX_PAGES = CORE_SYNC
   : (Number(SYNC_CONFIG.maxPages) || 80);
 const SYNC_INTERVAL_MINUTES = Number(SYNC_CONFIG.intervalMinutes) || 30;
 const PARSER_VERSION = TABLES_ONLY
-  ? "16.1.1-spark-delta-table-sync"
+  ? "16.2.0-exact-team-table-sync"
   : GAMES_ONLY
     ? "16.1.0-spark-games-sync"
     : CORE_SYNC
@@ -254,6 +274,8 @@ function chooseClubProfile(profileMap, profileIdMap, clubName, clubId = "") {
 }
 
 function sourceDescriptor(sourceUrl) {
+  const exactTable = exactTableDescriptor(sourceUrl);
+  if (exactTable) return exactTable;
   const normalized = String(sourceUrl || "").replace(/\/$/, "");
   for (const source of TEAM_SYNC_SOURCES) {
     if (normalized === String(source.url || "").replace(/\/$/, "")) return source;
@@ -271,9 +293,15 @@ function sourceDescriptor(sourceUrl) {
 }
 
 function teamFromUrl(sourceUrl) {
-  const path = decodeURIComponent(new URL(sourceUrl).pathname).toLowerCase();
+  const exactTable = exactTableDescriptor(sourceUrl);
+  if (exactTable) return { teamKey: exactTable.teamKey, teamName: exactTable.teamName };
+  let path = "";
+  try { path = decodeURIComponent(new URL(sourceUrl).pathname).toLowerCase(); } catch { return null; }
+  const segments = path.split("/").filter(Boolean);
+  const saisonIndex = segments.findIndex((segment) => /^saison-\d{4}-\d{2}$/.test(segment));
+  const teamSegment = saisonIndex >= 0 ? (segments[saisonIndex + 1] || "") : "";
   for (const team of TEAM_PAGES) {
-    if (team.slugs.some((slugName) => path.includes(`/${slugName.toLowerCase()}/`))) {
+    if ((team.slugs || []).some((slugName) => String(slugName).toLowerCase() === teamSegment)) {
       return { teamKey: team.key, teamName: team.name };
     }
   }
@@ -768,11 +796,15 @@ function addStanding(target, data, sourceUrl) {
   const position = parseNumber(data.position);
   const clubName = oneLine(data.clubName);
   if (!position || !clubName || position > 100) return;
-  const urlTeam = teamFromUrl(sourceUrl);
+  const descriptor = sourceDescriptor(sourceUrl);
+  const urlTeam = descriptor.kind === "table" && descriptor.teamKey
+    ? { teamKey: descriptor.teamKey, teamName: descriptor.teamName }
+    : teamFromUrl(sourceUrl);
   const teamName = urlTeam?.teamName || data.teamName || teamFromText(data.competitionName || "") || "Kampfmannschaft";
   const teamKey = urlTeam?.teamKey || data.teamKey || slug(teamName).toUpperCase();
+  const canonicalTableUrl = canonicalTableSourceForTeam(teamKey);
   target.push({
-    id: makeId(["kfv-standing", teamKey, data.competitionName || "ÖFB", clubName]),
+    id: makeId(["kfv-standing-v16.2", teamKey, clubKey(clubName) || clubName]),
     teamId: slug(teamName), teamKey, teamName,
     season: seasonFromUrl(sourceUrl),
     competitionName: cleanCompetitionTitle(data.competitionName, teamName) || "ÖFB",
@@ -788,6 +820,7 @@ function addStanding(target, data, sourceUrl) {
     goalsAgainst: parseNumber(data.goalsAgainst) || 0,
     goalDifference: parseNumber(data.goalDifference) || 0,
     points: parseNumber(data.points) || 0,
+    sourceTableUrl: canonicalTableUrl || sourceUrl,
     active: true, source: "oefb-public", sourceUrl,
   });
 }
@@ -2425,8 +2458,15 @@ async function main() {
           }
         }
         if (descriptor.teamKey && descriptor.kind === "table") {
-          for (const item of parsed.standings) {
-            if (item.teamKey === descriptor.teamKey) standings.push(item);
+          const exactDescriptor = exactTableDescriptor(resource.finalUrl);
+          const canonicalTableUrl = canonicalTableSourceForTeam(descriptor.teamKey);
+          if (!exactDescriptor || exactDescriptor.teamKey !== descriptor.teamKey) {
+            warnings.push(`${descriptor.teamName}: fremde Tabellenquelle verworfen: ${resource.finalUrl}`);
+          } else {
+            for (const item of parsed.standings) {
+              if (item.teamKey !== descriptor.teamKey) continue;
+              standings.push({ ...item, teamKey: descriptor.teamKey, teamName: descriptor.teamName, teamId: slug(descriptor.teamName), sourceUrl: canonicalTableUrl, sourceTableUrl: canonicalTableUrl });
+            }
           }
         }
         if (descriptor.teamKey && descriptor.kind === "squad") {
@@ -2504,7 +2544,9 @@ async function main() {
       .sort((a, b) => a.teamKey.localeCompare(b.teamKey) || a.position - b.position);
     const standingGroups = new Map();
     for (const row of uniqueStandings) {
-      const key = `${row.teamKey}|${row.competitionName}`;
+      // Genau eine offizielle Tabelle pro Mannschaft. Unterschiedliche Seitentitel
+      // dürfen die Tabelle nicht mehr in mehrere Gruppen zerlegen.
+      const key = row.teamKey;
       const group = standingGroups.get(key) || [];
       group.push(row); standingGroups.set(key, group);
     }
@@ -2516,7 +2558,8 @@ async function main() {
         const containsAinet = group.some((row) => /\bainet\b/i.test(row.clubName));
         const plausibleRange = positions[0] === 1 && positions.at(-1) <= 30;
         const contiguousPositions = positions.every((position, index) => position === positions[0] + index);
-        const reliable = group.length >= 2 && uniquePositions && contiguousPositions && containsAinet && plausibleRange;
+        const exactSource = group.every((row) => exactTableDescriptor(row.sourceTableUrl || row.sourceUrl || "")?.teamKey === row.teamKey);
+        const reliable = group.length >= 2 && uniquePositions && contiguousPositions && containsAinet && plausibleRange && exactSource;
         if (reliable) reliableStandingTeams.add(group[0].teamKey);
         return reliable;
       })
@@ -2728,7 +2771,7 @@ async function main() {
       standingTeamCounts: uniqueStandings.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       squadTeamCounts: uniqueSquad.reduce((result, item) => { result[item.teamKey] = (result[item.teamKey] || 0) + 1; return result; }, {}),
       teamSyncStatus,
-      syncArchitecture: TABLES_ONLY ? "v16.1.1-spark-delta-table-sync" : GAMES_ONLY ? "v16.1.1-scheduled-games-sync" : CORE_SYNC ? "v16.1-spark-core-sync" : "v13.4-independent-official-sync",
+      syncArchitecture: TABLES_ONLY ? "v16.2-exact-team-table-sync" : GAMES_ONLY ? "v16.1.1-scheduled-games-sync" : CORE_SYNC ? "v16.1-spark-core-sync" : "v13.4-independent-official-sync",
       syncMode: SYNC_MODE,
       deactivatedMatches, deactivatedStandings, deactivatedSquad,
       warningCount: warnings.length, warnings: warnings.slice(0, 30),
@@ -2762,6 +2805,13 @@ async function main() {
     console.log(`  Verschoben: ${matchStatusCounts.postponed || 0}`);
     console.log(`  Abgesagt: ${matchStatusCounts.cancelled || 0}`);
     console.log(`Tabellenzeilen: ${standingsReliable ? uniqueStandings.length : "übersprungen (unvollständig)"}`);
+    console.log("----- Exakte Tabellenquellen -----");
+    for (const team of ACTIVE_TEAMS.filter((entry) => entry.tableUrl)) {
+      const rows = uniqueStandings.filter((row) => row.teamKey === team.key);
+      const ainet = rows.find((row) => /\bainet\b/i.test(row.clubName));
+      console.log(`  ${team.key} -> ${team.tableUrl} | ${rows.length} Zeilen | Ainet: ${ainet ? `${ainet.position}. / ${ainet.points} Pkt.` : "nicht erkannt"} | zuverlässig=${reliableStandingTeams.has(team.key) ? "ja" : "nein"}`);
+    }
+    console.log("----- Ende Tabellenquellen -----");
 
     // U17-Diagnose: einzelne importierte Spiele sichtbar machen. So ist im
     // GitHub-Log sofort erkennbar, ob ein bestimmter Termin vor Firestore

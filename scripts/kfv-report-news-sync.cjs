@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-reserve-referee-scroll-fix";
+const VERSION = "18.3.0-beta.1-exact-official-match-source-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -850,6 +850,14 @@ async function extractReport(browser, match) {
 
     await waitForReport(page);
 
+    // Harte Identitätsprüfung: eine bekannte ÖFB-ID darf niemals Daten einer
+    // anderen Spielberichtseite liefern.
+    const expectedGameId = compact(match._resolvedGameId || match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl));
+    const loadedGameId = extractOefbGameId(page.url());
+    if (expectedGameId && loadedGameId && expectedGameId !== loadedGameId) {
+      throw new Error(`Falsche ÖFB-Spielberichtseite geladen: erwartet ${expectedGameId}, erhalten ${loadedGameId}`);
+    }
+
     const raw = await page.evaluate(
       ({ expectedHomeTeam, expectedAwayTeam }) => {
         const compact = (value) =>
@@ -941,7 +949,7 @@ async function extractReport(browser, match) {
           .replace(/\s+(?:Assistent(?:en)?|Zuschauer|Besucher|Spielort|Stadion|Adresse).*$/i, "")
           .trim();
 
-        const referee = cleanOfficial(labelledValue(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160));
+        const referee = cleanOfficial(strictLabelValue(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160));
         const assistantText = labelledValue([
           "Schiedsrichter-Assistenten",
           "Schiedsrichterassistenten",
@@ -958,10 +966,40 @@ async function extractReport(browser, match) {
           return compact(String(document.body?.innerText || "").match(pattern)?.[1] || "");
         };
 
+        // Strikte Label/Wert-Auswertung für die offizielle Einzel-Spielberichtseite.
+        // Es werden nur Werte aus derselben Tabellen-/Definitions-/Info-Zeile akzeptiert.
+        // Dadurch können Navigationstexte wie „Termine“ oder Daten anderer Bereiche
+        // nicht mehr als Spielort/Schiedsrichter übernommen werden.
+        const strictLabelValue = (labels, maxLength = 220) => {
+          const wanted = labels.map((label) => normalize(label));
+          const labelMatches = (value) => {
+            const n = normalize(String(value || "").replace(/:$/, ""));
+            return wanted.some((label) => n === label);
+          };
+          const nodes = [...document.querySelectorAll("dt,th,[class*='label'],[data-label],span,strong,p")];
+          for (const node of nodes) {
+            const rawLabel = compact(node.textContent);
+            if (!rawLabel || rawLabel.length > 80 || !labelMatches(rawLabel)) continue;
+            const row = node.closest("tr,dl,li,[class*='row'],[class*='item'],[class*='info'],[class*='detail']") || node.parentElement;
+            const candidates = [
+              node.tagName === "DT" ? node.nextElementSibling : null,
+              node.tagName === "TH" ? node.parentElement?.querySelector("td") : null,
+              node.nextElementSibling,
+              row?.querySelector("dd,[class*='value'],[data-value]")
+            ].filter(Boolean);
+            for (const candidate of candidates) {
+              const value = compact(candidate.textContent);
+              if (!value || value === rawLabel || value.length > maxLength) continue;
+              if (labelMatches(value)) continue;
+              return value;
+            }
+          }
+          return "";
+        };
+
         // ÖFB verändert das Markup der Infobox gelegentlich. Die Werte werden
         // deshalb zusätzlich direkt aus dem sichtbaren Text ausgelesen.
-        let robustReferee = referee || textValueAfterLabel(["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"], 160);
-        robustReferee = cleanOfficial(robustReferee);
+        let robustReferee = cleanOfficial(referee);
         const robustAssistantText = assistantText || textValueAfterLabel([
           "Schiedsrichter-Assistenten",
           "Schiedsrichterassistenten",
@@ -984,10 +1022,8 @@ async function extractReport(browser, match) {
           return text;
         };
 
-        let venue = cleanVenue(labelledValue(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180)) ||
-          cleanVenue(textValueAfterLabel(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180));
-        let venueAddress = cleanVenue(labelledValue(["Adresse", "Anschrift"], 220)) ||
-          cleanVenue(textValueAfterLabel(["Adresse", "Anschrift"], 220));
+        let venue = cleanVenue(strictLabelValue(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180));
+        let venueAddress = cleanVenue(strictLabelValue(["Adresse", "Anschrift"], 220));
 
         const mapLinks = [...document.querySelectorAll("a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap'],a[href*='maps.apple']")];
         const mapHrefCandidates = [];
@@ -1159,10 +1195,10 @@ async function extractReport(browser, match) {
           return !/(?:termine|spielbericht|aufstellung|tabelle|kader|zuschauer|spielort)/i.test(normalized);
         }) || "";
 
-        // Für das zentrale Match darf es keinen globalen Fallback geben. Wenn im
-        // korrekt zugeordneten Match-Bereich kein SR steht, ist offiziell keiner
-        // veröffentlicht und der gespeicherte Wert wird beim Sync entfernt.
-        robustReferee = scopedReferee;
+        // Für die exakt zugeordnete Einzel-Spielberichtseite ist ausschließlich
+        // das strikte Label/Wert-Feld maßgeblich. Kein globaler/heuristischer Fallback.
+        // Fehlt dort ein Schiedsrichter, ist für dieses Spiel offiziell keiner veröffentlicht.
+        robustReferee = cleanOfficial(referee);
         if (!robustReferee) robustRefereeAssistants = [];
 
         const classifyRole = (context) => {
@@ -1973,10 +2009,10 @@ async function upsertReport(report, runId) {
     ? report.awayBench
     : (isFutureReport ? [] : (old.awayBench || []));
   const referee = report.referee || (isFutureReport ? "" : (old.referee || ""));
-  const venue = cleanVenueValue(report.venue) || cleanVenueValue(old.venue) || "";
+  const venue = cleanVenueValue(report.venue) || (isFutureReport ? "" : cleanVenueValue(old.venue)) || "";
   const refereeAssistants = report.refereeAssistants.length
     ? report.refereeAssistants
-    : old.refereeAssistants || [];
+    : (isFutureReport ? [] : (old.refereeAssistants || []));
   const lineupPlayerCount =
     homeLineup.length + awayLineup.length + homeBench.length + awayBench.length;
 
@@ -2033,7 +2069,7 @@ async function updateMatchFromReport(report) {
   const cleanReportVenue = cleanVenueValue(report.venue);
   const cleanExistingVenue = cleanVenueValue(snapshot.data()?.venue);
   if (cleanReportVenue) patch.venue = cleanReportVenue;
-  else if (snapshot.data()?.venue && !cleanExistingVenue) patch.venue = admin.firestore.FieldValue.delete();
+  else if (snapshot.data()?.venue && (!cleanExistingVenue || asDate(snapshot.data()?.kickoffAt || report.kickoffAt).getTime() > Date.now())) patch.venue = admin.firestore.FieldValue.delete();
   const cleanReportVenueAddress = cleanVenueValue(report.venueAddress);
   if (cleanReportVenueAddress) patch.venueAddress = cleanReportVenueAddress;
   else if (snapshot.data()?.venueAddress && !cleanVenueValue(snapshot.data()?.venueAddress)) patch.venueAddress = admin.firestore.FieldValue.delete();
@@ -2062,6 +2098,7 @@ async function updateMatchFromReport(report) {
   if (Array.isArray(report.awayBench) && report.awayBench.length) patch.awayBench = report.awayBench;
   else if (isFutureMatch && Array.isArray(snapshotData.awayBench) && snapshotData.awayBench.length) patch.awayBench = [];
   if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
+  else if (isFutureMatch && Array.isArray(snapshotData.refereeAssistants) && snapshotData.refereeAssistants.length) patch.refereeAssistants = [];
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
 
   const homeLineupAvailable = Math.max(

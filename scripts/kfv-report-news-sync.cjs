@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-report-metadata-only-fix";
+const VERSION = "18.3.0-beta.1-reserve-referee-scroll-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -90,6 +90,19 @@ const compact = (value) =>
   String(value || "")
     .replace(/\s+/g, " ")
     .trim();
+
+const INVALID_VENUE_PATTERN = /^(?:termine?|spiele?|spielbericht|aufstellung(?:en)?|tabelle(?:n)?|kader|news|verein|home|mehr|details|navigation|karte|map|route|kontakt|bewerb|runde|heim|gast|geplant|beendet|liveticker|statistik)$/i;
+
+const cleanVenueValue = (value) => {
+  const text = compact(value)
+    .replace(/^(?:spielort|stadion|sportplatz|spielstätte|austragungsort|spielanlage)\s*:?\s*/i, "")
+    .replace(/\s+(?:schiedsrichter|zuschauer|besucher|aufstellung|tabelle|termine|spielbericht)\b.*$/i, "")
+    .trim();
+  if (!text || text.length < 3 || text.length > 220) return "";
+  if (INVALID_VENUE_PATTERN.test(text)) return "";
+  if (/^(?:\d{1,2}[:.]\d{2}(?:\s*uhr)?|\d{1,2}[.:]\d{1,2})$/i.test(text)) return "";
+  return text;
+};
 
 const sha = (value) =>
   crypto
@@ -291,6 +304,24 @@ function validateReportPage(match, raw) {
 
   if (!pageContainsClub(identityText, match.awayTeam)) {
     reasons.push(`Gastverein "${match.awayTeam}" nicht eindeutig erkannt`);
+  }
+
+  // Zusätzlich zum Paarungsabgleich muss auch der Spieltag zur geladenen
+  // Einzel-Spielberichtseite passen. So können Daten eines anderen Spiels mit
+  // denselben/ähnlichen Vereinsnamen nicht auf dieses Match übertragen werden.
+  const expectedDate = asDate(match.kickoffDate || match.kickoffAt);
+  if (expectedDate.getTime() > 0) {
+    const dd = String(expectedDate.getDate()).padStart(2, "0");
+    const mm = String(expectedDate.getMonth() + 1).padStart(2, "0");
+    const yyyy = expectedDate.getFullYear();
+    const dateIdentityText = [raw.title, raw.heading, raw.topText, raw.preview].join(" ");
+    const hasExactDate =
+      dateIdentityText.includes(`${dd}.${mm}.${yyyy}`) ||
+      dateIdentityText.includes(`${dd}.${mm}.${String(yyyy).slice(-2)}`) ||
+      dateIdentityText.includes(`${dd}.${mm}.`);
+    if (!hasExactDate) {
+      reasons.push(`Spieltag ${dd}.${mm}.${yyyy} nicht auf der ÖFB-Seite erkannt`);
+    }
   }
 
   if (
@@ -937,34 +968,69 @@ async function extractReport(browser, match) {
           "Assistenten",
           "Linienrichter",
         ], 220);
-        const robustRefereeAssistants = refereeAssistants.length
+        let robustRefereeAssistants = refereeAssistants.length
           ? refereeAssistants
           : robustAssistantText.split(/[,;/]|\s+und\s+/i).map(cleanOfficial).filter(Boolean).slice(0, 4);
 
-        let venue = labelledValue(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180) ||
-          textValueAfterLabel(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180);
-        let venueAddress = labelledValue(["Adresse", "Anschrift"], 220) ||
-          textValueAfterLabel(["Adresse", "Anschrift"], 220);
+        const invalidVenue = /^(?:termine?|spiele?|spielbericht|aufstellung(?:en)?|tabelle(?:n)?|kader|news|verein|home|mehr|details|navigation|karte|map|route|kontakt|bewerb|runde|heim|gast|geplant|beendet|liveticker|statistik)$/i;
+        const cleanVenue = (value) => {
+          const text = compact(value)
+            .replace(/^(?:spielort|stadion|sportplatz|spielstätte|austragungsort|spielanlage)\s*:?\s*/i, "")
+            .replace(/\s+(?:schiedsrichter|zuschauer|besucher|aufstellung|tabelle|termine|spielbericht)\b.*$/i, "")
+            .trim();
+          if (!text || text.length < 3 || text.length > 220) return "";
+          if (invalidVenue.test(text)) return "";
+          if (/^(?:\d{1,2}[:.]\d{2}(?:\s*uhr)?|\d{1,2}[.:]\d{1,2})$/i.test(text)) return "";
+          return text;
+        };
 
-        // Zusätzlicher DOM-Fallback: ÖFB rendert den Spielort je nach Bericht
-        // teilweise als eigene Location-/Venue-/Map-Komponente ohne sichtbares
-        // Label. Nur kompakte, plausible Ortsangaben übernehmen.
-        if (!venue) {
-          const venueNodes = [...document.querySelectorAll(
-            "[class*='venue'],[class*='location'],[class*='stadion'],[class*='sportplatz'],[class*='spielort'],[data-testid*='venue'],[data-testid*='location'],a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap']"
-          )];
-          const venueCandidates = venueNodes
-            .map((node) => compact(node.innerText || node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || ''))
-            .filter((value) => value && value.length >= 3 && value.length <= 180)
-            .filter((value) => !/^(?:karte|map|route|navigation|mehr|details)$/i.test(value));
-          venue = venueCandidates[0] || "";
+        let venue = cleanVenue(labelledValue(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180)) ||
+          cleanVenue(textValueAfterLabel(["Spielort", "Stadion", "Sportplatz", "Spielstätte", "Austragungsort", "Spielanlage"], 180));
+        let venueAddress = cleanVenue(labelledValue(["Adresse", "Anschrift"], 220)) ||
+          cleanVenue(textValueAfterLabel(["Adresse", "Anschrift"], 220));
+
+        const mapLinks = [...document.querySelectorAll("a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap'],a[href*='maps.apple']")];
+        const mapHrefCandidates = [];
+        for (const link of mapLinks) {
+          try {
+            const href = link.getAttribute("href") || "";
+            const parsed = new URL(href, location.href);
+            for (const key of ["query", "q", "destination", "daddr"]) {
+              const candidate = cleanVenue(decodeURIComponent(parsed.searchParams.get(key) || ""));
+              if (candidate) mapHrefCandidates.push(candidate);
+            }
+            const pathCandidate = cleanVenue(decodeURIComponent(parsed.pathname || "").replace(/^\/maps\/(?:place|search)\//i, "").replace(/\/data=.*$/i, "").replace(/\+/g, " "));
+            if (pathCandidate && !/^maps$/i.test(pathCandidate)) mapHrefCandidates.push(pathCandidate);
+          } catch {}
         }
 
+        // Zusätzlicher DOM-Fallback: echte Location-/Venue-/Map-Komponenten
+        // bevorzugen. Allgemeine Navigationsbegriffe wie „Termine“ werden
+        // ausdrücklich verworfen.
+        const venueNodes = [...document.querySelectorAll(
+          "[class*='venue'],[class*='location'],[class*='stadion'],[class*='sportplatz'],[class*='spielort'],[data-testid*='venue'],[data-testid*='location'],address,a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap'],a[href*='maps.apple']"
+        )];
+        const venueCandidates = [...mapHrefCandidates, ...venueNodes
+          .map((node) => cleanVenue(node.innerText || node.textContent || node.getAttribute('aria-label') || node.getAttribute('title') || ''))]
+          .filter(Boolean);
+
+        const scoreVenue = (value) => {
+          let score = 0;
+          if (/\b(?:sportplatz|stadion|arena|fußballplatz|fussballplatz|kunstrasen|platz|sportanlage|stadionanlage)\b/i.test(value)) score += 40;
+          if (/\b\d{4}\b/.test(value)) score += 12;
+          if (/\b(?:straße|strasse|weg|gasse|platz)\b/i.test(value)) score += 10;
+          if (/\d/.test(value)) score += 3;
+          if (value.length >= 8 && value.length <= 100) score += 5;
+          return score;
+        };
+        venueCandidates.sort((a, b) => scoreVenue(b) - scoreVenue(a));
+        if (!venue || scoreVenue(venueCandidates[0] || "") > scoreVenue(venue)) venue = venueCandidates[0] || venue;
+
         if (!venueAddress) {
-          const mapLink = document.querySelector("a[href*='maps.google'],a[href*='google.com/maps'],a[href*='openstreetmap']");
+          const mapLink = mapLinks[0];
           const mapContainer = mapLink?.closest("li,p,div,section,article");
-          const mapText = compact(mapContainer?.innerText || mapContainer?.textContent || "");
-          if (mapText && mapText.length <= 220 && mapText !== venue) venueAddress = mapText;
+          const mapText = cleanVenue(mapContainer?.innerText || mapContainer?.textContent || "");
+          if (mapText && mapText !== venue) venueAddress = mapText;
         }
 
         let robustAttendance = attendance;
@@ -1043,6 +1109,61 @@ async function extractReport(browser, match) {
           if (rect.width > 0) return rect.left + rect.width / 2 < window.innerWidth / 2 ? "home" : "away";
           return "";
         };
+
+        // Schiedsrichter nur aus dem DOM-Bereich dieses konkreten Spiels akzeptieren.
+        // Auf ÖFB-Seiten können zusätzlich Daten/Links anderer Partien gerendert sein;
+        // ein globaler Text-Fallback hat dadurch z.B. den KM-Schiedsrichter in ein
+        // Reserve-Spiel übernommen. Der lokale Bereich muss sowohl Heim- als auch
+        // Gastteam des erwarteten Matches enthalten. BODY/HTML werden bewusst nicht
+        // als Match-Container akzeptiert.
+        const refereeLabels = /^(?:schiedsrichter|referee|hauptschiedsrichter|schiedsrichter\s*1|sr\s*1)\s*:?/i;
+        const scopedRefereeCandidates = [];
+        const refereeLabelNodes = [...document.querySelectorAll(
+          "dt,th,td,li,p,span,strong,div,[class*='label'],[class*='info'],[class*='detail']",
+        )].filter((node) => {
+          const text = compact(node.textContent);
+          return text && text.length <= 180 && refereeLabels.test(text);
+        });
+
+        for (const labelNode of refereeLabelNodes) {
+          let container = labelNode.parentElement;
+          for (let depth = 0; container && depth < 8; depth += 1, container = container.parentElement) {
+            if (container === document.body || container === document.documentElement) break;
+            const context = compact(container.textContent);
+            if (!context || context.length > 6500) continue;
+            const homeHits = tokenHits(context, homeTokens);
+            const awayHits = tokenHits(context, awayTokens);
+            if (homeHits < 1 || awayHits < 1) continue;
+
+            const localCandidates = [
+              labelNode.nextElementSibling,
+              labelNode.parentElement?.querySelector("dd,[class*='value'],strong,b"),
+            ].filter(Boolean);
+            for (const candidate of localCandidates) {
+              const value = cleanOfficial(compact(candidate.textContent));
+              if (value && value.length <= 160 && !refereeLabels.test(value)) {
+                scopedRefereeCandidates.push(value);
+              }
+            }
+
+            const labelText = compact(labelNode.textContent);
+            const inline = cleanOfficial(labelText.replace(refereeLabels, "").trim());
+            if (inline && inline.length <= 160) scopedRefereeCandidates.push(inline);
+            break;
+          }
+        }
+
+        const scopedReferee = scopedRefereeCandidates.find((value) => {
+          const normalized = normalize(value);
+          if (!normalized || normalized.length < 4) return false;
+          return !/(?:termine|spielbericht|aufstellung|tabelle|kader|zuschauer|spielort)/i.test(normalized);
+        }) || "";
+
+        // Für das zentrale Match darf es keinen globalen Fallback geben. Wenn im
+        // korrekt zugeordneten Match-Bereich kein SR steht, ist offiziell keiner
+        // veröffentlicht und der gespeicherte Wert wird beim Sync entfernt.
+        robustReferee = scopedReferee;
+        if (!robustReferee) robustRefereeAssistants = [];
 
         const classifyRole = (context) => {
           const normalized = normalize(context);
@@ -1656,6 +1777,27 @@ async function extractReport(browser, match) {
       raw.frameDiagnostics = frameDiagnostics;
     }
 
+    // Vor einem zukünftigen Spiel dürfen nur tatsächlich veröffentlichte
+    // Spielberichts-Daten übernommen werden. ÖFB-Seiten enthalten auch Kader-
+    // und Profil-Links außerhalb der offiziellen Aufstellung; diese wurden
+    // bisher teilweise fälschlich als Startelf interpretiert. Eine zukünftige
+    // Aufstellung gilt deshalb erst als veröffentlicht, wenn beide Startelfen
+    // praktisch vollständig erkannt werden.
+    const isFutureMatch = Boolean(
+      match.kickoffDate && match.kickoffDate.getTime() > Date.now()
+    );
+    if (isFutureMatch) {
+      const homeCount = Array.isArray(raw.homeLineup) ? raw.homeLineup.length : 0;
+      const awayCount = Array.isArray(raw.awayLineup) ? raw.awayLineup.length : 0;
+      const officialFutureLineupPublished = homeCount >= 10 && awayCount >= 10;
+      if (!officialFutureLineupPublished) {
+        raw.homeLineup = [];
+        raw.awayLineup = [];
+        raw.homeBench = [];
+        raw.awayBench = [];
+      }
+    }
+
     const validation = validateReportPage(match, raw);
 
     const report = {
@@ -1693,7 +1835,10 @@ async function extractReport(browser, match) {
         ),
       venue: raw.venue || compact(match.venue),
       venueAddress: raw.venueAddress || compact(match.venueAddress),
-      referee: raw.referee || compact(match.referee),
+      // Schiedsrichter ausschließlich von exakt dieser ÖFB-Spielberichtseite.
+      // Kein Fallback auf bereits im Match gespeicherte Werte, da diese aus
+      // einer früheren Fehlzuordnung stammen können.
+      referee: raw.referee || "",
       refereeAssistants: raw.refereeAssistants || [],
       attendance: raw.attendance,
       homeLineup: raw.homeLineup,
@@ -1807,18 +1952,28 @@ async function upsertReport(report, runId) {
   const existing = await ref.get();
   const old = existing.exists ? existing.data() : {};
 
+  const kickoffDate = asDate(report.kickoffAt);
+  const isFutureReport = kickoffDate.getTime() > Date.now();
   const homeScore = Number.isInteger(report.homeScore)
     ? report.homeScore
     : (Number.isInteger(old.homeScore) ? old.homeScore : null);
   const awayScore = Number.isInteger(report.awayScore)
     ? report.awayScore
     : (Number.isInteger(old.awayScore) ? old.awayScore : null);
-  const homeLineup = report.homeLineup.length ? report.homeLineup : old.homeLineup || [];
-  const awayLineup = report.awayLineup.length ? report.awayLineup : old.awayLineup || [];
-  const homeBench = report.homeBench.length ? report.homeBench : old.homeBench || [];
-  const awayBench = report.awayBench.length ? report.awayBench : old.awayBench || [];
-  const referee = report.referee || old.referee || "";
-  const venue = report.venue || old.venue || "";
+  const homeLineup = report.homeLineup.length
+    ? report.homeLineup
+    : (isFutureReport ? [] : (old.homeLineup || []));
+  const awayLineup = report.awayLineup.length
+    ? report.awayLineup
+    : (isFutureReport ? [] : (old.awayLineup || []));
+  const homeBench = report.homeBench.length
+    ? report.homeBench
+    : (isFutureReport ? [] : (old.homeBench || []));
+  const awayBench = report.awayBench.length
+    ? report.awayBench
+    : (isFutureReport ? [] : (old.awayBench || []));
+  const referee = report.referee || (isFutureReport ? "" : (old.referee || ""));
+  const venue = cleanVenueValue(report.venue) || cleanVenueValue(old.venue) || "";
   const refereeAssistants = report.refereeAssistants.length
     ? report.refereeAssistants
     : old.refereeAssistants || [];
@@ -1875,20 +2030,37 @@ async function updateMatchFromReport(report) {
     oefbMatchId: report.oefbMatchId || "",
   };
 
-  if (report.venue) patch.venue = report.venue;
-  if (report.venueAddress) patch.venueAddress = report.venueAddress;
-  if (report.referee) patch.referee = report.referee;
-
+  const cleanReportVenue = cleanVenueValue(report.venue);
+  const cleanExistingVenue = cleanVenueValue(snapshot.data()?.venue);
+  if (cleanReportVenue) patch.venue = cleanReportVenue;
+  else if (snapshot.data()?.venue && !cleanExistingVenue) patch.venue = admin.firestore.FieldValue.delete();
+  const cleanReportVenueAddress = cleanVenueValue(report.venueAddress);
+  if (cleanReportVenueAddress) patch.venueAddress = cleanReportVenueAddress;
+  else if (snapshot.data()?.venueAddress && !cleanVenueValue(snapshot.data()?.venueAddress)) patch.venueAddress = admin.firestore.FieldValue.delete();
   const snapshotData = snapshot.data() || {};
+  const matchKickoff = asDate(snapshotData.kickoffAt || report.kickoffAt);
+  const isFutureMatch = matchKickoff.getTime() > Date.now();
+
+  if (report.referee) patch.referee = report.referee;
+  else if (isFutureMatch && snapshotData.referee) {
+    // Exakte ÖFB-Seite enthält aktuell keinen Schiedsrichter: einen früher
+    // falsch zugeordneten Wert für dieses zukünftige Spiel entfernen.
+    patch.referee = admin.firestore.FieldValue.delete();
+  }
+
 
   // WICHTIG: Der Spielbericht-Sync darf NIEMALS Ergebnis oder Spielstatus
   // im zentralen Spiel-Dokument verändern. Diese Felder gehören ausschließlich
   // dem offiziellen Spielplan-Sync (kfv-games-sync.cjs). Dadurch können Uhrzeiten
   // wie 15:00, 12:30 oder 13:45 nicht mehr als Resultate interpretiert werden.
   if (Array.isArray(report.homeLineup) && report.homeLineup.length) patch.homeLineup = report.homeLineup;
+  else if (isFutureMatch && Array.isArray(snapshotData.homeLineup) && snapshotData.homeLineup.length) patch.homeLineup = [];
   if (Array.isArray(report.awayLineup) && report.awayLineup.length) patch.awayLineup = report.awayLineup;
+  else if (isFutureMatch && Array.isArray(snapshotData.awayLineup) && snapshotData.awayLineup.length) patch.awayLineup = [];
   if (Array.isArray(report.homeBench) && report.homeBench.length) patch.homeBench = report.homeBench;
+  else if (isFutureMatch && Array.isArray(snapshotData.homeBench) && snapshotData.homeBench.length) patch.homeBench = [];
   if (Array.isArray(report.awayBench) && report.awayBench.length) patch.awayBench = report.awayBench;
+  else if (isFutureMatch && Array.isArray(snapshotData.awayBench) && snapshotData.awayBench.length) patch.awayBench = [];
   if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;
 

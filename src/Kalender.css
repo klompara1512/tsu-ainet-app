@@ -226,3 +226,64 @@
 
 /* Version 17.1.2 – Seitenköpfe ohne Untertitel */
 .calendar-eyebrow,.teams-label,.news-eyebrow,.news-header-mark,.kfv-header .kfv-eyebrow,.dashboard-page>.home-eyebrow{display:none!important}
+
+/* Mobile Spielcenter: Vordergrund scrollt, Hintergrund bleibt gesperrt */
+html.calendar-match-center-open,
+body.calendar-match-center-open{
+  overflow:hidden!important;
+  overscroll-behavior:none!important;
+}
+body.calendar-match-center-open .bottom-nav{
+  display:none!important;
+}
+.calendar-modal-backdrop{
+  z-index:2147483645;
+  overflow:hidden;
+  overscroll-behavior:none;
+  touch-action:none;
+  -webkit-overflow-scrolling:auto;
+}
+.match-center{
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  touch-action:pan-y;
+  scrollbar-gutter:stable;
+}
+
+@media(max-width:680px){
+  .calendar-modal-backdrop{
+    display:block;
+    padding:0;
+    background:rgba(2,7,18,.94);
+  }
+  .match-center{
+    box-sizing:border-box;
+    width:100%;
+    height:100dvh;
+    max-height:100dvh;
+    padding-top:env(safe-area-inset-top);
+    padding-bottom:calc(18px + env(safe-area-inset-bottom));
+    border-radius:0;
+    border-left:0;
+    border-right:0;
+    border-bottom:0;
+  }
+  .calendar-modal-close{
+    top:calc(14px + env(safe-area-inset-top));
+  }
+  .match-center-header{
+    padding-top:22px;
+  }
+  .match-center-actions{
+    padding-bottom:calc(22px + env(safe-area-inset-bottom));
+  }
+}
+
+@supports not (height:100dvh){
+  @media(max-width:680px){
+    .match-center{height:100vh;max-height:100vh}
+  }
+}

@@ -254,6 +254,9 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
 
 
     const reportEvents = matchReport?.events ?? [];
+    const lineupPublished = Boolean(
+      matchReport && matchReport.homeLineup.length >= 10 && matchReport.awayLineup.length >= 10
+    );
     const eventLabel = (type: string) => ({
       goal: "Tor", yellow: "Gelbe Karte", yellowRed: "Gelb-Rote Karte", red: "Rote Karte",
       substitution: "Wechsel", halfTime: "Halbzeit", fullTime: "Spielende", other: "Ereignis",
@@ -406,7 +409,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                   <article><Icon name="location" /><small>Spielort</small><strong>{matchReport?.venue || selectedMatch.venue || "Noch nicht bekannt"}</strong></article>
                   <article><Icon name="calendar" /><small>Datum</small><strong>{formatDate(selectedMatch.kickoffAt)}</strong></article>
                   <article><Icon name="clock" /><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></article>
-                  <article><Icon name="users" /><small>Schiedsrichter</small><strong>{matchReport?.referee || selectedMatch.referee || "Noch nicht veröffentlicht"}</strong></article>
+                  <article><Icon name="users" /><small>Schiedsrichter</small><strong>{matchReport ? (matchReport.referee || "Noch nicht veröffentlicht") : (selectedMatch.referee || "Noch nicht veröffentlicht")}</strong></article>
                   {matchReport?.attendance !== null && matchReport?.attendance !== undefined && <article><Icon name="users" /><small>Zuschauer</small><strong>{matchReport.attendance}</strong></article>}
                   <article><Icon name="table" /><small>TSU Tabellenplatz</small><strong>{tsuRow ? `${tsuRow.position}. Platz` : "Noch offen"}</strong></article>
                   <article><Icon name="sync" /><small>Letzte Aktualisierung</small><strong>{selectedMatch.sourceUpdatedAt ? `${formatDate(selectedMatch.sourceUpdatedAt)} · ${formatTime(selectedMatch.sourceUpdatedAt)}` : "Noch nicht verfügbar"}</strong></article>
@@ -491,6 +494,13 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                 <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>Aufstellungen werden geladen …</strong></div>
               ) : matchReportError ? (
                 <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>{matchReportError}</strong></div>
+              ) : !lineupPublished ? (
+                <div className="premium-empty-state premium-empty-state-large">
+                  <Icon name="users" />
+                  <strong>Aufstellungen noch nicht veröffentlicht</strong>
+                  <p>Sobald die offiziellen Startaufstellungen im ÖFB-Spielbericht veröffentlicht sind, werden sie hier automatisch angezeigt.</p>
+                  {(matchReport?.reportUrl || selectedMatch.reportUrl) && <a className="official-report-link" href={matchReport?.reportUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offiziellen ÖFB-Spielbericht öffnen</a>}
+                </div>
               ) : (
                 <>
                   <div className="official-lineup-grid">
@@ -499,7 +509,6 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                     <LineupList title={`${selectedMatch.homeTeam} – Ersatzbank`} players={matchReport?.homeBench ?? []} />
                     <LineupList title={`${selectedMatch.awayTeam} – Ersatzbank`} players={matchReport?.awayBench ?? []} />
                   </div>
-                  {!matchReport && <p className="premium-muted premium-tab-note">Der offizielle Spielbericht wurde noch nicht synchronisiert.</p>}
                   {(matchReport?.reportUrl || selectedMatch.reportUrl) && <a className="official-report-link" href={matchReport?.reportUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offiziellen ÖFB-Spielbericht öffnen</a>}
                 </>
               )}

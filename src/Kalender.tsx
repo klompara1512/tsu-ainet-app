@@ -272,6 +272,38 @@ function Kalender() {
     [],
   );
 
+  useEffect(() => {
+    if (!selectedMatch || typeof window === "undefined") return;
+
+    const scrollY = window.scrollY;
+    const body = document.body;
+    const html = document.documentElement;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyWidth = body.style.width;
+    const previousBodyOverflow = body.style.overflow;
+    const previousHtmlOverflow = html.style.overflow;
+
+    html.classList.add("calendar-match-center-open");
+    body.classList.add("calendar-match-center-open");
+    html.style.overflow = "hidden";
+    body.style.position = "fixed";
+    body.style.top = `-${scrollY}px`;
+    body.style.width = "100%";
+    body.style.overflow = "hidden";
+
+    return () => {
+      html.classList.remove("calendar-match-center-open");
+      body.classList.remove("calendar-match-center-open");
+      html.style.overflow = previousHtmlOverflow;
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.width = previousBodyWidth;
+      body.style.overflow = previousBodyOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [selectedMatch]);
+
   const availableTeams = useMemo(() => {
     const values = new Map<string, string>();
     matches.forEach((match) => values.set(getTeamKey(match), getTeamLabel(match)));

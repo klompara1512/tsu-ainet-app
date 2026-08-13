@@ -113,3 +113,108 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
   .week-summary-bookings{min-height:0}
   .week-summary-booking{padding:8px 10px}
 }
+
+
+/* ===== Mobile redesign 18.3.0-beta.3 ===== */
+@media (max-width: 640px) {
+  .training-planner-page,
+  .training-planner {
+    padding-left: 12px !important;
+    padding-right: 12px !important;
+  }
+
+  /* Wochenkopf kompakter und klarer */
+  .tp-week-navigation,
+  .week-navigation,
+  .training-week-navigation {
+    display: grid !important;
+    grid-template-columns: 52px 1fr 52px !important;
+    align-items: center !important;
+    gap: 10px !important;
+    margin: 14px 0 12px !important;
+  }
+  .tp-week-navigation button,
+  .week-navigation button,
+  .training-week-navigation button {
+    width: 52px !important;
+    height: 52px !important;
+    min-width: 52px !important;
+    border-radius: 16px !important;
+    padding: 0 !important;
+  }
+
+  /* Tagesauswahl horizontal, ohne abgeschnittene Karten */
+  .tp-days,
+  .week-days,
+  .training-days,
+  .day-selector {
+    display: flex !important;
+    gap: 8px !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    padding: 3px 1px 10px !important;
+    scrollbar-width: none !important;
+  }
+  .tp-days::-webkit-scrollbar,
+  .week-days::-webkit-scrollbar,
+  .training-days::-webkit-scrollbar,
+  .day-selector::-webkit-scrollbar { display:none !important; }
+  .tp-day,
+  .week-day,
+  .training-day,
+  .day-selector > * {
+    flex: 0 0 76px !important;
+    min-width: 76px !important;
+    height: 82px !important;
+    border-radius: 18px !important;
+    scroll-snap-align: center !important;
+  }
+
+  /* Platzkarten: weniger Weißraum, bessere Proportionen */
+  .pitch-card,
+  .training-pitch-card,
+  .tp-pitch-card,
+  .field-card {
+    border-radius: 22px !important;
+    padding: 16px 12px 14px !important;
+    margin: 14px 0 !important;
+    overflow: hidden !important;
+  }
+  .pitch-card-header,
+  .field-card-header,
+  .tp-pitch-header {
+    margin-bottom: 10px !important;
+  }
+
+  /* Spielfeld auf Smartphones deutlich flacher */
+  .football-pitch,
+  .pitch-graphic,
+  .training-field,
+  .tp-pitch {
+    width: 100% !important;
+    min-height: 0 !important;
+    height: auto !important;
+    aspect-ratio: 1.42 / 1 !important;
+    border-radius: 18px !important;
+  }
+
+  /* Beschriftungen auf dem Platz */
+  .pitch-half-label,
+  .half-label,
+  .area-label {
+    font-size: 13px !important;
+    padding: 6px 10px !important;
+    border-radius: 999px !important;
+  }
+  .add-training,
+  .add-training-label,
+  .pitch-add {
+    font-size: 12px !important;
+  }
+
+  /* Bottom navigation nicht über den Inhalt legen */
+  .training-planner-page,
+  .training-planner {
+    padding-bottom: calc(108px + env(safe-area-inset-bottom)) !important;
+  }
+}

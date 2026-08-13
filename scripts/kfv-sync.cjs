@@ -56,7 +56,7 @@ const TEAM_SYNC_SOURCES = ACTIVE_TEAMS.flatMap((team) => [
 const EXACT_TABLE_SOURCES = new Map(
   ACTIVE_TEAMS.filter((team) => team.tableUrl).map((team) => [
     String(team.tableUrl).split("#")[0].split("?")[0].replace(/\/$/, ""),
-    { teamKey: team.key, teamName: team.name, teamId: slug(team.name), kind: "table", url: team.tableUrl },
+    { teamKey: team.key, teamName: team.name, teamId: String(team.key || team.name || "").toLowerCase(), kind: "table", url: team.tableUrl },
   ]),
 );
 function canonicalTableSourceForTeam(teamKey) {

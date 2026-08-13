@@ -1746,10 +1746,13 @@ async function collectWithBrowser(startUrls) {
           if (!isOfficialTablePage) continue;
           const headers = Array.from(table.querySelectorAll("th")).map((x) => compact(x.textContent).toLowerCase());
           const headerText = headers.join(" | ");
-          const hasRank = /platz|rang|^#$/i.test(headerText);
-          const hasPlayed = /(?:^|\b)(?:sp|spiele|gespielt)(?:\b|$)/i.test(headerText);
-          const hasPoints = /punkte|pkt|pts/i.test(headerText);
-          const hasGoals = /tore|torverhältnis|tv/i.test(headerText);
+          // ÖFB verwendet je nach Bewerb entweder "Platz"/"Rang" oder nur "#".
+          // Wichtig: "#" muss pro einzelner Header-Zelle geprüft werden; gegen die
+          // zusammengefügte komplette Kopfzeile kann /^#$/ niemals matchen.
+          const hasRank = headers.some((header) => /^(?:#|platz|rang)\.?$/i.test(header));
+          const hasPlayed = headers.some((header) => /^(?:sp|sp\.|spiele|gespielt)$/i.test(header));
+          const hasPoints = headers.some((header) => /^(?:punkte|pkt|pkt\.|pts)$/i.test(header));
+          const hasGoals = headers.some((header) => /^(?:tore|torverhältnis|tv)$/i.test(header));
           if (!(hasRank && hasPlayed && hasPoints && hasGoals)) continue;
           for (const row of Array.from(table.querySelectorAll("tbody tr, tr"))) {
             const cells = Array.from(row.querySelectorAll("th,td")).map((x) => compact(x.textContent)).filter(Boolean);
@@ -1782,7 +1785,10 @@ async function collectWithBrowser(startUrls) {
             '[class*="standing-row"]', '[class*="standingRow"]',
             '[class*="ranking-row"]', '[class*="rankingRow"]',
             '[class*="table__row"]', '[class*="standings__row"]',
-            'li'
+            // Auch echte Tabellenzeilen zulassen. Falls eine Tabelle wegen einer
+            // abweichenden ÖFB-Kopfzeile nicht in Stufe 1 akzeptiert wird, kann
+            // der Fallback sie trotzdem noch auslesen.
+            'tbody tr', 'table tr', 'li'
           ];
           const rowCandidates = Array.from(document.querySelectorAll(rowSelectors.join(',')));
           const seenStandingRows = new Set();

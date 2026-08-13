@@ -2408,6 +2408,37 @@ async function main() {
 
       await upsertReport(result.report, runId);
       await updateMatchFromReport(result.report);
+
+      const debugHomeLineup = Array.isArray(result.report.homeLineup)
+        ? result.report.homeLineup.map((player) => compact(player?.name || player?.playerName || player?.fullName || player)).filter(Boolean)
+        : [];
+      const debugAwayLineup = Array.isArray(result.report.awayLineup)
+        ? result.report.awayLineup.map((player) => compact(player?.name || player?.playerName || player?.fullName || player)).filter(Boolean)
+        : [];
+      const debugHomeBench = Array.isArray(result.report.homeBench)
+        ? result.report.homeBench.map((player) => compact(player?.name || player?.playerName || player?.fullName || player)).filter(Boolean)
+        : [];
+      const debugAwayBench = Array.isArray(result.report.awayBench)
+        ? result.report.awayBench.map((player) => compact(player?.name || player?.playerName || player?.fullName || player)).filter(Boolean)
+        : [];
+
+      console.log(
+        `ÖFB DETAILS ${result.report.oefbMatchId || result.report.gameId || result.report.matchId}: ` +
+        `Spiel=${result.report.homeTeam} vs ${result.report.awayTeam} | ` +
+        `Spielort="${result.report.venue || ""}" | ` +
+        `Adresse="${result.report.venueAddress || ""}" | ` +
+        `Schiedsrichter="${result.report.referee || ""}" | ` +
+        `Heim-Aufstellung=${debugHomeLineup.length} [${debugHomeLineup.join(", ")}] | ` +
+        `Gast-Aufstellung=${debugAwayLineup.length} [${debugAwayLineup.join(", ")}] | ` +
+        `Heim-Bank=${debugHomeBench.length} [${debugHomeBench.join(", ")}] | ` +
+        `Gast-Bank=${debugAwayBench.length} [${debugAwayBench.join(", ")}]`
+      );
+      console.log(
+        `ÖFB FIRESTORE ${result.report.oefbMatchId || result.report.gameId || result.report.matchId}: ` +
+        `matchId=${result.report.matchId} | reportId=${result.report.id} | ` +
+        `Quelle=${result.report.reportUrl || ""}`
+      );
+
       reportWrites += 1;
 
       const draft = await createNewsDraft(
@@ -2437,6 +2468,7 @@ async function main() {
         `Bank Heim=${diagnostic.homeBenchPlayers || 0}, Gast=${diagnostic.awayBenchPlayers || 0}, ` +
         `Profile=${diagnostic.directProfileCount || 0}, DeepFrames=${diagnostic.deepFramePlayerCount || 0}, Kandidaten=${diagnostic.playerCandidateCount || 0}, ` +
         `SR=${diagnostic.referee ? "ja" : "nein"}, Ort=${diagnostic.venue ? "ja" : "nein"}, ` +
+        `Spielort="${diagnostic.venue || ""}", Schiedsrichter="${diagnostic.referee || ""}", ` +
         `Zuschauer=${Number.isInteger(diagnostic.attendance) ? diagnostic.attendance : "-"}, ` +
         `gültig=${diagnostic.valid ? "ja" : "nein"}`
       );

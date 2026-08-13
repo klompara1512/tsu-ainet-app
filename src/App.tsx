@@ -10,6 +10,7 @@ import {
   type UserProfile,
 } from "./permissions";
 const InstallApp = lazy(() => import("./InstallApp"));
+const UpdateApp = lazy(() => import("./UpdateApp"));
 import OfflineStatus from "./OfflineStatus";
 import "./App.css";
 
@@ -136,6 +137,7 @@ function App() {
     <Suspense fallback={<AppFallback />}>
       <AppContent />
       <InstallApp />
+      <UpdateApp />
       <OfflineStatus />
     </Suspense>
   );

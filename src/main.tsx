@@ -18,12 +18,6 @@ if ("serviceWorker" in navigator && import.meta.env.PROD) {
       });
       await registration.update();
 
-      let reloading = false;
-      navigator.serviceWorker.addEventListener("controllerchange", () => {
-        if (reloading) return;
-        reloading = true;
-        window.location.reload();
-      });
     } catch (error) {
       console.error("Service Worker konnte nicht registriert werden:", error);
     }

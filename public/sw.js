@@ -1,4 +1,4 @@
-const CACHE_NAME = "tsu-ainet-v18-3-0-beta-1";
+const CACHE_NAME = "tsu-ainet-v18-3-0-beta-2";
 const APP_SHELL = [
   "/index.html",
   "/manifest.webmanifest",
@@ -15,7 +15,13 @@ self.addEventListener("install", (event) => {
       await Promise.allSettled(APP_SHELL.map((url) => cache.add(url)));
     }),
   );
-  self.skipWaiting();
+});
+
+
+self.addEventListener("message", (event) => {
+  if (event.data?.type === "SKIP_WAITING") {
+    self.skipWaiting();
+  }
 });
 
 self.addEventListener("activate", (event) => {

@@ -23,6 +23,7 @@ import { Icon } from "./Icons";
 import LogoManager from "./LogoManager";
 import SponsorManager from "./SponsorManager";
 import KitManager from "./KitManager";
+import TrainingPlanner from "./TrainingPlanner";
 import ClubPeopleManager from "./ClubPeopleManager";
 import PublicSponsors from "./PublicSponsors";
 import PublicEvents from "./PublicEvents";
@@ -50,6 +51,7 @@ type Page =
   | "logo-manager"
   | "sponsor-manager"
   | "kit-manager"
+  | "training-planner"
   | "board-manager"
   | "trainer-manager"
   | "public-sponsors"
@@ -78,6 +80,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const canManageClub = role === "admin" || role === "section";
   const canManageSponsors = hasPermission(role, "manageSponsors");
   const canManageKits = role === "admin" || role === "section";
+  const canUseTrainingPlanner = Boolean(user) && ["admin", "section", "trainer"].includes(role);
   const hasInternalAccess = Boolean(user) && ["admin", "section", "trainer", "board"].includes(role);
 
   function renderMorePage() {
@@ -108,6 +111,11 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           {canManageKits && (
             <button type="button" className="mobile-kit-entry" onClick={() => setActivePage("kit-manager")}>
               <span className="quick-icon"><Icon name="shirt" /></span><strong>Trikotsätze</strong><span>›</span>
+            </button>
+          )}
+          {canUseTrainingPlanner && (
+            <button type="button" onClick={() => setActivePage("training-planner")}>
+              <span className="quick-icon"><Icon name="calendar" /></span><strong>Trainingsplaner</strong><span>›</span>
             </button>
           )}
         </div>
@@ -142,6 +150,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("trainer-manager")}><span className="quick-icon"><Icon name="users" /></span><span className="quick-content"><strong>Trainer verwalten</strong></span><span className="quick-arrow">›</span></button>}
           {canManageSponsors && <button type="button" className="quick-card" onClick={() => setActivePage("sponsor-manager")}><span className="quick-icon"><Icon name="sponsor" /></span><span className="quick-content"><strong>Sponsor Manager</strong></span><span className="quick-arrow">›</span></button>}
           {canManageKits && <button type="button" className="quick-card" onClick={() => setActivePage("kit-manager")}><span className="quick-icon"><Icon name="shirt" /></span><span className="quick-content"><strong>Trikotsätze verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canUseTrainingPlanner && <button type="button" className="quick-card" onClick={() => setActivePage("training-planner")}><span className="quick-icon"><Icon name="calendar" /></span><span className="quick-content"><strong>Trainingsplaner</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && user && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("visual-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Bildverwaltung</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong></span><span className="quick-arrow">›</span></button>}
@@ -188,6 +197,10 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
 
     if (activePage === "kit-manager") {
       return canManageKits ? <KitManager onBack={() => setActivePage("administration")} /> : renderMorePage();
+    }
+
+    if (activePage === "training-planner") {
+      return canUseTrainingPlanner && user ? <TrainingPlanner user={user} profile={profile} onBack={() => setActivePage("mehr")} /> : renderMorePage();
     }
 
     if (activePage === "visual-manager") {
@@ -320,6 +333,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     activePage === "logo-manager" ||
     activePage === "sponsor-manager" ||
     activePage === "kit-manager" ||
+    activePage === "training-planner" ||
     activePage === "visual-manager" ||
     activePage === "board-manager" ||
     activePage === "trainer-manager" ||

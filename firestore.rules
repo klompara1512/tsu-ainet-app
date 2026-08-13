@@ -11,6 +11,7 @@ service cloud.firestore { match /databases/{database}/documents {
  function board(){return active() && role()=='board';}
  function leaders(){return admin()||section();}
  function football(){return leaders()||trainer();}
+ function trainingTeam(teamId){return leaders() || (trainer() && profile().data.teamIds is list && teamId in profile().data.teamIds);}
  function editors(){return leaders()||board();}
  match /users/{uid}{
   allow create: if signedIn() && request.auth.uid==uid && request.resource.data.role=='pending' && request.resource.data.approved==false;
@@ -19,6 +20,19 @@ service cloud.firestore { match /databases/{database}/documents {
  }
  match /invites/{id}{allow read,write:if leaders();}
  match /tasks/{id}{allow read:if active();allow write:if football()||board();}
+
+ match /trainingBookings/{id}{
+  allow read: if active();
+  allow create: if active() && trainingTeam(request.resource.data.teamId) && request.resource.data.createdBy == request.auth.uid;
+  allow update: if active() && trainingTeam(resource.data.teamId) && trainingTeam(request.resource.data.teamId);
+  allow delete: if active() && trainingTeam(resource.data.teamId);
+ }
+ match /trainingSlots/{id}{
+  allow read: if active();
+  allow create: if active() && trainingTeam(request.resource.data.teamId) && request.resource.data.createdBy == request.auth.uid;
+  allow update: if active() && trainingTeam(resource.data.teamId) && trainingTeam(request.resource.data.teamId);
+  allow delete: if active() && trainingTeam(resource.data.teamId);
+ }
  match /services/{id}{allow read:if active();allow write:if football()||board();}
  match /kfvMatches/{d=**}{allow read:if true;allow write:if football();}
 match /oefbV12Matches/{d=**}{allow read:if true;allow write:if football();}

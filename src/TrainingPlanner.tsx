@@ -127,6 +127,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
   const [teams, setTeams] = useState<Team[]>([]);
   const [bookings, setBookings] = useState<TrainingBooking[]>([]);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(todayIso()));
+  const [selectedDay, setSelectedDay] = useState(() => todayIso());
   const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<TrainingBooking | null>(null);
   const [form, setForm] = useState<FormState>(() => emptyForm());
@@ -196,11 +197,11 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
     return isLeader || profile.teamIds.includes(booking.teamId);
   }
 
-  function openCreate(date = todayIso()) {
+  function openCreate(date = todayIso(), preset?: { field?: Field; area?: Area }) {
     setEditing(null);
     setError("");
     setMessage("");
-    setForm({ ...emptyForm(allowedTeams[0]?.id ?? ""), date, repeatUntil: addDays(date, 56) });
+    setForm({ ...emptyForm(allowedTeams[0]?.id ?? ""), date, repeatUntil: addDays(date, 56), ...(preset?.field ? { field: preset.field } : {}), ...(preset?.area ? { area: preset.area } : {}) });
     setFormOpen(true);
   }
 
@@ -377,26 +378,95 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         <button type="button" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
       </div>
 
-      <div className="training-week-grid">
-        {days.map((day) => {
-          const dayBookings = visibleBookings.filter((booking) => booking.date === day);
+      <div className="training-day-strip" role="tablist" aria-label="Trainingstag auswählen">
+        {days.map((day) => (
+          <button
+            key={day}
+            type="button"
+            className={`${selectedDay === day ? "active" : ""} ${day === today ? "today" : ""}`}
+            onClick={() => setSelectedDay(day)}
+          >
+            <span>{new Intl.DateTimeFormat("de-AT", { weekday: "short" }).format(new Date(`${day}T12:00:00`))}</span>
+            <strong>{day.slice(8, 10)}.</strong>
+            {day === today && <small>Heute</small>}
+          </button>
+        ))}
+      </div>
+
+      <div className="training-field-stack">
+        {(["main", "training"] as Field[]).map((field) => {
+          const fieldBookings = visibleBookings.filter((booking) => booking.date === selectedDay && booking.field === field);
+          const fullBookings = fieldBookings.filter((booking) => booking.area === "full");
           return (
-            <article key={day} className={`training-day ${day === today ? "today" : ""}`}>
-              <header><strong>{formatDay(day)}</strong>{day === today && <span>Heute</span>}</header>
-              <div className="training-day-body">
-                {dayBookings.length === 0 ? (
-                  <button type="button" className="training-empty" onClick={() => openCreate(day)}>+ Zeit eintragen</button>
-                ) : dayBookings.map((booking) => (
-                  <button key={booking.id} type="button" className={`training-booking ${booking.kind}`} onClick={() => canEdit(booking) && openEdit(booking)}>
-                    <span className="booking-time">{booking.startTime}–{booking.endTime}</span>
-                    <strong>{booking.teamName}</strong>
-                    <span>{FIELD_LABELS[booking.field]} · {booking.area === "full" ? "ganzer Platz" : `Hälfte ${booking.area}`}</span>
-                    {booking.floodlight && <small>💡 Flutlicht</small>}
-                    {booking.note && booking.kind !== "block" && <small>{booking.note}</small>}
+            <article key={field} className={`pitch-card ${field === "training" ? "floodlit" : ""}`}>
+              <header className="pitch-card-header">
+                <div>
+                  <span>{field === "main" ? "Hauptfeld" : "Trainingsplatz"}</span>
+                  <h2>{field === "main" ? "Hauptfeld" : "Trainingsplatz"}</h2>
+                </div>
+                <div className="pitch-meta">
+                  {field === "training" && <span className="floodlight-badge">💡 Flutlicht</span>}
+                  <strong>{formatDay(selectedDay)}</strong>
+                </div>
+              </header>
+
+              <div className={`pitch-graphic ${field === "training" ? "training-pitch" : "main-pitch"}`}>
+                <div className="pitch-lines" aria-hidden="true">
+                  <span className="center-line" />
+                  <span className="center-circle" />
+                  <span className="box box-left" />
+                  <span className="box box-right" />
+                </div>
+
+                {(["A", "B"] as const).map((half) => {
+                  const halfBookings = fieldBookings.filter((booking) => booking.area === half);
+                  return (
+                    <button
+                      key={half}
+                      type="button"
+                      className={`pitch-half pitch-half-${half.toLowerCase()}`}
+                      onClick={() => openCreate(selectedDay, { field, area: half })}
+                    >
+                      <span className="half-label">Hälfte {half}</span>
+                      <span className="half-add">+ Training</span>
+                      <span className="pitch-bookings">
+                        {halfBookings.map((booking) => (
+                          <span
+                            key={booking.id}
+                            className={`pitch-booking ${booking.kind}`}
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => { event.stopPropagation(); if (canEdit(booking)) openEdit(booking); }}
+                            onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && canEdit(booking)) { event.preventDefault(); event.stopPropagation(); openEdit(booking); } }}
+                          >
+                            <strong>{booking.startTime}–{booking.endTime}</strong>
+                            <b>{booking.teamName}</b>
+                            {booking.floodlight && <small>💡 Flutlicht</small>}
+                          </span>
+                        ))}
+                      </span>
+                    </button>
+                  );
+                })}
+
+                {fullBookings.map((booking) => (
+                  <button
+                    key={booking.id}
+                    type="button"
+                    className={`pitch-full-booking ${booking.kind}`}
+                    onClick={() => canEdit(booking) && openEdit(booking)}
+                  >
+                    <strong>{booking.startTime}–{booking.endTime}</strong>
+                    <span>{booking.teamName}</span>
+                    <small>Ganzer Platz{booking.floodlight ? " · 💡 Flutlicht" : ""}</small>
                   </button>
                 ))}
-                {dayBookings.length > 0 && <button type="button" className="training-day-add" onClick={() => openCreate(day)}>+ Training</button>}
               </div>
+
+              <footer className="pitch-footer">
+                <button type="button" onClick={() => openCreate(selectedDay, { field, area: "full" })}>+ Ganzen Platz buchen</button>
+                <span>{fieldBookings.length === 0 ? "Komplett frei" : `${fieldBookings.length} Belegung${fieldBookings.length === 1 ? "" : "en"}`}</span>
+              </footer>
             </article>
           );
         })}

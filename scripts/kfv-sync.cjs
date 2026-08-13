@@ -1325,13 +1325,21 @@ function parseTables($, matches, standings, sourceUrl, title) {
 function parseStandingText(bodyText, standings, sourceUrl, title) {
   const lines = clean(bodyText).split("\n").map(oneLine).filter(Boolean);
   for (const line of lines) {
-    // Common compact format: 1. Verein 26 18 4 4 70:25 58
-    const match = line.match(/^\s*(\d{1,2})[.)]?\s+(.{2,60}?)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,3})\s*:\s*(\d{1,3})\s+(-?\d{1,3})?\s+(\d{1,3})\s*$/);
+    // Standard: 1. Verein 26 18 4 4 70:25 58
+    // Responsive ÖFB: 1 58 Verein 26 18 4 4 70:25 45 58
+    // (die zweite Zahl ist eine vorangestellte Anzeige-/Punktespalte).
+    let match = line.match(/^\s*(\d{1,2})[.)]?\s+(.{2,60}?)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,3})\s*:\s*(\d{1,3})\s+(-?\d{1,3})?\s+(\d{1,3})\s*$/);
+    let shifted = false;
+    if (!match) {
+      match = line.match(/^\s*(\d{1,2})[.)]?\s+-?\d{1,3}\s+(.{2,60}?)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,3})\s*:\s*(\d{1,3})\s+(-?\d{1,3})?\s+(\d{1,3})\s*$/);
+      shifted = Boolean(match);
+    }
     if (!match) continue;
     addStanding(standings, {
       position: match[1], clubName: match[2], played: match[3], won: match[4], drawn: match[5], lost: match[6],
       goalsFor: match[7], goalsAgainst: match[8], goalDifference: match[9], points: match[10],
       competitionName: title, teamName: teamFromText(`${title} ${bodyText.slice(0, 500)}`),
+      responsivePointsPrefix: shifted,
     }, sourceUrl);
   }
 }
@@ -1809,17 +1817,26 @@ async function collectWithBrowser(startUrls) {
             clubName = compact(clubName).replace(/^\d{1,2}[.)]?\s*/, '');
             if (!clubName || clubName.length > 100) continue;
 
-            const goalsMatch = rowText.match(/(?:^|\s)(\d{1,3})\s*[:\-]\s*(\d{1,3})(?:\s|$)/);
-            const allNumbers = rowText.match(/-?\d+/g)?.map(Number) || [];
-            if (allNumbers.length < 5) continue;
-            // Position ist die erste Zahl. Torzahlen werden separat behandelt.
-            const afterRank = allNumbers.slice(1);
-            let played, won, drawn, lost, points;
-            if (afterRank.length >= 7) {
-              played = afterRank[0]; won = afterRank[1]; drawn = afterRank[2]; lost = afterRank[3]; points = afterRank.at(-1);
-            } else if (afterRank.length >= 5) {
-              played = afterRank[0]; won = afterRank[1]; drawn = afterRank[2]; lost = afterRank[3]; points = afterRank.at(-1);
-            } else continue;
+            // ÖFB rendert manche Tabellen responsive mit einer zusätzlichen
+            // Punkte-Spalte DIREKT nach dem Rang und noch vor dem Vereinsnamen.
+            // Beispiel: "1 3 SG WSG ... 1 1 0 0 5:2 3 3".
+            // Zahlen vor dem Vereinsnamen dürfen deshalb niemals als "Spiele"
+            // interpretiert werden. Wir lesen die Statistik ausschließlich aus
+            // dem Teil der Zeile NACH dem erkannten Vereinsnamen.
+            const clubPos = rowText.toLocaleLowerCase('de-AT').indexOf(clubName.toLocaleLowerCase('de-AT'));
+            const statsText = clubPos >= 0 ? rowText.slice(clubPos + clubName.length).trim() : rowText;
+            const goalsMatch = statsText.match(/(?:^|\s)(\d{1,3})\s*[:\-]\s*(\d{1,3})(?:\s|$)/);
+            const statsWithoutGoals = goalsMatch ? statsText.replace(goalsMatch[0], ' ') : statsText;
+            const statNumbers = statsWithoutGoals.match(/-?\d+/g)?.map(Number) || [];
+            if (statNumbers.length < 5) continue;
+
+            const played = statNumbers[0];
+            const won = statNumbers[1];
+            const drawn = statNumbers[2];
+            const lost = statNumbers[3];
+            // Nach S/U/N können Differenz und weitere Anzeige-Spalten folgen.
+            // Die Punkte stehen auf der ÖFB-Tabelle zuverlässig ganz rechts.
+            const points = statNumbers.at(-1);
 
             const goalsFor = goalsMatch ? Number(goalsMatch[1]) : 0;
             const goalsAgainst = goalsMatch ? Number(goalsMatch[2]) : 0;

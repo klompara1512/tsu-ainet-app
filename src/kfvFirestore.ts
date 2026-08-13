@@ -161,7 +161,14 @@ export function subscribeKfvMatchReport(
     [...matchReports, ...oefbReports].forEach((report) => {
       if (report.active) merged.set(report.id, report);
     });
-    const reports = [...merged.values()];
+    let reports = [...merged.values()];
+    // Harte Identitätsregel: Sobald eine eindeutige ÖFB-Spiel-ID bekannt ist,
+    // dürfen ausschließlich Berichte exakt dieses Spiels verwendet werden.
+    // Alte Match-ID-Dokumente oder Berichte anderer Spiele können dadurch
+    // keinen Schiedsrichter / keine Aufstellung mehr einschleusen.
+    if (oefbMatchId) {
+      reports = reports.filter((report) => report.oefbMatchId === oefbMatchId);
+    }
     if (!reports.length) {
       onData(null);
       return;

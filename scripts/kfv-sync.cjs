@@ -1280,8 +1280,12 @@ function parseDomMatchCards($, matches, sourceUrl, title) {
 function parseTables($, matches, standings, sourceUrl, title) {
   $("table").each((_, table) => {
     const tableText = oneLine($(table).text());
-    const headers = $(table).find("th").map((__, cell) => lower($(cell).text())).get();
-    const isStanding = headers.some((h) => /platz|rang|punkte|pkt|spiele|tore/.test(h)) || /tordifferenz|punkte/.test(lower(tableText));
+    const headers = $(table).find("th,thead td").map((__, cell) => lower($(cell).text())).get();
+    // Auf einer fest zugeordneten /Tabellen-Quelle ist jedes echte HTML-Table
+    // als Tabellenkandidat zu behandeln. ÖFB rendert die Kopfzeile je nach
+    // Bewerb teilweise ohne <th> oder nur mit Kurzbezeichnungen (#, Pkt., Sp.).
+    const isExactOfficialTable = Boolean(exactTableDescriptor(sourceUrl));
+    const isStanding = isExactOfficialTable || headers.some((h) => /^(?:#|platz|rang|punkte|pkt\.?|sp\.?|spiele|tore|diff\.?)$/i.test(h)) || /tordifferenz|punkte/.test(lower(tableText));
 
     $(table).find("tr").each((__, row) => {
       const cellNodes = $(row).find("th,td").toArray();
@@ -1753,7 +1757,11 @@ async function collectWithBrowser(startUrls) {
           const hasPlayed = headers.some((header) => /^(?:sp|sp\.|spiele|gespielt)$/i.test(header));
           const hasPoints = headers.some((header) => /^(?:punkte|pkt|pkt\.|pts)$/i.test(header));
           const hasGoals = headers.some((header) => /^(?:tore|torverhältnis|tv)$/i.test(header));
-          if (!(hasRank && hasPlayed && hasPoints && hasGoals)) continue;
+          // Auf einer expliziten ÖFB-/KFV-Tabellenseite darf eine abweichende
+          // Kopfzeile die Daten nicht komplett blockieren. Die eigentliche
+          // Plausibilitätsprüfung erfolgt pro Datenzeile weiter unten.
+          const headerLooksLikeStanding = hasRank && hasPlayed && hasPoints && hasGoals;
+          if (!isOfficialTablePage && !headerLooksLikeStanding) continue;
           for (const row of Array.from(table.querySelectorAll("tbody tr, tr"))) {
             const cells = Array.from(row.querySelectorAll("th,td")).map((x) => compact(x.textContent)).filter(Boolean);
             if (cells.length < 3 || !/^\d{1,2}[.)]?$/.test(cells[0])) continue;
@@ -1866,6 +1874,60 @@ async function collectWithBrowser(startUrls) {
               clubId: clubKfvId ? `kfv:${clubKfvId}` : (clubOefbSlug ? `oefb:${clubOefbSlug.toLowerCase()}` : ''),
               teamLogoUrl, played, won, drawn, lost, goalsFor, goalsAgainst,
               goalDifference: goalsFor - goalsAgainst, points,
+              competitionName: compact(document.querySelector('h1')?.textContent || document.title || 'ÖFB')
+            });
+          }
+        }
+
+
+        // Version 16.3: letzter DOM-unabhängiger ÖFB-Fallback.
+        // Einige Bewerbe (insb. Reserve/Jugend) rendern die Tabelle weder als
+        // <table> noch mit stabilen standing/table-row Klassen. Wir erkennen
+        // deshalb die kleinsten sichtbaren DOM-Elemente anhand der Tabellenzeilen-
+        // Signatur selbst: Rang ... Verein ... Sp S U N Tore Diff Pkt.
+        if (isOfficialTablePage && standings.length === 0) {
+          const rowRx = /^(\d{1,2})[.)]?\s+(?:(-?\d{1,3})\s+)?(.{2,110}?)\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,2})\s+(\d{1,3})\s*:\s*(\d{1,3})\s+(-?\d{1,3})\s+(\d{1,3})$/;
+          const allCandidates = Array.from(document.querySelectorAll('tr,[role="row"],li,div'))
+            .map((node) => ({ node, text: compact(node.innerText || node.textContent) }))
+            .filter(({ text }) => text.length >= 12 && text.length <= 260 && /^\d{1,2}[.)]?\s+/.test(text) && /\d+\s*:\s*\d+/.test(text) && /[A-Za-zÄÖÜäöü]/.test(text));
+          const parsedCandidates = allCandidates
+            .map(({ node, text }) => ({ node, text, match: text.match(rowRx) }))
+            .filter((item) => item.match);
+          // Nur die kleinsten passenden Container verwenden, damit eine Zeile
+          // nicht zugleich als eigener DIV und als Eltern-DIV importiert wird.
+          const minimalCandidates = parsedCandidates.filter(({ node }) =>
+            !parsedCandidates.some((other) => other.node !== node && node.contains(other.node))
+          );
+          const seenGeneric = new Set();
+          for (const { node, match } of minimalCandidates) {
+            const position = Number(match[1]);
+            const clubName = compact(match[3]);
+            const played = Number(match[4]);
+            const won = Number(match[5]);
+            const drawn = Number(match[6]);
+            const lost = Number(match[7]);
+            const goalsFor = Number(match[8]);
+            const goalsAgainst = Number(match[9]);
+            const goalDifference = Number(match[10]);
+            const points = Number(match[11]);
+            if (played !== won + drawn + lost) continue;
+            if (points < 0 || points > played * 3 + 3) continue;
+            if (goalDifference !== goalsFor - goalsAgainst) continue;
+            const signature = `${position}|${clubName.toLowerCase()}|${played}|${points}`;
+            if (seenGeneric.has(signature)) continue;
+            seenGeneric.add(signature);
+            const anchor = Array.from(node.querySelectorAll('a[href]')).find((a) => compact(a.textContent).includes(clubName)) || node.querySelector('a[href]');
+            const clubUrl = anchor?.href || '';
+            const clubKfvId = clubUrl.match(/\/Verein\/(\d+)/i)?.[1] || '';
+            const clubOefbSlug = (() => { try { const u = new URL(clubUrl); return /vereine\.oefb\.at$/i.test(u.hostname) ? u.pathname.split('/').filter(Boolean)[0] || '' : ''; } catch { return ''; } })();
+            const logo = node.querySelector('img');
+            const logoRaw = logo?.currentSrc || logo?.getAttribute('src') || logo?.getAttribute('data-src') || logo?.getAttribute('data-lazy-src') || '';
+            let teamLogoUrl = ''; try { teamLogoUrl = logoRaw ? new URL(logoRaw, location.href).href : ''; } catch { teamLogoUrl = ''; }
+            standings.push({
+              position, clubName, clubUrl,
+              clubId: clubKfvId ? `kfv:${clubKfvId}` : (clubOefbSlug ? `oefb:${clubOefbSlug.toLowerCase()}` : ''),
+              teamLogoUrl, played, won, drawn, lost, goalsFor, goalsAgainst,
+              goalDifference, points,
               competitionName: compact(document.querySelector('h1')?.textContent || document.title || 'ÖFB')
             });
           }
@@ -2088,9 +2150,17 @@ async function collectWithBrowser(startUrls) {
         domCounts: await page.evaluate(() => ({
           tables: document.querySelectorAll('table').length,
           rows: document.querySelectorAll('table tr, [role="row"]').length,
+          rankScoreCandidates: Array.from(document.querySelectorAll('tr,[role="row"],li,div')).filter((node) => {
+            const text = String(node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim();
+            return text.length <= 260 && /^\d{1,2}[.)]?\s+/.test(text) && /\d+\s*:\s*\d+/.test(text) && /[A-Za-zÄÖÜäöü]/.test(text);
+          }).length,
           images: document.images.length,
           links: document.links.length,
           playerCandidates: document.querySelectorAll('article, li, [class*="player"], [class*="spieler"], [class*="person"]').length,
+        })),
+        tableDebug: await page.evaluate(() => ({
+          headers: Array.from(document.querySelectorAll('table thead th, table thead td, table th')).slice(0, 20).map((x) => String(x.textContent || '').replace(/\s+/g, ' ').trim()),
+          rowSamples: Array.from(document.querySelectorAll('tr,[role="row"],li,div')).map((node) => String(node.innerText || node.textContent || '').replace(/\s+/g, ' ').trim()).filter((text) => text.length <= 260 && /^\d{1,2}[.)]?\s+/.test(text) && /\d+\s*:\s*\d+/.test(text) && /[A-Za-zÄÖÜäöü]/.test(text)).slice(0, 5),
         })),
         preview: oneLine(renderedText).slice(0, 2000),
       });
@@ -2835,6 +2905,24 @@ async function main() {
       console.log(`  ${team.key} -> ${team.tableUrl} | ${rows.length} Zeilen | Ainet: ${ainet ? `${ainet.position}. / ${ainet.points} Pkt.` : "nicht erkannt"} | zuverlässig=${reliableStandingTeams.has(team.key) ? "ja" : "nein"}`);
     }
     console.log("----- Ende Tabellenquellen -----");
+    if (TABLES_ONLY) {
+      console.log("----- Tabellen DOM-Diagnose -----");
+      for (const team of ACTIVE_TEAMS.filter((entry) => entry.tableUrl)) {
+        const normalized = String(team.tableUrl).replace(/\/$/, "");
+        const diag = pageDiagnostics.find((entry) => entry.kind === "browser" && String(entry.url || "").replace(/\/$/, "") === normalized);
+        if (!diag) {
+          console.log(`  ${team.key}: keine Browser-Diagnose für ${team.tableUrl}`);
+          continue;
+        }
+        const counts = diag.domCounts || {};
+        const dbg = diag.tableDebug || {};
+        console.log(`  ${team.key}: extracted=${diag.extractedStandings || 0} | tables=${counts.tables || 0} | rows=${counts.rows || 0} | rankScoreCandidates=${counts.rankScoreCandidates || 0}`);
+        if (Array.isArray(dbg.headers) && dbg.headers.length) console.log(`    Header: ${dbg.headers.join(" | ")}`);
+        if (Array.isArray(dbg.rowSamples) && dbg.rowSamples.length) dbg.rowSamples.forEach((sample, index) => console.log(`    Zeile ${index + 1}: ${sample}`));
+        else console.log(`    Vorschau: ${String(diag.preview || "").slice(0, 500)}`);
+      }
+      console.log("----- Ende Tabellen DOM-Diagnose -----");
+    }
 
     // U17-Diagnose: einzelne importierte Spiele sichtbar machen. So ist im
     // GitHub-Log sofort erkennbar, ob ein bestimmter Termin vor Firestore

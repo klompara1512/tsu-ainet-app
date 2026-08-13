@@ -11,7 +11,6 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { UserProfile } from "./permissions";
-import { Icon } from "./Icons";
 import "./TrainingPlanner.css";
 
 type Team = { id: string; name: string; order: number };
@@ -134,6 +133,16 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    if (!formOpen) return;
+    document.documentElement.classList.add("training-modal-open");
+    document.body.classList.add("training-modal-open");
+    return () => {
+      document.documentElement.classList.remove("training-modal-open");
+      document.body.classList.remove("training-modal-open");
+    };
+  }, [formOpen]);
 
   useEffect(() => {
     const teamsQuery = query(collection(db, "teams"), orderBy("order", "asc"));
@@ -337,11 +346,18 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
     try {
       await runTransaction(db, async (transaction) => {
         const bookingRef = doc(db, "trainingBookings", booking.id);
-        for (const key of slotKeys(booking.date, booking.startTime, booking.endTime, booking.field, booking.area)) {
-          const slotRef = doc(db, "trainingSlots", key);
-          const snap = await transaction.get(slotRef);
+        const slotRefs = slotKeys(booking.date, booking.startTime, booking.endTime, booking.field, booking.area)
+          .map((key) => doc(db, "trainingSlots", key));
+
+        // Firestore-Transaktionen verlangen: zuerst ALLE Reads, danach erst Writes/Deletes.
+        const slotSnapshots = await Promise.all(
+          slotRefs.map((slotRef) => transaction.get(slotRef)),
+        );
+
+        slotRefs.forEach((slotRef, index) => {
+          const snap = slotSnapshots[index];
           if (snap.exists() && snap.data().bookingId === booking.id) transaction.delete(slotRef);
-        }
+        });
         transaction.delete(bookingRef);
       });
       setMessage("Termin wurde gelöscht. Die Änderung ist sofort überall sichtbar.");
@@ -361,11 +377,6 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         <button type="button" className="training-add" onClick={() => openCreate(today)}><span>+</span> Training</button>
       </header>
 
-      <div className="training-intro">
-        <div><Icon name="calendar" /><p><strong>Live-Planung</strong><span>Änderungen erscheinen sofort bei allen Trainern und der Sektionsleitung.</span></p></div>
-        <div className="field-key"><span>Hauptplatz A + B</span><span>Trainingsplatz A + B · 💡 Flutlicht</span></div>
-      </div>
-
       {!isLeader && allowedTeams.length === 0 && (
         <div className="training-alert error">Deinem Trainerkonto ist noch keine Mannschaft zugeordnet. Die Sektionsleitung kann das unter Vereinsverwaltung ändern.</div>
       )}
@@ -373,9 +384,9 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
       {error && !formOpen && <div className="training-alert error">{error}</div>}
 
       <div className="training-toolbar">
-        <button type="button" onClick={() => setWeekStart(addDays(weekStart, -7))}>‹</button>
+        <button type="button" className="week-arrow" aria-label="Vorherige Woche" title="Vorherige Woche" onClick={() => setWeekStart(addDays(weekStart, -7))}>←</button>
         <div><strong>{formatDay(weekStart)} – {formatDay(weekEnd)}</strong><button type="button" onClick={() => setWeekStart(startOfWeek(today))}>Diese Woche</button></div>
-        <button type="button" onClick={() => setWeekStart(addDays(weekStart, 7))}>›</button>
+        <button type="button" className="week-arrow" aria-label="Nächste Woche" title="Nächste Woche" onClick={() => setWeekStart(addDays(weekStart, 7))}>→</button>
       </div>
 
       <div className="training-day-strip" role="tablist" aria-label="Trainingstag auswählen">
@@ -427,7 +438,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                       className={`pitch-half pitch-half-${half.toLowerCase()}`}
                       onClick={() => openCreate(selectedDay, { field, area: half })}
                     >
-                      <span className="half-label">Hälfte {half}</span>
+                      <span className="half-label">{half === "A" ? "Oben" : "Unten"}</span>
                       <span className="half-add">+ Training</span>
                       <span className="pitch-bookings">
                         {halfBookings.map((booking) => (
@@ -472,16 +483,49 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         })}
       </div>
 
-      <div className="training-availability">
-        <h2>Platzübersicht dieser Woche</h2>
-        <div className="availability-grid">
-          {(["main-A", "main-B", "training-A", "training-B"] as const).map((resource) => {
-            const [field, half] = resource.split("-") as [Field, "A" | "B"];
-            const count = visibleBookings.filter((booking) => booking.field === field && (booking.area === half || booking.area === "full")).length;
-            return <div key={resource}><span>{FIELD_LABELS[field]} {half}{field === "training" ? " 💡" : ""}</span><strong>{count === 0 ? "frei" : `${count} Belegung${count === 1 ? "" : "en"}`}</strong></div>;
+      <section className="training-week-summary" aria-label="Wochenzusammenfassung">
+        <header className="week-summary-header">
+          <div>
+            <span>Diese Woche</span>
+            <h2>Wochenzusammenfassung</h2>
+          </div>
+          <strong>{visibleBookings.length} Termin{visibleBookings.length === 1 ? "" : "e"}</strong>
+        </header>
+
+        <div className="week-summary-days">
+          {days.map((day) => {
+            const dayBookings = visibleBookings.filter((booking) => booking.date === day);
+            return (
+              <div key={day} className={`week-summary-day ${day === today ? "today" : ""}`}>
+                <div className="week-summary-date">
+                  <span>{new Intl.DateTimeFormat("de-AT", { weekday: "short" }).format(new Date(`${day}T12:00:00`))}</span>
+                  <strong>{day.slice(8, 10)}.</strong>
+                </div>
+                <div className="week-summary-bookings">
+                  {dayBookings.length === 0 ? (
+                    <span className="week-summary-free">Keine Belegung</span>
+                  ) : dayBookings.map((booking) => (
+                    <button
+                      key={booking.id}
+                      type="button"
+                      className={`week-summary-booking ${booking.kind}`}
+                      onClick={() => canEdit(booking) && openEdit(booking)}
+                      title={canEdit(booking) ? "Termin bearbeiten" : booking.teamName}
+                    >
+                      <span className="summary-time">{booking.startTime}–{booking.endTime}</span>
+                      <strong>{booking.teamName}</strong>
+                      <small>
+                        {FIELD_LABELS[booking.field]} · {booking.area === "full" ? "Ganzer Platz" : booking.area === "A" ? "Oben" : "Unten"}
+                        {booking.floodlight ? " · 💡 Flutlicht" : ""}
+                      </small>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
           })}
         </div>
-      </div>
+      </section>
 
       {formOpen && (
         <div className="training-modal-backdrop" onClick={() => !saving && setFormOpen(false)}>
@@ -495,7 +539,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
               <label><span>Datum</span><input type="date" value={form.date} onChange={(e) => setForm((c) => ({ ...c, date: e.target.value }))} /></label>
               <div className="training-two"><label><span>Beginn</span><input type="time" step="900" value={form.startTime} onChange={(e) => setForm((c) => ({ ...c, startTime: e.target.value }))} /></label><label><span>Ende</span><input type="time" step="900" value={form.endTime} onChange={(e) => setForm((c) => ({ ...c, endTime: e.target.value }))} /></label></div>
               <label><span>Platz</span><select value={form.field} onChange={(e) => setForm((c) => ({ ...c, field: e.target.value as Field, floodlight: e.target.value === "training" ? c.floodlight : false }))}><option value="main">Hauptplatz</option><option value="training">Trainingsplatz · Flutlicht</option></select></label>
-              <label><span>Fläche</span><div className="area-choice">{(["A", "B", "full"] as Area[]).map((area) => <button key={area} type="button" className={form.area === area ? "active" : ""} onClick={() => setForm((c) => ({ ...c, area }))}>{area === "full" ? "Ganzer Platz" : `Hälfte ${area}`}</button>)}</div></label>
+              <label><span>Fläche</span><div className="area-choice">{(["A", "B", "full"] as Area[]).map((area) => <button key={area} type="button" className={form.area === area ? "active" : ""} onClick={() => setForm((c) => ({ ...c, area }))}>{area === "full" ? "Ganzer Platz" : area === "A" ? "Oben" : "Unten"}</button>)}</div></label>
               {form.field === "training" && <label className="check-row"><input type="checkbox" checked={form.floodlight} onChange={(e) => setForm((c) => ({ ...c, floodlight: e.target.checked }))} /><span>💡 Flutlicht benötigt</span></label>}
               <label><span>{form.kind === "block" ? "Bezeichnung der Sperre" : "Notiz (optional)"}</span><input value={form.note} onChange={(e) => setForm((c) => ({ ...c, note: e.target.value }))} placeholder={form.kind === "block" ? "z. B. Rasenpflege" : "z. B. Torschusstraining"} /></label>
               {!editing && <label className="check-row"><input type="checkbox" checked={form.repeatWeekly} onChange={(e) => setForm((c) => ({ ...c, repeatWeekly: e.target.checked }))} /><span>Jede Woche wiederholen</span></label>}

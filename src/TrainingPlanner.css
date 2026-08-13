@@ -5,3 +5,111 @@
 .training-availability{margin-top:18px}.training-availability h2{font-size:1rem}.availability-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.availability-grid>div{background:#fff;border:1px solid #e4e8ee;border-radius:14px;padding:12px;display:flex;flex-direction:column}.availability-grid span{font-size:.78rem;color:#687487}.availability-grid strong{font-size:.9rem;margin-top:2px}.training-alert{padding:12px 14px;border-radius:12px;margin:10px 0;font-weight:700;font-size:.88rem}.training-alert.error{background:#fff0f0;color:#a20f18;border:1px solid #f4c5c8}.training-alert.success{background:#effaf3;color:#17663b;border:1px solid #c7ebd5}.training-modal-backdrop{position:fixed;inset:0;background:#11182799;z-index:1500;display:grid;place-items:center;padding:18px}.training-modal{background:#fff;width:min(620px,100%);max-height:min(820px,92dvh);overflow:auto;border-radius:22px;box-shadow:0 28px 80px #0004}.training-modal>header{position:sticky;top:0;background:#fff;z-index:2;padding:18px 20px;border-bottom:1px solid #e8ebf0;display:flex;align-items:center}.training-modal>header>div{flex:1}.training-modal>header span{font-size:.72rem;text-transform:uppercase;color:#7d8797}.training-modal>header h2{margin:2px 0 0}.training-modal>header>button{border:0;background:#f0f2f5;border-radius:50%;width:40px;height:40px;font-size:1.5rem}.training-form{padding:18px 20px 22px;display:flex;flex-direction:column;gap:13px}.training-form label{display:flex;flex-direction:column;gap:6px;font-weight:700;font-size:.84rem}.training-form input,.training-form select{width:100%;min-height:45px;border:1px solid #d6dbe3;border-radius:12px;padding:0 12px;background:#fff;font:inherit}.training-two{display:grid;grid-template-columns:1fr 1fr;gap:10px}.area-choice{display:grid;grid-template-columns:repeat(3,1fr);gap:7px}.area-choice button{min-height:43px;border:1px solid #d8dde5;background:#fff;border-radius:11px;font-weight:700}.area-choice button.active{background:#a20f18;color:#fff;border-color:#a20f18}.training-form .check-row{flex-direction:row;align-items:center;gap:10px;background:#f6f7f9;border-radius:12px;padding:10px 12px}.training-form .check-row input{width:20px;min-height:20px}.training-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:4px}.training-actions button{border:0;border-radius:12px;min-height:44px;padding:0 14px;font-weight:800}.training-actions .primary{background:#a20f18;color:#fff}.training-actions .secondary{background:#edf0f4}.training-actions .danger{background:#fff0f0;color:#a20f18;margin-right:auto}
 @media(max-width:900px){.training-planner{padding:4px 10px 105px}.training-header{position:sticky;top:0;z-index:8;background:#f6f7f9f5;padding:8px 0;margin-top:0}.training-add{padding:0 12px}.training-intro{flex-direction:column}.training-day-strip{grid-template-columns:repeat(7,minmax(76px,1fr));margin-bottom:12px}.pitch-card{padding:11px;border-radius:20px}.pitch-card-header{align-items:center}.pitch-card-header h2{font-size:1.28rem}.pitch-graphic,.pitch-half{min-height:360px}.pitch-half{padding:54px 8px 12px}.half-label{left:10px}.half-add{right:10px}.pitch-booking{display:flex;flex-direction:column;align-items:flex-start;gap:1px;padding:8px 9px}.pitch-booking small{grid-column:auto}.pitch-full-booking{min-width:76%;padding:10px 12px}.availability-grid{grid-template-columns:1fr 1fr}.training-modal-backdrop{padding:0;align-items:end}.training-modal{width:100%;max-height:94dvh;border-radius:22px 22px 0 0;padding-bottom:env(safe-area-inset-bottom)}.training-two{grid-template-columns:1fr 1fr}}
 @media(max-width:520px){.training-header h1{font-size:1.35rem}.training-header>div>span{display:none}.training-add{font-size:.78rem}.training-day-strip{margin-left:-2px;margin-right:-2px}.pitch-card-header{align-items:flex-start}.pitch-meta{flex-direction:column;align-items:flex-end;gap:4px}.pitch-graphic,.pitch-half{min-height:410px}.pitch-lines{inset:10px}.center-circle{width:60px;height:60px}.pitch-half{padding-top:52px}.half-label{font-size:.68rem;padding:5px 7px}.half-add{font-size:.64rem}.pitch-booking{font-size:.74rem;border-left-width:4px}.pitch-footer{align-items:flex-start}.pitch-footer span{text-align:right}.availability-grid{grid-template-columns:1fr}.training-actions{display:grid;grid-template-columns:1fr 1fr}.training-actions .danger{grid-column:1/-1;margin:0}.training-actions .primary{grid-column:2}.training-actions .secondary{grid-column:1;grid-row:2}.field-key{flex-direction:column;align-items:flex-start}}
+
+/* Formular-Kontrastfix: globale Dark-Theme-Regeln dürfen die hellen Modal-Felder nicht überschreiben. */
+.training-modal-backdrop{z-index:10000!important}
+.training-modal{color:#182235!important;color-scheme:light;background:#fff!important}
+.training-form label,.training-form label>span{color:#182235!important}
+.training-form input,.training-form select{
+  color:#182235!important;
+  -webkit-text-fill-color:#182235!important;
+  background:#fff!important;
+  border-color:#cfd6e1!important;
+  opacity:1!important;
+  color-scheme:light;
+}
+.training-form input::placeholder{color:#8a96a8!important;-webkit-text-fill-color:#8a96a8!important;opacity:1!important}
+.training-form select option{color:#182235!important;background:#fff!important}
+.area-choice button{color:#263247!important;background:#fff!important;opacity:1!important}
+.area-choice button.active{color:#fff!important;background:#a20f18!important;-webkit-text-fill-color:#fff!important}
+.training-form .check-row,.training-form .check-row span{color:#182235!important}
+.training-actions{position:sticky;bottom:0;z-index:3;background:#fff;padding:10px 0 calc(10px + env(safe-area-inset-bottom));border-top:1px solid #edf0f4}
+.training-actions .secondary{color:#263247!important;background:#edf0f4!important}
+.training-actions .primary{color:#fff!important;background:#a20f18!important}
+.training-actions .danger{color:#a20f18!important;background:#fff0f0!important}
+@media(max-width:900px){
+  .training-modal{padding-bottom:0!important}
+  .training-form{padding-bottom:8px}
+}
+
+
+/* Belegungs-Kontrast + eindeutige Bedienbarkeit */
+.pitch-booking{
+  background:#8f1520!important;
+  color:#fff!important;
+  border-left-color:#ffcf43!important;
+  box-shadow:0 7px 18px #11182735!important;
+}
+.pitch-booking.block{background:#364152!important;border-left-color:#cbd5e1!important}
+.pitch-booking strong,.pitch-booking b,.pitch-booking small{color:#fff!important;-webkit-text-fill-color:#fff!important;opacity:1!important}
+.pitch-booking strong{font-weight:900!important}
+.pitch-booking b{font-weight:900!important}
+.pitch-booking:focus-visible{outline:3px solid #ffd43b!important;outline-offset:2px}
+.training-actions .danger{font-weight:900!important;border:1px solid #e1a4aa!important}
+
+
+/* Wochen-Navigation: Pfeile auf hellem Button immer sichtbar */
+.training-toolbar>button.week-arrow{
+  color:#182235!important;
+  -webkit-text-fill-color:#182235!important;
+  background:#fff!important;
+  border:1px solid #d9e0e8!important;
+  font-size:1.45rem!important;
+  font-weight:950!important;
+  line-height:1!important;
+  display:grid!important;
+  place-items:center!important;
+  cursor:pointer;
+  box-shadow:0 4px 14px #18223520!important;
+}
+.training-toolbar>button.week-arrow:hover{background:#f2f5f8!important;transform:translateY(-1px)}
+.training-toolbar>button.week-arrow:focus-visible{outline:3px solid #ffd43b!important;outline-offset:2px}
+
+/* Trainingsdialog: Hauptnavigation ausblenden, damit Aktionen frei bedienbar bleiben. */
+html.training-modal-open,body.training-modal-open{overflow:hidden!important}
+.training-modal-open .bottom-nav{display:none!important}
+
+/* Wochenzusammenfassung statt einzelner weißer Ressourcenfelder */
+.training-week-summary{
+  margin-top:22px;
+  background:linear-gradient(145deg,#101b2c,#17243a);
+  color:#fff;
+  border:1px solid #ffffff16;
+  border-radius:22px;
+  padding:18px;
+  box-shadow:0 16px 38px #08111f24;
+}
+.week-summary-header{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+.week-summary-header>div{display:flex;flex-direction:column;gap:2px}
+.week-summary-header span{font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:#91a3bd;font-weight:800}
+.week-summary-header h2{margin:0;font-size:1.2rem;color:#fff}
+.week-summary-header>strong{background:#ffffff12;border:1px solid #ffffff18;border-radius:999px;padding:7px 11px;font-size:.8rem;color:#fff}
+.week-summary-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:9px}
+.week-summary-day{min-width:0;background:#ffffff08;border:1px solid #ffffff12;border-radius:15px;padding:10px;display:flex;flex-direction:column;gap:9px}
+.week-summary-day.today{border-color:#ffd43b88;box-shadow:inset 0 0 0 1px #ffd43b33}
+.week-summary-date{display:flex;align-items:baseline;justify-content:space-between;gap:6px;border-bottom:1px solid #ffffff12;padding-bottom:7px}
+.week-summary-date span{font-size:.72rem;color:#aab8cb;text-transform:uppercase;font-weight:900}
+.week-summary-date strong{font-size:1rem;color:#fff}
+.week-summary-bookings{display:flex;flex-direction:column;gap:7px;min-height:52px}
+.week-summary-free{font-size:.75rem;color:#8190a5;padding:7px 2px}
+.week-summary-booking{width:100%;border:0;border-left:4px solid #ffcf43;border-radius:10px;background:#a91622;color:#fff;padding:8px 9px;text-align:left;display:flex;flex-direction:column;gap:2px;cursor:pointer;box-shadow:0 5px 14px #0002}
+.week-summary-booking.block{background:#465366;border-left-color:#d3dce9}
+.week-summary-booking .summary-time{font-size:.7rem;font-weight:950;color:#ffd85a}
+.week-summary-booking strong{font-size:.76rem;line-height:1.18;color:#fff;white-space:normal;overflow-wrap:anywhere}
+.week-summary-booking small{font-size:.64rem;color:#eef3f9;opacity:.9;line-height:1.25}
+.week-summary-booking:hover{transform:translateY(-1px);filter:brightness(1.05)}
+.week-summary-booking:focus-visible{outline:3px solid #ffd43b;outline-offset:2px}
+
+/* Das frühere rote Live-Infofeld wird nicht mehr verwendet. */
+.training-intro{display:none!important}
+
+@media(max-width:1100px){.week-summary-days{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(max-width:700px){
+  .training-week-summary{padding:14px;border-radius:18px}
+  .week-summary-header{align-items:flex-start}
+  .week-summary-days{grid-template-columns:1fr}
+  .week-summary-day{display:grid;grid-template-columns:58px 1fr;align-items:start;padding:9px 10px}
+  .week-summary-date{display:flex;flex-direction:column;align-items:center;justify-content:center;border-bottom:0;border-right:1px solid #ffffff12;padding:4px 9px 4px 0}
+  .week-summary-bookings{min-height:0}
+  .week-summary-booking{padding:8px 10px}
+}

@@ -179,7 +179,15 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
     }));
   }, [visibleStandings]);
 
-  function formatDate(date: Date) {
+  const INVALID_DISPLAY_VENUE = /^(?:termine?|spiele?|spielbericht|aufstellung(?:en)?|tabelle(?:n)?|kader|news|verein|home|mehr|details|navigation|karte|map|route|kontakt|bewerb|runde|heim|gast|geplant|beendet|liveticker|statistik)$/i;
+
+function displayVenue(match: KfvMatch): string {
+  const venue = (match.venue || "").replace(/\s+/g, " ").trim();
+  if (venue && !INVALID_DISPLAY_VENUE.test(venue)) return venue;
+  return /ainet/i.test(match.homeTeam || "") ? "Sandgrubenstadion Ainet" : "";
+}
+
+function formatDate(date: Date) {
     return new Intl.DateTimeFormat("de-AT", {
       weekday: "short",
       day: "2-digit",
@@ -196,7 +204,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   }
 
   function openRoute(match: KfvMatch) {
-    const destination = encodeURIComponent(match.venueAddress || match.venue || "Sandgrubenstadion Ainet");
+    const destination = encodeURIComponent(match.venueAddress || displayVenue(match) || "Sandgrubenstadion Ainet");
     window.open(`https://www.google.com/maps/search/?api=1&query=${destination}`, "_blank", "noopener,noreferrer");
   }
 
@@ -362,11 +370,11 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
           <div className="match-detail-meta premium-match-meta">
             <span><Icon name="calendar" /> {formatDate(selectedMatch.kickoffAt)}</span>
             <span><Icon name="clock" /> {formatTime(selectedMatch.kickoffAt)} Uhr</span>
-            <span><Icon name="location" /> {selectedMatch.venue || "Spielort noch offen"}</span>
+            <span><Icon name="location" /> {displayVenue(selectedMatch) || "Spielort noch offen"}</span>
           </div>
 
           <div className="premium-match-actions">
-            {selectedMatch.venue && (
+            {displayVenue(selectedMatch) && (
               <button type="button" className="secondary" onClick={() => openRoute(selectedMatch)}>
                 <Icon name="location" /> Route starten
               </button>
@@ -406,7 +414,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                   </div>
                 </header>
                 <div className="premium-info-grid">
-                  <article><Icon name="location" /><small>Spielort</small><strong>{selectedMatch.venue || "Noch nicht bekannt"}</strong></article>
+                  <article><Icon name="location" /><small>Spielort</small><strong>{displayVenue(selectedMatch) || "Noch nicht bekannt"}</strong></article>
                   <article><Icon name="calendar" /><small>Datum</small><strong>{formatDate(selectedMatch.kickoffAt)}</strong></article>
                   <article><Icon name="clock" /><small>Anstoß</small><strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong></article>
                   <article><Icon name="users" /><small>Schiedsrichter</small><strong>{selectedMatch.referee || "Noch nicht veröffentlicht"}</strong></article>
@@ -700,7 +708,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
                               ? "Abgesagt"
                               : `${formatTime(match.kickoffAt)} Uhr`}
                       </span>
-                      {match.venue && <span>{match.venue}</span>}
+                      {displayVenue(match) && <span>{displayVenue(match)}</span>}
                       {result && (
                         <span className={`kfv-result kfv-result-${result}`}>
                           {result === "W" ? "Sieg" : result === "D" ? "Remis" : "Niederlage"}

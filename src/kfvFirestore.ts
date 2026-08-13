@@ -28,6 +28,15 @@ function readNullableDate(value: unknown): Date | null {
   return value instanceof Timestamp ? value.toDate() : null;
 }
 
+const INVALID_VENUE_PATTERN = /^(?:termine?|spiele?|spielbericht|aufstellung(?:en)?|tabelle(?:n)?|kader|news|verein|home|mehr|details|navigation|karte|map|route|kontakt|bewerb|runde|heim|gast|geplant|beendet|liveticker|statistik)$/i;
+
+function cleanVenue(value: unknown): string {
+  if (typeof value !== "string") return "";
+  const text = value.replace(/\s+/g, " ").trim();
+  if (!text || INVALID_VENUE_PATTERN.test(text)) return "";
+  return text;
+}
+
 function readStatus(value: unknown): KfvMatchStatus {
   if (
     value === "scheduled" ||
@@ -103,7 +112,7 @@ function mapMatchReportDocument(
     awayBench: readLineupPlayers(data.awayBench),
     homeCoach: typeof data.homeCoach === "string" ? data.homeCoach : "",
     awayCoach: typeof data.awayCoach === "string" ? data.awayCoach : "",
-    venue: typeof data.venue === "string" ? data.venue : "",
+    venue: cleanVenue(data.venue),
     venueAddress: typeof data.venueAddress === "string" ? data.venueAddress : "",
     referee: typeof data.referee === "string" ? data.referee : "",
     refereeAssistants: Array.isArray(data.refereeAssistants)
@@ -316,7 +325,7 @@ function deduplicateMatches(matches: KfvMatch[]) {
       for (const match of ranked) {
         best.homeLogoUrl ||= match.homeLogoUrl;
         best.awayLogoUrl ||= match.awayLogoUrl;
-        best.venue ||= match.venue;
+        best.venue ||= cleanVenue(match.venue);
         best.venueAddress ||= match.venueAddress;
         best.referee ||= match.referee;
         best.liveUrl ||= match.liveUrl;
@@ -361,7 +370,7 @@ export function subscribeKfvMatches(
             homeScore: typeof data.homeScore === "number" ? data.homeScore : null,
             awayScore: typeof data.awayScore === "number" ? data.awayScore : null,
             kickoffAt: readDate(data.kickoffAt),
-            venue: typeof data.venue === "string" ? data.venue : "",
+            venue: cleanVenue(data.venue) || (typeof data.homeTeam === "string" && /ainet/i.test(data.homeTeam) ? "Sandgrubenstadion Ainet" : ""),
             venueAddress: typeof data.venueAddress === "string" ? data.venueAddress : "",
             referee: typeof data.referee === "string" ? data.referee : "",
             liveUrl: typeof data.liveUrl === "string" ? data.liveUrl : "",

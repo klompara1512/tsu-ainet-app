@@ -144,6 +144,16 @@ const TEAM_HINTS = [
 
 const clean = (value) => String(value ?? "").replace(/\u00a0/g, " ").replace(/[\t\r ]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
 const oneLine = (value) => clean(value).replace(/\s*\n\s*/g, " ");
+const INVALID_VENUE_PATTERN = /^(?:termine?|spiele?|spielbericht|aufstellung(?:en)?|tabelle(?:n)?|kader|news|verein|home|mehr|details|navigation|karte|map|route|kontakt|bewerb|runde|heim|gast|geplant|beendet|liveticker|statistik)$/i;
+const cleanVenueValue = (value) => {
+  const text = oneLine(value)
+    .replace(/^(?:spielort|stadion|sportplatz|spielstätte|austragungsort|spielanlage)\s*:?\s*/i, "")
+    .replace(/\s+(?:schiedsrichter|zuschauer|besucher|aufstellung|tabelle|termine|spielbericht)\b.*$/i, "")
+    .trim();
+  if (!text || text.length < 3 || text.length > 220) return "";
+  if (INVALID_VENUE_PATTERN.test(text)) return "";
+  return text;
+};
 const lower = (value) => oneLine(value).toLocaleLowerCase("de-AT");
 const makeId = (parts) => crypto.createHash("sha256").update(parts.map(oneLine).join("|")).digest("hex").slice(0, 32);
 const slug = (value) => lower(value).normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -687,7 +697,7 @@ function addMatch(target, data, sourceUrl, context = "") {
   const reportUrl = officialReportUrl(data.reportUrl, sourceUrl, homeTeam, awayTeam);
   const links = classifyOfficialLinks(data.liveUrl || reportUrl, sourceUrl);
   const gameId = extractGameId(data.reportUrl, reportUrl, context);
-  const venue = oneLine(data.venue) || extractVenueFromContext(context);
+  const venue = cleanVenueValue(data.venue) || cleanVenueValue(extractVenueFromContext(context)) || (/ainet/i.test(homeTeam) ? "Sandgrubenstadion Ainet" : "");
   const venueAddress = oneLine(data.venueAddress);
   const referee = oneLine(data.referee) || extractRefereeFromContext(context);
   const competitionName = canonicalCompetitionName(data.competitionName, teamName);
@@ -2061,7 +2071,9 @@ async function writeCollection(name, items, runId) {
       if (existing) {
         payload.homeLogoUrl = item.homeLogoUrl || existing.homeLogoUrl || "";
         payload.awayLogoUrl = item.awayLogoUrl || existing.awayLogoUrl || "";
-        payload.venue = item.venue || existing.venue || "";
+        // Ungültige Navigationstexte wie „Termin/Termine“ dürfen nicht als
+        // Spielort konserviert werden. Nur bereinigte Werte übernehmen.
+        payload.venue = cleanVenueValue(item.venue) || cleanVenueValue(existing.venue) || (/ainet/i.test(item.homeTeam || existing.homeTeam || "") ? "Sandgrubenstadion Ainet" : "");
         payload.venueAddress = item.venueAddress || existing.venueAddress || "";
         payload.referee = item.referee || existing.referee || "";
         payload.reportUrl = item.reportUrl || existing.reportUrl || "";

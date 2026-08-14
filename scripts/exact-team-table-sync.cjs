@@ -15,14 +15,6 @@ const CONFIGS = {
     key: "U17", teamId: "u17", teamName: "U17", slug: "U17",
     competitionName: "U17", minRows: 5, maxRows: 20,
   },
-  U12: {
-    key: "U12", teamId: "u12", teamName: "U12", slug: "U12",
-    competitionName: "U12", minRows: 4, maxRows: 20,
-  },
-  U10: {
-    key: "U10", teamId: "u10", teamName: "U10", slug: "U10",
-    competitionName: "U10", minRows: 4, maxRows: 20,
-  },
 };
 
 const requestedKey = String(process.env.TABLE_TEAM || process.argv[2] || "").toUpperCase();

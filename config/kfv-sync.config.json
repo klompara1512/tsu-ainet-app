@@ -72,7 +72,7 @@
       "enabled": true,
       "primarySlug": "U12",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Spiele",
-      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Tabellen",
+      "tableUrl": "",
       "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Kader/",
       "tableUrls": [
         "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Tabellen"
@@ -88,7 +88,7 @@
       "enabled": true,
       "primarySlug": "U10",
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Spiele",
-      "tableUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Tabellen",
+      "tableUrl": "",
       "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Kader/",
       "tableUrls": [
         "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Tabellen"

@@ -23,6 +23,7 @@ jobs:
     timeout-minutes: 10
     env:
       TZ: Europe/Vienna
+      TABLE_TEAM: CHALLENGE
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
     steps:
@@ -47,8 +48,16 @@ jobs:
             exit 1
           fi
 
+      - name: Spieltagsprüfung
+        id: matchday
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/table-matchday-gate.cjs CHALLENGE
+
       - name: Challenge Parser Selbsttest
+        if: steps.matchday.outputs.should_run == 'true'
         run: npm run sync:challenge-table:selftest
 
       - name: Exakte Challenge Tabelle synchronisieren
+        if: steps.matchday.outputs.should_run == 'true'
         run: npm run sync:challenge-table

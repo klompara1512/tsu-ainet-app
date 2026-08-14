@@ -1,7 +1,7 @@
 "use strict";
 const { parseExactTableRows, validateExactTable } = require("./exact-team-table-parser.cjs");
 const teamKey = String(process.env.TABLE_TEAM || process.argv[2] || "KM").toUpperCase();
-const minRows = teamKey === "KM" ? 8 : teamKey === "U17" ? 5 : 4;
+const minRows = teamKey === "KM" ? 8 : teamKey === "U17" ? 5 : 999;
 const names = teamKey === "KM"
   ? ["Alpha", "Bravo", "Charlie", "Delta", "Echo", "Foxtrot", "Golf", "Ainet", "India", "Juliet"]
   : ["Alpha", "Bravo", "Ainet", "Delta", "Echo", "Foxtrot"];

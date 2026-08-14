@@ -42,7 +42,15 @@ jobs:
             echo "::error::Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
+      - name: Spieltagsprüfung
+        id: matchday
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/table-matchday-gate.cjs KM
+
       - name: Kampfmannschaft Parser Selbsttest
+        if: steps.matchday.outputs.should_run == 'true'
         run: node scripts/exact-team-table-selftest.cjs KM
       - name: Exakte Kampfmannschaft Tabelle synchronisieren
+        if: steps.matchday.outputs.should_run == 'true'
         run: node scripts/exact-team-table-sync.cjs KM

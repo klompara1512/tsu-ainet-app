@@ -4,6 +4,7 @@ const path = require('path');
 const configPath = path.resolve(__dirname, '../config/kfv-sync.config.json');
 const config = JSON.parse(fs.readFileSync(configPath, 'utf8'));
 const required = ['KM','CHALLENGE','U17','U12','U10','U08'];
+const tableTeams = new Set(['KM','CHALLENGE','U17']);
 const teams = new Map(config.teams.map((team) => [team.key, team]));
 const errors = [];
 
@@ -13,7 +14,8 @@ for (const key of required) {
   if (!team.squadUrl) errors.push(`${key}: Kader-URL fehlt`);
   if (key !== 'U08') {
     if (!team.gamesUrl) errors.push(`${key}: Spielplan-URL fehlt`);
-    if (!(team.tableUrl || team.tableUrls?.length)) errors.push(`${key}: Tabellen-URL fehlt`);
+    if (tableTeams.has(key) && !(team.tableUrl || team.tableUrls?.length)) errors.push(`${key}: Tabellen-URL fehlt`);
+    if (!tableTeams.has(key) && (team.tableUrl || team.tableUrls?.length)) errors.push(`${key}: darf keine Tabellen-URL haben`);
   }
   for (const [field, value] of Object.entries(team)) {
     if ((field.endsWith('Url') || field.endsWith('Urls')) && value) {

@@ -74,9 +74,7 @@
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Spiele",
       "tableUrl": "",
       "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Kader/",
-      "tableUrls": [
-        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U12/Tabellen"
-      ]
+      "tableUrls": []
     },
     {
       "key": "U10",
@@ -90,9 +88,7 @@
       "gamesUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Spiele",
       "tableUrl": "",
       "squadUrl": "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Kader/",
-      "tableUrls": [
-        "https://vereine.oefb.at/TsuAinet/Mannschaften/Saison-2026-27/U10/Tabellen"
-      ]
+      "tableUrls": []
     },
     {
       "key": "U08",
@@ -116,9 +112,7 @@
   "requiredTeams": [
     "KM",
     "CHALLENGE",
-    "U17",
-    "U12",
-    "U10"
+    "U17"
   ],
   "officialProvider": "KFV / ÖFB Netzwerk",
   "officialSquadSync": true,

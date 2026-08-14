@@ -308,9 +308,14 @@ function Teams() {
     [matches, selectedTeam],
   );
 
+  const selectedTeamHasTable = useMemo(() => {
+    if (!selectedTeam) return false;
+    return ["km", "challenge", "u17"].includes(teamKeyFromName(selectedTeam.name));
+  }, [selectedTeam]);
+
   const teamStandings = useMemo(
-    () => selectedTeam ? standings.filter((row) => standingBelongsToTeam(row, selectedTeam)) : [],
-    [standings, selectedTeam],
+    () => selectedTeam && selectedTeamHasTable ? standings.filter((row) => standingBelongsToTeam(row, selectedTeam)) : [],
+    [standings, selectedTeam, selectedTeamHasTable],
   );
 
   const nextMatch = useMemo(
@@ -478,7 +483,9 @@ function Teams() {
         <div className="team-hub-actions">
           <button type="button" onClick={() => scrollToSection("team-schedule")}><Icon name="calendar" /><span><strong>Spielplan</strong><small>Spiele & Ergebnisse</small></span></button>
           <button type="button" onClick={() => scrollToSection("team-squad")}><Icon name="users" /><span><strong>Kader</strong><small>Spieler & Trainer</small></span></button>
-          <button type="button" onClick={() => scrollToSection("team-table")}><Icon name="table" /><span><strong>Tabelle</strong><small>Aktueller Stand</small></span></button>
+          {selectedTeamHasTable && (
+            <button type="button" onClick={() => scrollToSection("team-table")}><Icon name="table" /><span><strong>Tabelle</strong><small>Aktueller Stand</small></span></button>
+          )}
           <button type="button" onClick={() => scrollToSection("team-stats")}><Icon name="target" /><span><strong>Statistik</strong><small>Saisonbilanz</small></span></button>
         </div>
 
@@ -558,23 +565,25 @@ function Teams() {
         </section>
 
         <div className="team-hub-grid">
-          <article className="team-hub-card" id="team-table">
-            <div className="team-section-heading"><div><p className="team-card-label">Wettbewerb</p><h3>Top 5 Tabelle</h3></div><Icon name="table" /></div>
-            {teamStandings.length ? (
-              <>
-                <div className="team-table-preview">
-                  {teamStandings.slice(0, 5).map((row) => (
-                    <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
-                      <span>{row.position}</span><b className="team-table-points">{row.points}</b><TeamLogo name={row.clubName} url={row.teamLogoUrl} clubId={row.clubId} size="small" /><strong>{row.clubName}</strong>
-                    </div>
-                  ))}
-                </div>
-                <button type="button" className="team-open-full-table" onClick={() => setFullTableOpen(true)}>
-                  <Icon name="table" /><span>Komplette Tabelle öffnen</span><b>›</b>
-                </button>
-              </>
-            ) : <p className="team-hub-muted">Für diese Mannschaft ist noch keine Tabelle verfügbar.</p>}
-          </article>
+          {selectedTeamHasTable && (
+            <article className="team-hub-card" id="team-table">
+              <div className="team-section-heading"><div><p className="team-card-label">Wettbewerb</p><h3>Top 5 Tabelle</h3></div><Icon name="table" /></div>
+              {teamStandings.length ? (
+                <>
+                  <div className="team-table-preview">
+                    {teamStandings.slice(0, 5).map((row) => (
+                      <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
+                        <span>{row.position}</span><b className="team-table-points">{row.points}</b><TeamLogo name={row.clubName} url={row.teamLogoUrl} clubId={row.clubId} size="small" /><strong>{row.clubName}</strong>
+                      </div>
+                    ))}
+                  </div>
+                  <button type="button" className="team-open-full-table" onClick={() => setFullTableOpen(true)}>
+                    <Icon name="table" /><span>Komplette Tabelle öffnen</span><b>›</b>
+                  </button>
+                </>
+              ) : <p className="team-hub-muted">Für diese Mannschaft ist noch keine Tabelle verfügbar.</p>}
+            </article>
+          )}
 
           <article className="team-hub-card">
             <div className="team-section-heading"><div><p className="team-card-label">Letzte Spiele</p><h3>Ergebnisse</h3></div><Icon name="live" /></div>

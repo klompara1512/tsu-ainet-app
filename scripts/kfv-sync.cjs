@@ -150,7 +150,7 @@ function isPlausibleStandingRow(row) {
 
 const MATCH_COLLECTION = "oefbV12Matches";
 const STANDING_COLLECTION = "oefbV12Standings";
-const DATASET_VERSION = "13.4.0";
+const DATASET_VERSION = "16.4.0";
 const TEAM_HINTS = [
   // Reserve-Bezeichnungen müssen vor Liga-Hinweisen geprüft werden. Sonst wird
   // eine Res-Tabelle wegen „1. Klasse“ fälschlich der Kampfmannschaft zugeordnet.
@@ -2518,6 +2518,10 @@ async function main() {
     const visited = new Set(startUrls);
     const matches = [];
     const standings = [];
+    // Browser-DOM-Tabellen sind bei ÖFB die maßgebliche Quelle. Viele Seiten
+    // liefern parallel alte/vereinfachte Netzwerk-Responses. Deshalb sammeln wir
+    // die direkt sichtbare Tabelle separat und geben ihr später Vorrang.
+    const authoritativeBrowserStandings = new Map();
     const squad = [];
     const clubProfiles = [];
     const matchReports = [];
@@ -2538,6 +2542,24 @@ async function main() {
             const rawSnapshot = JSON.parse(resource.text).__browserSnapshot;
             importClubProfiles(rawSnapshot, clubProfiles, resource.finalUrl);
             importMatchReports(rawSnapshot, matchReports, resource.finalUrl);
+
+            // Version 16.4: exakt die im Browser sichtbare ÖFB-Tabelle wird als
+            // authoritative Quelle gespeichert. Damit können veraltete API-/XHR-
+            // Antworten den aktuellen Tabellenstand nicht mehr überstimmen.
+            const browserDescriptor = exactTableDescriptor(resource.finalUrl);
+            if (browserDescriptor && Array.isArray(rawSnapshot?.standings) && rawSnapshot.standings.length) {
+              const browserRows = [];
+              for (const row of rawSnapshot.standings) {
+                addStanding(browserRows, {
+                  ...row,
+                  teamKey: browserDescriptor.teamKey,
+                  teamName: browserDescriptor.teamName,
+                }, resource.finalUrl);
+              }
+              if (browserRows.length) {
+                authoritativeBrowserStandings.set(browserDescriptor.teamKey, browserRows);
+              }
+            }
           } catch { /* parseResource reports malformed data below */ }
         }
         const parsed = parseResource(resource.text, resource.contentType, resource.finalUrl);
@@ -2588,6 +2610,18 @@ async function main() {
         const descriptor = sourceDescriptor(resource.finalUrl);
         if (descriptor.teamKey && teamSyncStatus[descriptor.teamKey]) teamSyncStatus[descriptor.teamKey].warnings.push(String(error.message || error));
       }
+    }
+
+    // Version 16.4: Für Tabellen ersetzt der sichtbare Browser-DOM-Snapshot alle
+    // parallel erkannten Netzwerk-/HTML-Fallbacks derselben Mannschaft. Erst hier
+    // wird dedupliziert und plausibilisiert. So entspricht Firestore exakt dem
+    // Stand, den ein Benutzer auf vereine.oefb.at sieht.
+    for (const [teamKey, browserRows] of authoritativeBrowserStandings.entries()) {
+      for (let index = standings.length - 1; index >= 0; index -= 1) {
+        if (standings[index]?.teamKey === teamKey) standings.splice(index, 1);
+      }
+      standings.push(...browserRows);
+      console.log(`Authoritative Browser-Tabelle ${teamKey}: ${browserRows.length} Rohzeilen übernommen.`);
     }
 
     // Dieselbe Begegnung wird auf der ÖFB-Seite häufig über mehrere Ansichten

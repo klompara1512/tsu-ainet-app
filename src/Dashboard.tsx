@@ -87,7 +87,6 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     return (
       <section className="dashboard-page clear-more-page public-more-page club-menu-modern">
         <div className="club-menu-watermark" aria-hidden="true">
-          <img src="/tsu-ainet-logo.png" alt="" />
         </div>
 
         <header className="club-menu-hero">
@@ -97,7 +96,6 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
             <span className="club-menu-accent" aria-hidden="true" />
             <p>Alles rund um unseren Verein – schnell und übersichtlich.</p>
           </div>
-          <img className="club-menu-hero-logo" src="/tsu-ainet-logo.png" alt="TSU Ainet" />
         </header>
 
         <div className="public-more-grid club-menu-grid">
@@ -385,10 +383,6 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
             setActivePage("start")
           }
         >
-          <span className="dashboard-brand-mark">
-            <img src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
-          </span>
-
           <span>
             <strong>TSU Ainet</strong>
             
@@ -443,7 +437,6 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
       <main className="dashboard-content">
         {renderPage()}
         <footer className="dashboard-version" aria-label="App-Version">
-          <img src="/tsu-ainet-logo.png" alt="" />
           <span>TSU Ainet App</span>
           <strong>Version {APP_VERSION}</strong>
         </footer>

@@ -84,3 +84,27 @@
 .bottom-nav button.active .bottom-nav-icon{background:rgba(39,100,198,.22);box-shadow:0 0 0 1px rgba(111,166,255,.18)}
 .bottom-nav button.active::after{bottom:0;width:18px;height:2px}
 @media(min-width:800px){.bottom-nav{width:min(600px,calc(100% - 40px));border-radius:20px 20px 0 0}}
+
+/* Beta 19 · ruhige native Navigation */
+.bottom-nav {
+  min-height: 64px !important;
+  padding: 5px 8px calc(5px + env(safe-area-inset-bottom)) !important;
+  background: rgba(6,15,26,.96) !important;
+  border-top: 1px solid rgba(255,255,255,.07) !important;
+  box-shadow: 0 -6px 22px rgba(0,0,0,.18) !important;
+  backdrop-filter: blur(18px) !important;
+  -webkit-backdrop-filter: blur(18px) !important;
+}
+.bottom-nav button {
+  min-height: 49px !important;
+  gap: 2px !important;
+  padding: 4px 2px !important;
+  border-radius: 12px !important;
+  color: #8795a9 !important;
+  font-size: 9.5px !important;
+}
+.bottom-nav-icon { width: 34px !important; height: 29px !important; background: transparent !important; box-shadow: none !important; }
+.bottom-nav-icon svg { width: 21px !important; height: 21px !important; }
+.bottom-nav button.active { color: #f5f8fc !important; background: transparent !important; }
+.bottom-nav button.active .bottom-nav-icon { color: #e9cb47 !important; background: transparent !important; box-shadow: none !important; }
+.bottom-nav button.active::after { bottom: 0 !important; width: 16px !important; height: 2px !important; background: #e9cb47 !important; box-shadow: none !important; }

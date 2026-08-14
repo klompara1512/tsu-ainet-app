@@ -70,6 +70,8 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const [activePage, setActivePage] =
     useState<Page>("start");
   const [profileOpen, setProfileOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
   const [selectedMatchId, setSelectedMatchId] = useState("");
   const [kfvInitialTab, setKfvInitialTab] = useState<"matches" | "table" | "squad">("matches");
   const canManageMatches = hasPermission(role, "manageMatches");
@@ -83,6 +85,25 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const canManageKits = role === "admin" || role === "section";
   const canUseTrainingPlanner = Boolean(user) && ["admin", "section", "trainer"].includes(role);
   const hasInternalAccess = Boolean(user) && ["admin", "section", "trainer", "board"].includes(role);
+
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLogoutError("");
+    setLoggingOut(true);
+    setProfileOpen(false);
+    setActivePage("start");
+
+    try {
+      await signOut(auth);
+      // PWA/Browser vollständig auf den öffentlichen Zustand zurücksetzen.
+      window.location.replace(`${window.location.origin}${window.location.pathname}`);
+    } catch (error) {
+      console.error("Abmelden fehlgeschlagen", error);
+      setLogoutError("Abmelden fehlgeschlagen. Bitte erneut versuchen.");
+      setLoggingOut(false);
+      setProfileOpen(true);
+    }
+  }
 
   function renderMorePage() {
     return (
@@ -419,7 +440,10 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
                   <span>{profile.email || user.email}</span>
                   <small>Interner Vereinsbereich</small>
                   {hasInternalAccess && <button type="button" onClick={() => { setProfileOpen(false); setActivePage("administration"); }}>Administration</button>}
-                  <button type="button" onClick={() => signOut(auth)}>Abmelden</button>
+                  {logoutError && <span className="profile-logout-error" role="alert">{logoutError}</span>}
+                  <button type="button" className="profile-logout-button" onClick={() => void handleLogout()} disabled={loggingOut}>
+                    {loggingOut ? "Wird abgemeldet …" : "Abmelden"}
+                  </button>
                 </div>
               )}
             </>

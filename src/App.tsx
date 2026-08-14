@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from "react";
-import { onAuthStateChanged, type User } from "firebase/auth";
+import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 import { doc, onSnapshot } from "firebase/firestore";
 import { auth, db } from "./firebase";
 const Login = lazy(() => import("./Login"));
@@ -114,7 +114,7 @@ function AppContent() {
           <span>Registrierung erfolgreich</span>
           <h1>Freigabe ausständig</h1>
           <p>Hallo {profile.name}. Deine Registrierung wurde übermittelt. Die Sektionsleitung muss dein Konto noch freigeben.</p>
-          <button onClick={() => auth.signOut()}>Abmelden</button>
+          <button onClick={() => void signOut(auth).then(() => window.location.reload())}>Abmelden</button>
         </section>
       </main>
     );

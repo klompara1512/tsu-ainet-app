@@ -2325,3 +2325,35 @@ tr[data-team*="ainet"] {
   font-size: 11px !important;
   line-height: 1.35;
 }
+
+
+/* =========================================================
+   18.3.0-beta.30 · Profilmenü vor dem Inhalt
+   Das AL-Menü muss immer über Dashboard/Karten erscheinen.
+   ========================================================= */
+.dashboard-header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 1000 !important;
+  overflow: visible !important;
+  isolation: auto !important;
+}
+.dashboard-header-inner,
+.dashboard-header > * {
+  overflow: visible !important;
+}
+.profile-wrap {
+  position: relative !important;
+  z-index: 1100 !important;
+  overflow: visible !important;
+}
+.profile-menu {
+  z-index: 1200 !important;
+  isolation: isolate;
+}
+.dashboard-content {
+  z-index: 1 !important;
+}
+.bottom-nav {
+  z-index: 900 !important;
+}

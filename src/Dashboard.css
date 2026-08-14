@@ -811,3 +811,252 @@
 /* Version 18.1.2 – Public First Phase 3 */
 .public-more-page{max-width:980px;margin:0 auto}.public-more-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px;margin-top:20px}.public-more-grid button,.administration-entry{display:grid;grid-template-columns:52px 1fr auto;align-items:center;gap:12px;min-height:86px;padding:16px;border:1px solid rgba(255,255,255,.1);border-radius:19px;background:#111a2b;color:#f6f8fc;text-align:left;cursor:pointer}.public-more-grid button:hover,.administration-entry:hover{transform:translateY(-2px);border-color:rgba(242,183,5,.45)}.public-more-grid strong,.administration-entry strong{font-size:1rem}.public-more-grid>button>span:last-child,.administration-entry>span:last-child{font-size:1.65rem;color:#8793a8}.administration-entry{width:100%;margin-top:22px;background:linear-gradient(135deg,#192640,#111a2b);border-color:rgba(242,183,5,.28)}.administration-header{display:grid;grid-template-columns:44px 1fr 44px;align-items:center;margin-bottom:20px}.administration-header h2{margin:0;text-align:center}.administration-header button{width:42px;height:42px;border-radius:14px;border:1px solid rgba(255,255,255,.12);background:#111a2b;color:#fff;font-size:30px}.administration-grid{margin-top:0!important}
 @media(max-width:720px){.public-more-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.public-more-grid button{grid-template-columns:44px 1fr auto;min-height:76px;padding:13px}.public-more-grid strong{font-size:.94rem}}
+
+/* =========================================================
+   Version 18.3.0-beta.15 – modernes Verein-Menü
+   ========================================================= */
+.club-menu-modern {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  max-width: 1040px;
+  padding: clamp(22px, 3vw, 32px);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(25, 91, 177, .18), transparent 34%),
+    radial-gradient(circle at 96% 18%, rgba(188, 29, 48, .10), transparent 30%),
+    linear-gradient(160deg, rgba(16, 31, 55, .96), rgba(8, 18, 34, .97));
+  border-color: rgba(123, 165, 226, .18);
+  box-shadow: 0 24px 70px rgba(0,0,0,.26), inset 0 1px 0 rgba(255,255,255,.035);
+}
+
+.club-menu-watermark {
+  position: absolute;
+  z-index: -1;
+  top: -42px;
+  right: -72px;
+  width: min(68%, 560px);
+  opacity: .055;
+  transform: rotate(7deg);
+  pointer-events: none;
+  filter: saturate(.9) contrast(1.08);
+}
+.club-menu-watermark img { display:block; width:100%; height:auto; }
+
+.club-menu-hero {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 150px;
+  margin-bottom: 24px;
+  padding: 4px 4px 0;
+}
+.club-menu-hero-copy { max-width: 620px; }
+.club-menu-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #f5c725;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: .18em;
+}
+.club-menu-kicker::before {
+  width: 22px;
+  height: 2px;
+  content: "";
+  border-radius: 99px;
+  background: #f5c725;
+}
+.club-menu-hero h2 {
+  margin: 8px 0 5px;
+  font-size: clamp(2.35rem, 6vw, 4rem);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+.club-menu-accent {
+  display: block;
+  width: 54px;
+  height: 4px;
+  margin: 15px 0 14px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, #f6c823, #eead15);
+  box-shadow: 0 0 18px rgba(246,200,35,.24);
+}
+.club-menu-hero p {
+  max-width: 470px;
+  margin: 0;
+  color: rgba(229,237,249,.65);
+  font-size: .98rem;
+  line-height: 1.55;
+}
+.club-menu-hero-logo {
+  width: 112px;
+  height: 112px;
+  object-fit: contain;
+  opacity: .94;
+  filter: drop-shadow(0 14px 25px rgba(0,0,0,.28));
+}
+
+.club-menu-modern .club-menu-grid {
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap: 12px;
+  margin-top: 0;
+}
+.club-menu-modern .club-menu-card,
+.club-menu-modern .club-admin-entry {
+  position: relative;
+  display: grid;
+  grid-template-columns: 50px minmax(0,1fr) 18px;
+  align-items: center;
+  gap: 13px;
+  min-height: 94px;
+  padding: 16px;
+  overflow: hidden;
+  color: #f8fbff;
+  text-align: left;
+  background: linear-gradient(145deg, rgba(18,31,51,.90), rgba(10,21,38,.92));
+  border: 1px solid rgba(152,180,219,.14);
+  border-radius: 21px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035), 0 12px 28px rgba(0,0,0,.14);
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.club-menu-modern .club-menu-card::before,
+.club-menu-modern .club-admin-entry::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  opacity: .9;
+  background: var(--club-card-accent, #f5c725);
+}
+.club-menu-modern .club-menu-card:hover,
+.club-menu-modern .club-admin-entry:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--club-card-accent, #f5c725) 48%, transparent);
+  background: linear-gradient(145deg, rgba(23,39,63,.95), rgba(11,24,43,.96));
+}
+.club-menu-modern .club-menu-card:active,
+.club-menu-modern .club-admin-entry:active { transform: scale(.985); }
+.club-menu-modern .card-blue { --club-card-accent:#3f83ef; }
+.club-menu-modern .card-red { --club-card-accent:#d42b3d; }
+.club-menu-modern .card-gold { --club-card-accent:#f4c425; }
+
+.club-menu-modern .quick-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  color: var(--club-card-accent, #f4c425);
+  background: color-mix(in srgb, var(--club-card-accent, #f4c425) 11%, rgba(255,255,255,.025));
+  border: 1px solid color-mix(in srgb, var(--club-card-accent, #f4c425) 25%, rgba(255,255,255,.06));
+  border-radius: 16px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045);
+}
+.club-menu-modern .quick-icon svg { width: 25px; height: 25px; }
+.club-menu-card-copy {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 4px;
+}
+.club-menu-modern .club-menu-card-copy strong {
+  overflow: hidden;
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -.02em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.club-menu-modern .club-menu-card-copy small {
+  overflow: hidden;
+  color: rgba(220,230,244,.52);
+  font-size: .73rem;
+  font-weight: 620;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.club-menu-chevron {
+  color: rgba(186,203,228,.56) !important;
+  font-size: 1.55rem !important;
+  font-weight: 500;
+  line-height: 1;
+}
+.club-menu-modern .club-admin-entry {
+  --club-card-accent:#f4c425;
+  width: 100%;
+  min-height: 86px;
+  margin-top: 14px;
+  background:
+    radial-gradient(circle at 0% 50%, rgba(244,196,37,.08), transparent 34%),
+    linear-gradient(145deg, rgba(25,38,59,.94), rgba(11,22,39,.95));
+  border-color: rgba(244,196,37,.24);
+}
+
+@media (max-width: 720px) {
+  .dashboard-content {
+    padding-top: 14px;
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+  .club-menu-modern {
+    padding: 20px 16px 22px;
+    border-radius: 25px;
+  }
+  .club-menu-watermark {
+    top: 30px;
+    right: -88px;
+    width: 94%;
+    opacity: .045;
+  }
+  .club-menu-hero {
+    min-height: 125px;
+    margin-bottom: 18px;
+    padding: 0 2px;
+  }
+  .club-menu-hero-logo {
+    width: 76px;
+    height: 76px;
+    opacity: .9;
+  }
+  .club-menu-hero h2 { font-size: 2.75rem; }
+  .club-menu-hero p { max-width: 255px; font-size: .84rem; }
+  .club-menu-modern .club-menu-grid { gap: 9px; }
+  .club-menu-modern .club-menu-card {
+    grid-template-columns: 43px minmax(0,1fr) 12px;
+    gap: 9px;
+    min-height: 78px;
+    padding: 11px 10px;
+    border-radius: 17px;
+  }
+  .club-menu-modern .quick-icon {
+    width: 43px;
+    height: 43px;
+    border-radius: 14px;
+  }
+  .club-menu-modern .quick-icon svg { width: 22px; height: 22px; }
+  .club-menu-modern .club-menu-card-copy strong { font-size: .88rem; }
+  .club-menu-modern .club-menu-card-copy small { font-size: .62rem; }
+  .club-menu-modern .club-admin-entry {
+    grid-template-columns: 45px minmax(0,1fr) 14px;
+    min-height: 76px;
+    padding: 12px;
+    border-radius: 18px;
+  }
+}
+
+@media (max-width: 390px) {
+  .club-menu-modern { padding-right: 12px; padding-left: 12px; }
+  .club-menu-modern .club-menu-grid { gap: 8px; }
+  .club-menu-modern .club-menu-card {
+    grid-template-columns: 39px minmax(0,1fr) 10px;
+    min-height: 74px;
+    padding: 9px 8px;
+  }
+  .club-menu-modern .quick-icon { width: 39px; height: 39px; border-radius: 12px; }
+  .club-menu-modern .club-menu-card-copy strong { font-size: .82rem; }
+  .club-menu-modern .club-menu-card-copy small { display: none; }
+  .club-menu-hero-logo { width: 66px; height: 66px; }
+}

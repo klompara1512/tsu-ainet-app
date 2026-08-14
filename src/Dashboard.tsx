@@ -85,46 +85,75 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
 
   function renderMorePage() {
     return (
-      <section className="dashboard-page clear-more-page public-more-page">
-        <h2>Verein</h2>
-        <div className="public-more-grid">
-          <button type="button" onClick={() => { setSelectedMatchId(""); setKfvInitialTab("table"); setActivePage("kfv-live"); }}>
-            <span className="quick-icon"><Icon name="table" /></span><strong>Tabellen</strong><span>›</span>
+      <section className="dashboard-page clear-more-page public-more-page club-menu-modern">
+        <div className="club-menu-watermark" aria-hidden="true">
+          <img src="/tsu-ainet-logo.png" alt="" />
+        </div>
+
+        <header className="club-menu-hero">
+          <div className="club-menu-hero-copy">
+            <span className="club-menu-kicker">TSU AINET</span>
+            <h2>Verein</h2>
+            <span className="club-menu-accent" aria-hidden="true" />
+            <p>Alles rund um unseren Verein – schnell und übersichtlich.</p>
+          </div>
+          <img className="club-menu-hero-logo" src="/tsu-ainet-logo.png" alt="TSU Ainet" />
+        </header>
+
+        <div className="public-more-grid club-menu-grid">
+          <button type="button" className="club-menu-card card-blue" onClick={() => { setSelectedMatchId(""); setKfvInitialTab("table"); setActivePage("kfv-live"); }}>
+            <span className="quick-icon"><Icon name="table" /></span>
+            <span className="club-menu-card-copy"><strong>Tabellen</strong><small>KM, Challenge & U17</small></span>
+            <span className="club-menu-chevron">›</span>
           </button>
-          <button type="button" onClick={() => setActivePage("public-board")}>
-            <span className="quick-icon"><Icon name="shield" /></span><strong>Vorstand</strong><span>›</span>
+          <button type="button" className="club-menu-card card-gold" onClick={() => setActivePage("public-board")}>
+            <span className="quick-icon"><Icon name="shield" /></span>
+            <span className="club-menu-card-copy"><strong>Vorstand</strong><small>Unser Vereinsvorstand</small></span>
+            <span className="club-menu-chevron">›</span>
           </button>
-          <button type="button" onClick={() => setActivePage("public-trainers")}>
-            <span className="quick-icon"><Icon name="users" /></span><strong>Trainer</strong><span>›</span>
+          <button type="button" className="club-menu-card card-blue" onClick={() => setActivePage("public-trainers")}>
+            <span className="quick-icon"><Icon name="users" /></span>
+            <span className="club-menu-card-copy"><strong>Trainer</strong><small>Trainer & Betreuer</small></span>
+            <span className="club-menu-chevron">›</span>
           </button>
-          <button type="button" onClick={() => setActivePage("public-sponsors")}>
-            <span className="quick-icon"><Icon name="sponsor" /></span><strong>Sponsoren</strong><span>›</span>
+          <button type="button" className="club-menu-card card-red" onClick={() => setActivePage("public-sponsors")}>
+            <span className="quick-icon"><Icon name="sponsor" /></span>
+            <span className="club-menu-card-copy"><strong>Sponsoren</strong><small>Unsere Partner</small></span>
+            <span className="club-menu-chevron">›</span>
           </button>
-          <button type="button" onClick={() => setActivePage("public-events")}>
-            <span className="quick-icon"><Icon name="calendar" /></span><strong>Termine</strong><span>›</span>
+          <button type="button" className="club-menu-card card-gold" onClick={() => setActivePage("public-events")}>
+            <span className="quick-icon"><Icon name="calendar" /></span>
+            <span className="club-menu-card-copy"><strong>Termine</strong><small>Vereinstermine & Events</small></span>
+            <span className="club-menu-chevron">›</span>
           </button>
           {hasInternalAccess && (
-            <button type="button" onClick={() => setActivePage("public-club")}>
-              <span className="quick-icon"><Icon name="location" /></span><strong>Vereinsinfo</strong><span>›</span>
+            <button type="button" className="club-menu-card card-blue" onClick={() => setActivePage("public-club")}>
+              <span className="quick-icon"><Icon name="location" /></span>
+              <span className="club-menu-card-copy"><strong>Vereinsinfo</strong><small>Infos & Organisation</small></span>
+              <span className="club-menu-chevron">›</span>
             </button>
           )}
           {canManageKits && (
-            <button type="button" className="mobile-kit-entry" onClick={() => setActivePage("kit-manager")}>
-              <span className="quick-icon"><Icon name="shirt" /></span><strong>Trikotsätze</strong><span>›</span>
+            <button type="button" className="club-menu-card card-red mobile-kit-entry" onClick={() => setActivePage("kit-manager")}>
+              <span className="quick-icon"><Icon name="shirt" /></span>
+              <span className="club-menu-card-copy"><strong>Trikotsätze</strong><small>Teams & Ausstattung</small></span>
+              <span className="club-menu-chevron">›</span>
             </button>
           )}
           {canUseTrainingPlanner && (
-            <button type="button" onClick={() => setActivePage("training-planner")}>
-              <span className="quick-icon"><Icon name="calendar" /></span><strong>Trainingsplaner</strong><span>›</span>
+            <button type="button" className="club-menu-card card-gold" onClick={() => setActivePage("training-planner")}>
+              <span className="quick-icon"><Icon name="calendar" /></span>
+              <span className="club-menu-card-copy"><strong>Trainingsplaner</strong><small>Plätze & Trainingszeiten</small></span>
+              <span className="club-menu-chevron">›</span>
             </button>
           )}
         </div>
 
         {hasInternalAccess && (
-          <button type="button" className="administration-entry" onClick={() => setActivePage("administration")}>
+          <button type="button" className="administration-entry club-admin-entry" onClick={() => setActivePage("administration")}>
             <span className="quick-icon"><Icon name="settings" /></span>
-            <strong>Administration</strong>
-            <span>›</span>
+            <span className="club-menu-card-copy"><strong>Administration</strong><small>Verwaltung & Einstellungen</small></span>
+            <span className="club-menu-chevron">›</span>
           </button>
         )}
       </section>

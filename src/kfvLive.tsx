@@ -6,6 +6,7 @@ import {
   subscribeKfvStandings,
   subscribeKfvSquad,
   subscribeKfvMatchReport,
+  normalizeKfvTeamId,
 } from "./kfvFirestore";
 import type { KfvMatch, KfvMatchReport, KfvStandingRow, KfvSquadPlayer } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
@@ -125,11 +126,23 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
     const map = new Map(fixedTeams.map((team) => [team.id, team]));
 
     matches.forEach((match) => {
-      if (match.teamId) map.set(match.teamId, { id: match.teamId, name: match.teamName, order: map.get(match.teamId)?.order ?? 99 });
+      if (!match.teamId) return;
+      const canonicalId = normalizeKfvTeamId(match.teamId);
+      map.set(canonicalId, {
+        id: canonicalId,
+        name: match.teamName,
+        order: map.get(canonicalId)?.order ?? 99,
+      });
     });
 
     standings.forEach((row) => {
-      if (row.teamId) map.set(row.teamId, { id: row.teamId, name: row.teamName, order: map.get(row.teamId)?.order ?? 99 });
+      if (!row.teamId) return;
+      const canonicalId = normalizeKfvTeamId(row.teamId);
+      map.set(canonicalId, {
+        id: canonicalId,
+        name: row.teamName,
+        order: map.get(canonicalId)?.order ?? 99,
+      });
     });
 
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "de-AT"));
@@ -146,19 +159,19 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   }, [activeTab, selectedTeamId, teams]);
 
   const visibleMatches = useMemo(() => {
-    return matches.filter(
-      (match) =>
-        selectedTeamId === "all" ||
-        match.teamId === selectedTeamId,
-    );
+    const wantedTeamId = selectedTeamId === "all" ? "all" : normalizeKfvTeamId(selectedTeamId);
+    return matches.filter((match) => {
+      if (wantedTeamId === "all") return true;
+      return normalizeKfvTeamId(match.teamId) === wantedTeamId;
+    });
   }, [matches, selectedTeamId]);
 
   const visibleStandings = useMemo(() => {
-    return standings.filter(
-      (row) =>
-        selectedTeamId === "all" ||
-        row.teamId === selectedTeamId,
-    );
+    const wantedTeamId = selectedTeamId === "all" ? "all" : normalizeKfvTeamId(selectedTeamId);
+    return standings.filter((row) => {
+      if (wantedTeamId === "all") return true;
+      return normalizeKfvTeamId(row.teamId) === wantedTeamId;
+    });
   }, [standings, selectedTeamId]);
 
   const groupedStandings = useMemo(() => {

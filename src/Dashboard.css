@@ -1850,3 +1850,422 @@ body,
   }
   .club-menu-grid { gap: 9px !important; }
 }
+
+
+/* =========================================================
+   18.3.0-beta.27 · MODERN FOOTBALL CLUB / MATCHDAY
+   Reines UI-Redesign. Keine Logik-, Firestore- oder Sync-Änderungen.
+   ========================================================= */
+
+:root {
+  --mfc-bg: #050b13;
+  --mfc-bg-2: #081523;
+  --mfc-panel: rgba(11, 25, 42, .92);
+  --mfc-panel-soft: rgba(14, 31, 51, .82);
+  --mfc-line: rgba(255,255,255,.075);
+  --mfc-line-strong: rgba(255,255,255,.12);
+  --mfc-text: #f8fafc;
+  --mfc-muted: #8ea0b7;
+  --mfc-yellow: #f2c523;
+  --mfc-blue: #2c70cf;
+  --mfc-red: #c5263b;
+}
+
+/* ---------- App background ---------- */
+.dashboard {
+  background:
+    radial-gradient(circle at 8% 2%, rgba(44,112,207,.17), transparent 29%),
+    radial-gradient(circle at 97% 14%, rgba(197,38,59,.07), transparent 23%),
+    linear-gradient(180deg, #081522 0%, #06111d 40%, #050b13 100%) !important;
+}
+
+/* Very subtle pitch atmosphere */
+.dashboard-content {
+  position: relative;
+  isolation: isolate;
+}
+.dashboard-content::before {
+  content: "";
+  position: fixed;
+  inset: 72px 0 64px;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .020;
+  background:
+    linear-gradient(90deg,
+      transparent calc(50% - .5px),
+      rgba(255,255,255,.85) 50%,
+      transparent calc(50% + .5px)),
+    radial-gradient(circle at 50% 50%,
+      transparent 0 84px,
+      rgba(255,255,255,.78) 85px 86px,
+      transparent 87px);
+}
+
+/* ---------- Header ---------- */
+.dashboard-header {
+  min-height: 70px;
+  background: rgba(5, 13, 24, .94) !important;
+  border-bottom: 1px solid var(--mfc-line) !important;
+  box-shadow: 0 8px 28px rgba(0,0,0,.16) !important;
+  backdrop-filter: blur(18px) saturate(120%);
+  -webkit-backdrop-filter: blur(18px) saturate(120%);
+}
+
+.dashboard-brand {
+  align-items: center;
+}
+.dashboard-brand strong {
+  font-size: 1.02rem !important;
+  font-weight: 900 !important;
+  letter-spacing: -.025em !important;
+}
+.dashboard-brand small {
+  color: var(--mfc-muted) !important;
+}
+
+/* ---------- Main page shells ---------- */
+.dashboard-page {
+  border-radius: 20px !important;
+  border: 1px solid var(--mfc-line) !important;
+  background:
+    linear-gradient(145deg, rgba(15,33,54,.89), rgba(8,20,34,.88)) !important;
+  box-shadow:
+    0 18px 46px rgba(0,0,0,.15),
+    inset 0 1px 0 rgba(255,255,255,.02) !important;
+}
+
+.dashboard-page h1,
+.dashboard-page h2,
+.dashboard-page h3 {
+  color: var(--mfc-text);
+}
+.dashboard-page h1,
+.dashboard-page h2 {
+  letter-spacing: -.035em;
+}
+
+/* ---------- Generic cards: fewer boxes, flatter hierarchy ---------- */
+.dashboard-card,
+.quick-card,
+.club-menu-card,
+.public-more-card,
+.panel,
+.card {
+  background: var(--mfc-panel) !important;
+  border: 1px solid var(--mfc-line) !important;
+  box-shadow: 0 8px 20px rgba(0,0,0,.09) !important;
+}
+
+.dashboard-card:hover,
+.quick-card:hover,
+.club-menu-card:hover,
+.public-more-card:hover {
+  border-color: rgba(242,197,35,.24) !important;
+  transform: translateY(-1px);
+}
+
+/* ---------- Matchday / games ---------- */
+.match-card,
+.game-card,
+.fixture-card,
+.next-match-card,
+.hero-match,
+.matchday-card,
+.result-card,
+.schedule-card {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% -18%, rgba(44,112,207,.16), transparent 36%),
+    linear-gradient(135deg, rgba(17,39,65,.97), rgba(8,20,35,.98)) !important;
+  border: 1px solid rgba(255,255,255,.09) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 12px 28px rgba(0,0,0,.13) !important;
+}
+
+/* Sport accent stripe */
+.match-card::before,
+.game-card::before,
+.fixture-card::before,
+.next-match-card::before,
+.hero-match::before,
+.matchday-card::before,
+.result-card::before,
+.schedule-card::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--mfc-yellow), #e6a800);
+  opacity: .92;
+  pointer-events: none;
+}
+
+/* Match cards should read like scoreboards */
+.match-card strong,
+.game-card strong,
+.fixture-card strong,
+.next-match-card strong,
+.hero-match strong,
+.matchday-card strong {
+  font-weight: 850;
+  letter-spacing: -.02em;
+}
+
+/* Date and competition labels */
+.match-card small,
+.game-card small,
+.fixture-card small,
+.next-match-card small,
+.hero-match small,
+.matchday-card small {
+  color: var(--mfc-muted);
+}
+
+/* ---------- Buttons / tabs ---------- */
+.dashboard button,
+.dashboard .button,
+.dashboard .btn {
+  transition: transform .14s ease, border-color .14s ease, background .14s ease;
+}
+
+.dashboard button:active,
+.dashboard .button:active,
+.dashboard .btn:active {
+  transform: scale(.985);
+}
+
+.dashboard-tabs,
+.tabs,
+.segmented-control {
+  background: rgba(4,12,22,.58) !important;
+  border: 1px solid var(--mfc-line) !important;
+  border-radius: 14px !important;
+}
+
+.dashboard-tabs button.active,
+.tabs button.active,
+.segmented-control button.active,
+[role="tab"][aria-selected="true"] {
+  background: rgba(44,112,207,.25) !important;
+  color: #fff !important;
+  border-color: rgba(79,137,224,.28) !important;
+}
+
+/* ---------- League tables ---------- */
+.league-table-wrap,
+.standings-card,
+.table-card {
+  border-radius: 18px !important;
+  border: 1px solid var(--mfc-line) !important;
+  background: rgba(7,18,31,.95) !important;
+  box-shadow: none !important;
+}
+
+.league-table-wrap table,
+.standings-card table,
+.table-card table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.league-table-wrap thead,
+.standings-card thead,
+.table-card thead {
+  background: rgba(255,255,255,.035) !important;
+}
+
+.league-table-wrap th,
+.standings-card th,
+.table-card th {
+  color: var(--mfc-muted) !important;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  font-size: .69rem !important;
+  font-weight: 800;
+}
+
+.league-table-wrap td,
+.standings-card td,
+.table-card td {
+  border-bottom-color: rgba(255,255,255,.055) !important;
+}
+
+/* TSU row gets a club-highlight, but not a loud card */
+.league-table-wrap tr.is-ainet,
+.standings-card tr.is-ainet,
+.table-card tr.is-ainet,
+tr[data-team*="Ainet"],
+tr[data-team*="ainet"] {
+  background: linear-gradient(90deg, rgba(242,197,35,.08), rgba(44,112,207,.08)) !important;
+}
+
+/* ---------- Team area ---------- */
+.team-card,
+.team-hub,
+.team-header,
+.squad-card {
+  border: 1px solid var(--mfc-line) !important;
+  background:
+    linear-gradient(145deg, rgba(14,33,55,.93), rgba(8,20,35,.93)) !important;
+  box-shadow: 0 10px 26px rgba(0,0,0,.11) !important;
+}
+
+.team-header {
+  position: relative;
+  overflow: hidden;
+}
+.team-header::after {
+  content: "";
+  position: absolute;
+  right: -70px;
+  bottom: -90px;
+  width: 220px;
+  height: 220px;
+  border: 1px solid rgba(255,255,255,.045);
+  border-radius: 50%;
+  box-shadow:
+    0 0 0 42px rgba(255,255,255,.012),
+    0 0 0 84px rgba(255,255,255,.008);
+  pointer-events: none;
+}
+
+/* ---------- Verein ---------- */
+.club-menu-modern {
+  position: relative;
+  isolation: isolate;
+}
+
+.club-menu-modern::before {
+  content: "";
+  position: absolute;
+  right: -52px;
+  top: 28px;
+  width: 280px;
+  height: 280px;
+  background: url('/tsu-ainet-logo.png') center / contain no-repeat;
+  opacity: .05;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.club-menu-grid {
+  gap: 10px !important;
+}
+
+.club-menu-card {
+  min-height: 72px !important;
+  border-radius: 15px !important;
+  padding: 13px 14px !important;
+}
+
+.club-menu-card h3 {
+  font-size: .97rem !important;
+  font-weight: 800 !important;
+}
+
+.club-menu-card p {
+  color: var(--mfc-muted) !important;
+  font-size: .78rem !important;
+}
+
+/* ---------- Announcement / news style ---------- */
+.news-card,
+.announcement-card {
+  border-left: 3px solid rgba(44,112,207,.65) !important;
+  background: rgba(11,25,42,.92) !important;
+}
+
+/* ---------- Bottom navigation ---------- */
+.bottom-nav {
+  min-height: 62px !important;
+  padding: 5px 8px max(5px, env(safe-area-inset-bottom)) !important;
+  background: rgba(5,13,24,.96) !important;
+  border: 1px solid rgba(255,255,255,.07) !important;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.13) !important;
+  backdrop-filter: blur(18px) saturate(115%);
+  -webkit-backdrop-filter: blur(18px) saturate(115%);
+}
+
+.bottom-nav button {
+  min-height: 48px !important;
+  border-radius: 12px !important;
+  background: transparent !important;
+}
+
+.bottom-nav button.active,
+.bottom-nav button[aria-current="page"] {
+  color: var(--mfc-yellow) !important;
+  background: rgba(242,197,35,.075) !important;
+}
+
+/* ---------- Desktop layout ---------- */
+@media (min-width: 1100px) {
+  .dashboard-page {
+    padding: 24px 28px !important;
+  }
+
+  .club-menu-grid,
+  .public-more-grid {
+    grid-template-columns: repeat(3,minmax(0,1fr)) !important;
+  }
+
+  /* Give the wide desktop view a club-app dashboard rhythm */
+  .dashboard-content {
+    row-gap: 18px;
+  }
+}
+
+@media (min-width: 1450px) {
+  .club-menu-grid {
+    grid-template-columns: repeat(4,minmax(0,1fr)) !important;
+  }
+}
+
+/* ---------- Mobile ---------- */
+@media (max-width: 720px) {
+  .dashboard {
+    background:
+      radial-gradient(circle at 3% 0%, rgba(44,112,207,.17), transparent 31%),
+      radial-gradient(circle at 100% 19%, rgba(197,38,59,.055), transparent 24%),
+      linear-gradient(180deg, #081522 0%, #06111d 43%, #050b13 100%) !important;
+  }
+
+  .dashboard-content::before {
+    inset: 62px 0 58px;
+    opacity: .013;
+    background:
+      linear-gradient(90deg,
+        transparent calc(50% - .5px),
+        rgba(255,255,255,.8) 50%,
+        transparent calc(50% + .5px));
+  }
+
+  .dashboard-page {
+    border-radius: 17px !important;
+    box-shadow: 0 12px 28px rgba(0,0,0,.11) !important;
+  }
+
+  .match-card,
+  .game-card,
+  .fixture-card,
+  .next-match-card,
+  .hero-match,
+  .matchday-card {
+    border-radius: 15px !important;
+  }
+
+  .club-menu-modern::before {
+    width: 215px;
+    height: 215px;
+    right: -72px;
+    top: 30px;
+    opacity: .042;
+  }
+
+  .club-menu-card {
+    min-height: 66px !important;
+    border-radius: 14px !important;
+  }
+}

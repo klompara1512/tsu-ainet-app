@@ -84,7 +84,7 @@ const LEAN_SYNC = CORE_SYNC;
 // oder Spielpläne mehr in den Sync einmischen.
 const CLUB_SEED_URLS = Array.isArray(SYNC_CONFIG.clubSeedUrls) ? SYNC_CONFIG.clubSeedUrls.filter(Boolean) : [];
 const START_URLS = TABLES_ONLY
-  ? TEAM_SYNC_SOURCES.filter((entry) => entry.kind === "table" && entry.teamKey !== "CHALLENGE").map((entry) => entry.url)
+  ? TEAM_SYNC_SOURCES.filter((entry) => entry.kind === "table" && !new Set(["KM", "CHALLENGE", "U17", "U12", "U10"]).has(entry.teamKey)).map((entry) => entry.url)
   : GAMES_ONLY
     ? TEAM_SYNC_SOURCES.filter((entry) => entry.kind === "games").map((entry) => entry.url)
     : CORE_SYNC
@@ -2665,11 +2665,12 @@ async function main() {
       warnings.push(`${duplicateMatchesRemoved} doppelte Spielerkennungen wurden zusammengeführt.`);
     }
 
-    // Challenge besitzt ab Beta 11 einen vollständig getrennten, autoritativen
-    // Workflow (scripts/challenge-table-sync.cjs). Der allgemeine Sync darf
-    // Challenge-Tabellen niemals mehr schreiben oder deaktivieren.
+    // Ab Beta 12 besitzen KM, Challenge, U17, U12 und U10 jeweils einen
+    // getrennten autoritativen Tabellenworkflow. Der allgemeine Sync darf
+    // diese Tabellen niemals mehr schreiben oder deaktivieren.
+    const DEDICATED_TABLE_KEYS = new Set(["KM", "CHALLENGE", "U17", "U12", "U10"]);
     for (let index = standings.length - 1; index >= 0; index -= 1) {
-      if (standings[index]?.teamKey === "CHALLENGE") standings.splice(index, 1);
+      if (DEDICATED_TABLE_KEYS.has(standings[index]?.teamKey)) standings.splice(index, 1);
     }
 
     const standingMap = new Map();

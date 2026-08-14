@@ -1,0 +1,48 @@
+name: ÖFB Kampfmannschaft Tabelle exakt
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * *"
+    - cron: "0 10 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 20 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oefb-km-table-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-table:
+    name: Kampfmannschaft Tabelle synchronisieren
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Europe/Vienna
+      TABLE_TEAM: KM
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Abhängigkeiten installieren
+        run: npm ci
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+      - name: Kampfmannschaft Parser Selbsttest
+        run: node scripts/exact-team-table-selftest.cjs KM
+      - name: Exakte Kampfmannschaft Tabelle synchronisieren
+        run: node scripts/exact-team-table-sync.cjs KM

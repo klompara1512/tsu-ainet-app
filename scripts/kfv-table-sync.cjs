@@ -1,4 +1,2 @@
-process.env.SYNC_MODE = "tables";
-process.env.RUN_DAILY_TASKS = "false";
-process.env.RUN_DUPLICATE_CLEANUP = "false";
-require("./kfv-sync.cjs");
+"use strict";
+console.log("Tabellen-Sync Legacy: deaktiviert. KM, Challenge, U17, U12 und U10 werden ausschließlich durch ihre exakten Einzel-Workflows synchronisiert.");

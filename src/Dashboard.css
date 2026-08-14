@@ -1060,3 +1060,53 @@
   .club-menu-modern .club-menu-card-copy small { display: none; }
   .club-menu-hero-logo { width: 66px; height: 66px; }
 }
+
+/* =========================================================
+   BETA 16 – GLOBAL PREMIUM SPORT UI
+   Einheitliche TSU-Ainet-Oberfläche
+   ========================================================= */
+.dashboard {
+  --dashboard-background:#050b16;
+  --dashboard-surface:rgba(14,27,47,.82);
+  --dashboard-surface-hover:rgba(19,37,63,.94);
+  --dashboard-border:rgba(141,174,225,.13);
+  --dashboard-border-active:rgba(255,211,52,.30);
+  --dashboard-primary:#79a9ff;
+  --dashboard-primary-soft:rgba(44,105,205,.13);
+  --dashboard-text:#f8fbff;
+  --dashboard-text-muted:#a8b5ca;
+  background:
+    radial-gradient(ellipse at 8% -8%,rgba(28,93,190,.20),transparent 31%),
+    radial-gradient(ellipse at 98% 24%,rgba(190,24,48,.075),transparent 26%),
+    linear-gradient(180deg,#07111f 0%,#050b16 52%,#040a13 100%);
+}
+.dashboard-header{
+  min-height:68px;
+  padding:max(10px,env(safe-area-inset-top)) clamp(16px,4vw,28px) 10px;
+  background:rgba(5,12,23,.82);
+  border-bottom-color:rgba(132,165,216,.10);
+  box-shadow:0 12px 34px rgba(0,0,0,.18);
+}
+.dashboard-brand-mark{width:42px;height:42px;padding:3px;background:linear-gradient(145deg,rgba(20,43,76,.96),rgba(9,21,39,.98));border-color:rgba(255,211,52,.20);border-radius:13px}
+.dashboard-brand-mark img{width:36px;height:36px}
+.dashboard-brand strong{font-size:15px;letter-spacing:-.02em}
+.dashboard-content{position:relative;z-index:1}
+
+/* Karten wirken wie eine Familie statt einzelner Widgets */
+:where(.dashboard-content) :where(.v5-match-center,.v5-agenda,.v5-training-strip,.club-hub-card,.kfv-match-card,.kfv-table-card,.public-more-grid button,.administration-entry){
+  background:linear-gradient(145deg,rgba(17,32,54,.88),rgba(10,21,38,.94)) !important;
+  border:1px solid rgba(140,172,220,.13) !important;
+  box-shadow:0 14px 38px rgba(0,0,0,.16),inset 0 1px 0 rgba(255,255,255,.025);
+}
+:where(.dashboard-content) :where(.v5-match-center,.v5-agenda,.v5-training-strip,.club-hub-card,.kfv-match-card,.kfv-table-card,.public-more-grid button,.administration-entry):hover{
+  border-color:rgba(255,211,52,.22) !important;
+}
+.dashboard-version{opacity:.72}
+
+@media(max-width:640px){
+  .dashboard-header{min-height:62px;padding-left:14px;padding-right:14px}
+  .dashboard-brand-mark{width:38px;height:38px;border-radius:12px}.dashboard-brand-mark img{width:33px;height:33px}
+  .dashboard-brand strong{font-size:14px}
+  .dashboard-content{padding-left:14px!important;padding-right:14px!important;padding-bottom:104px!important}
+  .dashboard-version{margin-top:28px!important;margin-bottom:2px!important;transform:scale(.92)}
+}

@@ -83,6 +83,19 @@ async function removeOtherTokens(uid: string, keepDocumentId: string) {
     .map((entry) => deleteDoc(entry.ref).catch(() => undefined)));
 }
 
+
+export async function hasActivePushToken() {
+  if (!auth.currentUser) return false;
+  const snapshot = await getDocs(
+    query(
+      collection(db, "fcmTokens"),
+      where("uid", "==", auth.currentUser.uid),
+    ),
+  ).catch(() => null);
+  if (!snapshot) return false;
+  return snapshot.docs.some((entry) => entry.data().active === true && Boolean(entry.data().token));
+}
+
 export async function enablePush(topics: PushTopic[]) {
   const support = await getPushSupport();
   if (!support.supported) throw new Error("Push wird auf diesem Browser nicht unterstützt.");

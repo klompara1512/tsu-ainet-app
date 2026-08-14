@@ -2357,3 +2357,71 @@ tr[data-team*="ainet"] {
 .bottom-nav {
   z-index: 900 !important;
 }
+
+
+/* =========================================================
+   18.3.0-beta.31 · Profil Push + Trainer ohne Administration
+   ========================================================= */
+.profile-push-status {
+  display: grid;
+  grid-template-columns: 10px 1fr;
+  align-items: center;
+  gap: 9px;
+  margin-top: 10px;
+  padding: 10px 11px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 12px;
+  background: rgba(255,255,255,.035);
+}
+.profile-push-status > span {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #79869a;
+  box-shadow: 0 0 0 4px rgba(121,134,154,.08);
+}
+.profile-push-status > span.is-on {
+  background: #5bd391;
+  box-shadow: 0 0 0 4px rgba(91,211,145,.10);
+}
+.profile-push-status div {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.profile-push-status strong {
+  font-size: 12px;
+  color: #f7f9fd;
+}
+.profile-push-status small {
+  margin: 0 !important;
+  font-size: 9px !important;
+  letter-spacing: .02em !important;
+  text-transform: none !important;
+  color: rgba(255,255,255,.54) !important;
+}
+.profile-menu .profile-push-button {
+  margin-top: 7px;
+  background: rgba(44,112,207,.16);
+  color: #dceaff;
+  border: 1px solid rgba(92,148,232,.24);
+}
+.profile-menu .profile-push-button.is-enabled {
+  background: rgba(255,255,255,.055);
+  color: #b8c2d2;
+  border-color: rgba(255,255,255,.08);
+}
+.profile-menu .profile-push-button:disabled {
+  opacity: .55;
+  cursor: wait;
+}
+.profile-push-message {
+  display: block;
+  margin-top: 4px;
+  padding: 7px 9px;
+  border-radius: 9px;
+  background: rgba(44,112,207,.08);
+  color: #bcd4fb !important;
+  font-size: 10px !important;
+  line-height: 1.35;
+}

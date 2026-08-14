@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { signOut, type User } from "firebase/auth";
 import { auth } from "./firebase";
 import { hasPermission, type UserProfile } from "./permissions";
@@ -32,6 +32,7 @@ import PublicPeople from "./PublicPeople";
 import PublicClubInfo from "./PublicClubInfo";
 import VisualManager from "./VisualManager";
 import { APP_VERSION } from "./appVersion";
+import { disablePush, enablePush, getPushSupport, hasActivePushToken } from "./push";
 
 type Page =
   | "start"
@@ -72,6 +73,10 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const [profileOpen, setProfileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
   const [logoutError, setLogoutError] = useState("");
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushSupported, setPushSupported] = useState(true);
+  const [pushMessage, setPushMessage] = useState("");
   const [selectedMatchId, setSelectedMatchId] = useState("");
   const [kfvInitialTab, setKfvInitialTab] = useState<"matches" | "table" | "squad">("matches");
   const canManageMatches = hasPermission(role, "manageMatches");
@@ -85,6 +90,54 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const canManageKits = role === "admin" || role === "section";
   const canUseTrainingPlanner = Boolean(user) && ["admin", "section", "trainer"].includes(role);
   const hasInternalAccess = Boolean(user) && ["admin", "section", "trainer", "board"].includes(role);
+  const canOpenAdministration = Boolean(user) && ["admin", "section", "board"].includes(role);
+
+  useEffect(() => {
+    if (!user) {
+      setPushEnabled(false);
+      setPushMessage("");
+      return;
+    }
+
+    let active = true;
+    void Promise.all([getPushSupport(), hasActivePushToken()])
+      .then(([support, enabled]) => {
+        if (!active) return;
+        setPushSupported(support.supported);
+        setPushEnabled(enabled);
+      })
+      .catch(() => {
+        if (active) setPushSupported(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  async function handlePushToggle() {
+    if (pushBusy || !user) return;
+    setPushBusy(true);
+    setPushMessage("");
+
+    try {
+      if (pushEnabled) {
+        await disablePush();
+        setPushEnabled(false);
+        setPushMessage("Push-Benachrichtigungen deaktiviert.");
+      } else {
+        await enablePush(["all"]);
+        setPushEnabled(true);
+        setPushSupported(true);
+        setPushMessage("Push-Benachrichtigungen sind aktiviert.");
+      }
+    } catch (error) {
+      console.error("Push-Einstellung fehlgeschlagen", error);
+      setPushMessage(error instanceof Error ? error.message : "Push konnte nicht aktiviert werden.");
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   async function handleLogout() {
     if (loggingOut) return;
@@ -170,7 +223,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           )}
         </div>
 
-        {hasInternalAccess && (
+        {canOpenAdministration && (
           <button type="button" className="administration-entry club-admin-entry" onClick={() => setActivePage("administration")}>
             <span className="quick-icon"><Icon name="settings" /></span>
             <span className="club-menu-card-copy"><strong>Administration</strong><small>Verwaltung & Einstellungen</small></span>
@@ -182,7 +235,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   }
 
   function renderAdministrationPage() {
-    if (!hasInternalAccess) return renderMorePage();
+    if (!canOpenAdministration) return renderMorePage();
     return (
       <section className="dashboard-page clear-more-page administration-page">
         <header className="administration-header">
@@ -439,7 +492,32 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
                   <strong>{profile.name}</strong>
                   <span>{profile.email || user.email}</span>
                   <small>Interner Vereinsbereich</small>
-                  {hasInternalAccess && <button type="button" onClick={() => { setProfileOpen(false); setActivePage("administration"); }}>Administration</button>}
+
+                  <div className="profile-push-status">
+                    <span className={pushEnabled ? "is-on" : "is-off"} aria-hidden="true" />
+                    <div>
+                      <strong>Benachrichtigungen</strong>
+                      <small>{pushEnabled ? "Push ist aktiviert" : "Push ist noch nicht aktiviert"}</small>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    className={`profile-push-button ${pushEnabled ? "is-enabled" : ""}`}
+                    onClick={() => void handlePushToggle()}
+                    disabled={pushBusy || !pushSupported}
+                  >
+                    {pushBusy
+                      ? "Bitte warten …"
+                      : !pushSupported
+                        ? "Push nicht unterstützt"
+                        : pushEnabled
+                          ? "🔕 Push deaktivieren"
+                          : "🔔 Push aktivieren"}
+                  </button>
+
+                  {pushMessage && <span className="profile-push-message" role="status">{pushMessage}</span>}
+                  {canOpenAdministration && <button type="button" onClick={() => { setProfileOpen(false); setActivePage("administration"); }}>Administration</button>}
                   {logoutError && <span className="profile-logout-error" role="alert">{logoutError}</span>}
                   <button type="button" className="profile-logout-button" onClick={() => void handleLogout()} disabled={loggingOut}>
                     {loggingOut ? "Wird abgemeldet …" : "Abmelden"}

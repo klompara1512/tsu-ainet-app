@@ -1,4 +1,4 @@
-const CACHE_NAME = "tsu-ainet-v18-3-0-beta-23";
+const CACHE_NAME = "tsu-ainet-v18-3-0-beta-25";
 const APP_SHELL = [
   "/index.html",
   "/manifest.webmanifest",

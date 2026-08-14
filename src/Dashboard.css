@@ -1610,3 +1610,243 @@ body,
     box-shadow: 0 14px 36px rgba(0,0,0,.15) !important;
   }
 }
+
+
+/* =========================================================
+   Version 18.3.0-beta.24 – Desktopbreite
+   Auf großen Bildschirmen nutzt die App deutlich mehr Fläche.
+   Mobile Darstellung bleibt unverändert.
+   ========================================================= */
+@media (min-width: 1100px) {
+  .dashboard-main,
+  .dashboard-content,
+  .dashboard-shell,
+  .dashboard-container,
+  .dashboard-page-wrap,
+  .dashboard > main {
+    width: min(94vw, 1540px) !important;
+    max-width: 1540px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  /* Falls die Seiten direkt über die bekannte Content-Klasse begrenzt werden. */
+  .dashboard .content {
+    width: min(94vw, 1540px) !important;
+    max-width: 1540px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+}
+
+@media (min-width: 1600px) {
+  .dashboard-main,
+  .dashboard-content,
+  .dashboard-shell,
+  .dashboard-container,
+  .dashboard-page-wrap,
+  .dashboard > main,
+  .dashboard .content {
+    width: min(95vw, 1660px) !important;
+    max-width: 1660px !important;
+  }
+}
+
+
+/* =========================================================
+   18.3.0-beta.25 · FOOTBALL UI REDESIGN
+   Sportlicher, klarer, stärker auf Spieltag/Fußball fokussiert.
+   Keine Funktions- oder Sync-Änderungen.
+   ========================================================= */
+:root {
+  --football-navy: #06101d;
+  --football-panel: rgba(12,27,46,.90);
+  --football-panel-strong: rgba(15,33,55,.96);
+  --football-line: rgba(155,184,225,.12);
+  --football-yellow: #f3c623;
+  --football-text: #f7f9fd;
+  --football-muted: #98a9be;
+}
+
+.dashboard {
+  background:
+    radial-gradient(circle at 12% 0%, rgba(40,101,190,.16), transparent 31%),
+    radial-gradient(circle at 100% 32%, rgba(191,39,55,.055), transparent 25%),
+    linear-gradient(180deg,#081628 0%,#06101d 48%,#040a12 100%) !important;
+}
+
+/* Sehr dezente Fußballplatz-Linien – nur Atmosphäre, kein Musterteppich. */
+.dashboard-content {
+  position: relative;
+}
+.dashboard-content::before {
+  content: "";
+  position: fixed;
+  inset: 74px 0 64px;
+  pointer-events: none;
+  opacity: .025;
+  background:
+    linear-gradient(90deg, transparent 49.9%, #d9e8ff 50%, transparent 50.1%),
+    radial-gradient(circle at 50% 50%, transparent 0 88px, #d9e8ff 89px 90px, transparent 91px);
+  z-index: 0;
+}
+.dashboard-content > * { position: relative; z-index: 1; }
+
+/* Header wie Club-App / Matchday-Leiste. */
+.dashboard-header {
+  border-bottom: 1px solid rgba(255,255,255,.07) !important;
+  background: rgba(5,14,26,.91) !important;
+  box-shadow: 0 10px 28px rgba(0,0,0,.16) !important;
+}
+.dashboard-brand strong {
+  font-weight: 900 !important;
+  letter-spacing: -.025em !important;
+  text-transform: uppercase;
+}
+.dashboard-brand small { color: #91a3ba !important; }
+
+/* Seiten bekommen klarere sportliche Hierarchie. */
+.dashboard-page {
+  border: 1px solid rgba(151,177,221,.10) !important;
+  border-radius: 22px !important;
+  background: linear-gradient(145deg,rgba(14,30,50,.87),rgba(8,20,35,.84)) !important;
+  box-shadow: 0 18px 46px rgba(0,0,0,.16) !important;
+}
+.dashboard-page h1,
+.dashboard-page h2 {
+  letter-spacing: -.035em;
+}
+
+/* Allgemeine Karten: weniger Deko, mehr Informationshierarchie. */
+.dashboard-card,
+.quick-card,
+.club-menu-card,
+.public-more-card,
+.panel,
+.card {
+  background: var(--football-panel) !important;
+  border: 1px solid var(--football-line) !important;
+  box-shadow: 0 8px 22px rgba(0,0,0,.10) !important;
+}
+.dashboard-card:hover,
+.quick-card:hover,
+.club-menu-card:hover,
+.public-more-card:hover {
+  border-color: rgba(243,198,35,.25) !important;
+}
+
+/* Match-/Spielkarten sportlicher: Ergebnis und Teams sollen dominieren. */
+.match-card,
+.game-card,
+.fixture-card,
+.next-match-card,
+.hero-match,
+.matchday-card {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(135deg,rgba(16,38,64,.97),rgba(8,21,38,.97)) !important;
+  border: 1px solid rgba(151,177,221,.13) !important;
+  box-shadow: 0 12px 30px rgba(0,0,0,.15) !important;
+}
+.match-card::after,
+.game-card::after,
+.fixture-card::after,
+.next-match-card::after,
+.hero-match::after,
+.matchday-card::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--football-yellow);
+  opacity: .82;
+  pointer-events: none;
+}
+
+/* Tabellen wie Ligatabelle statt normaler Datentabelle. */
+.league-table-wrap,
+.standings-card,
+.table-card {
+  background: rgba(8,20,35,.94) !important;
+  border: 1px solid var(--football-line) !important;
+  border-radius: 18px !important;
+  overflow: hidden;
+}
+.league-table-wrap thead,
+.standings-card thead,
+.table-card thead {
+  background: rgba(255,255,255,.035) !important;
+  text-transform: uppercase;
+  letter-spacing: .055em;
+  font-size: .72rem;
+}
+
+/* Vereinsmenü: flacher, schneller scannbar. */
+.club-menu-grid { gap: 10px !important; }
+.club-menu-card {
+  min-height: 70px !important;
+  border-radius: 15px !important;
+  padding: 13px 14px !important;
+}
+.club-menu-card h3 { font-size: .96rem !important; }
+.club-menu-card p { color: var(--football-muted) !important; }
+
+/* Nur im Verein-Bereich das Wappen als dezente Identität. */
+.club-menu-modern { position: relative; isolation: isolate; }
+.club-menu-modern::before {
+  content: "";
+  position: absolute;
+  right: -55px;
+  top: 42px;
+  width: 260px;
+  height: 260px;
+  background: url('/tsu-ainet-logo.png') center/contain no-repeat;
+  opacity: .045;
+  pointer-events: none;
+  z-index: -1;
+}
+
+/* Aktive Navigation: klarer Fußball-App-Akzent. */
+.bottom-nav {
+  background: rgba(5,14,26,.95) !important;
+  border-top: 1px solid rgba(255,255,255,.07) !important;
+  box-shadow: 0 -8px 24px rgba(0,0,0,.12) !important;
+}
+.bottom-nav button.active,
+.bottom-nav button[aria-current="page"] {
+  color: var(--football-yellow) !important;
+  background: rgba(243,198,35,.075) !important;
+}
+
+/* Desktop: Breite auch gestalterisch nutzen. */
+@media (min-width: 1100px) {
+  .dashboard-page { padding: 24px 28px !important; }
+  .club-menu-grid { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+  .public-more-grid { grid-template-columns: repeat(3,minmax(0,1fr)) !important; }
+}
+
+@media (min-width: 1450px) {
+  .club-menu-grid { grid-template-columns: repeat(4,minmax(0,1fr)) !important; }
+}
+
+@media (max-width: 720px) {
+  .dashboard-content::before {
+    inset: 64px 0 58px;
+    opacity: .018;
+    background: linear-gradient(90deg,transparent 49.8%,#d9e8ff 50%,transparent 50.2%);
+  }
+  .dashboard-page {
+    border-radius: 18px !important;
+    box-shadow: 0 12px 30px rgba(0,0,0,.12) !important;
+  }
+  .club-menu-modern::before {
+    width: 210px;
+    height: 210px;
+    right: -70px;
+    top: 35px;
+    opacity: .04;
+  }
+  .club-menu-grid { gap: 9px !important; }
+}

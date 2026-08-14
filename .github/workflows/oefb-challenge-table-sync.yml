@@ -1,0 +1,54 @@
+name: ÖFB Challenge Tabelle exakt
+
+on:
+  workflow_dispatch:
+  schedule:
+    # GitHub-Cron = UTC. In Österreich während der Sommerzeit etwa 06/12/18/22 Uhr.
+    - cron: "0 4 * * *"
+    - cron: "0 10 * * *"
+    - cron: "0 16 * * *"
+    - cron: "0 20 * * *"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oefb-challenge-table-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  challenge-table:
+    name: Challenge Tabelle synchronisieren
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+
+      - name: Challenge Parser Selbsttest
+        run: npm run sync:challenge-table:selftest
+
+      - name: Exakte Challenge Tabelle synchronisieren
+        run: npm run sync:challenge-table

@@ -1,7 +1,7 @@
 {
   "name": "tsu-ainet-app",
   "private": true,
-  "version": "18.3.0-beta.10",
+  "version": "18.3.0-beta.11",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "sync:kfv": "node scripts/kfv-core-sync.cjs",
     "check": "npm run sync:check && npm run typecheck",
     "typecheck": "tsc -b --pretty false",
-    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node --check scripts/kfv-games-sync.cjs && node --check scripts/kfv-table-sync.cjs && node --check scripts/weekend-holiday-gate.cjs && node --check scripts/game-sync-time-gate.cjs && node --check scripts/kfv-club-sync.cjs && node --check scripts/kfv-squad-sync.cjs && node --check scripts/kfv-report-news-sync.cjs && node --check scripts/send-push.cjs && node scripts/table-parser-selftest.cjs && node scripts/push-selftest.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
+    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node --check scripts/kfv-games-sync.cjs && node --check scripts/kfv-table-sync.cjs && node --check scripts/challenge-table-sync.cjs && node --check scripts/challenge-table-parser.cjs && node --check scripts/weekend-holiday-gate.cjs && node --check scripts/game-sync-time-gate.cjs && node --check scripts/kfv-club-sync.cjs && node --check scripts/kfv-squad-sync.cjs && node --check scripts/kfv-report-news-sync.cjs && node --check scripts/send-push.cjs && node scripts/table-parser-selftest.cjs && node scripts/challenge-table-selftest.cjs && node scripts/push-selftest.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
     "sync:selftest": "node scripts/official-sync-selftest.cjs",
     "sync:core": "node scripts/kfv-core-sync.cjs",
     "sync:full": "node scripts/kfv-sync.cjs",
@@ -32,7 +32,9 @@
     "predev": "node scripts/sync-app-version.cjs",
     "prestart": "node scripts/sync-app-version.cjs",
     "prebuild": "node scripts/sync-app-version.cjs",
-    "prerelease:check": "node scripts/sync-app-version.cjs"
+    "prerelease:check": "node scripts/sync-app-version.cjs",
+    "sync:challenge-table": "node scripts/challenge-table-sync.cjs",
+    "sync:challenge-table:selftest": "node scripts/challenge-table-selftest.cjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

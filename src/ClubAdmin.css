@@ -1,1 +1,172 @@
 .club-admin{max-width:1180px;margin:0 auto}.club-admin>header{display:flex;align-items:center;gap:18px;margin-bottom:18px}.club-admin>header button{border:0;background:transparent;color:#8db9ff;font:inherit;font-weight:800}.club-admin header small{color:#7daeff;font-weight:850;text-transform:uppercase;letter-spacing:.12em}.club-admin h2,.club-admin h3{margin:2px 0}.club-admin>nav{display:flex;gap:8px;overflow:auto;padding-bottom:10px;margin-bottom:12px}.club-admin>nav button{white-space:nowrap;padding:10px 14px;border:1px solid rgba(255,255,255,.08);border-radius:12px;background:rgba(255,255,255,.04);color:rgba(255,255,255,.62);font:inherit;font-weight:750}.club-admin>nav button.active{color:#fff;background:rgba(86,145,241,.17);border-color:rgba(111,166,255,.28)}.admin-panel{padding:22px;border:1px solid rgba(255,255,255,.08);border-radius:22px;background:rgba(255,255,255,.045)}.admin-grid{display:grid;grid-template-columns:minmax(280px,.8fr) minmax(0,1.4fr);gap:14px}.admin-title{display:flex;justify-content:space-between;gap:15px;align-items:center;margin-bottom:16px}.admin-title p{margin:4px 0;color:rgba(255,255,255,.48)}.admin-title input,.create-form input,.create-form select,.user-actions select{padding:11px 12px;border:1px solid rgba(255,255,255,.1);border-radius:11px;background:#0c1728;color:#fff;font:inherit}.create-form{display:grid;gap:11px;align-content:start}.primary,.user-actions button,.simple-list button{padding:10px 13px;border:0;border-radius:10px;background:#3978d6;color:#fff;font:inherit;font-weight:800}.user-list,.simple-list{display:grid;gap:9px}.user-list article{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:13px;align-items:center;padding:14px;border-radius:16px;background:rgba(0,0,0,.16)}.avatar{display:grid;place-items:center;width:43px;height:43px;border-radius:50%;background:rgba(91,150,244,.18);color:#b9d5ff;font-weight:900}.user-main{display:grid;gap:3px;min-width:0}.user-main small,.simple-list small{color:rgba(255,255,255,.48);overflow:hidden;text-overflow:ellipsis}.chips{display:flex;gap:6px;margin-top:4px}.chips span{padding:3px 7px;border-radius:999px;background:rgba(255,255,255,.07);font-size:10px}.chips .warn{background:rgba(230,164,55,.14);color:#ffd78c}.user-actions{display:flex;gap:7px;align-items:center}.user-actions select{max-width:140px}.user-actions select[multiple]{height:42px}.user-actions .muted{background:rgba(255,255,255,.08)}.simple-list article{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:13px;border-radius:14px;background:rgba(0,0,0,.15)}.simple-list article>div{display:grid;gap:3px}.simple-list code{color:#9bc2ff}.simple-list .danger{background:rgba(194,57,70,.16);color:#ffb5bd}@media(max-width:850px){.admin-grid{grid-template-columns:1fr}.admin-title{align-items:stretch;flex-direction:column}.user-list article{grid-template-columns:auto 1fr}.user-actions{grid-column:1/-1;flex-wrap:wrap}.user-actions select{flex:1;min-width:130px}.simple-list article{align-items:flex-start;flex-wrap:wrap}}
+
+
+/* =========================================================
+   18.3.0-beta.33 · bessere Mannschaftszuordnung
+   ========================================================= */
+.team-assignment {
+  position: relative;
+  min-width: 190px;
+}
+.team-assignment-trigger {
+  width: 100%;
+  min-height: 48px;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  gap: 9px;
+  padding: 7px 10px 7px 12px !important;
+  border: 1px solid rgba(255,255,255,.11) !important;
+  border-radius: 11px !important;
+  background: #0c1728 !important;
+  color: #fff !important;
+  text-align: left;
+}
+.team-assignment-trigger.has-teams {
+  border-color: rgba(86,145,241,.35) !important;
+  background: rgba(35,70,119,.35) !important;
+}
+.team-assignment-trigger-copy {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.team-assignment-trigger-copy small {
+  color: rgba(255,255,255,.46);
+  font-size: 9px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.team-assignment-trigger-copy strong {
+  overflow: hidden;
+  color: #f7f9fd;
+  font-size: 12px;
+  font-weight: 820;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.team-assignment-chevron {
+  color: #8db9ff;
+  font-size: 17px;
+  line-height: 1;
+}
+.team-assignment-picker {
+  position: absolute;
+  z-index: 2500;
+  top: calc(100% + 7px);
+  right: 0;
+  width: 280px;
+  padding: 12px;
+  border: 1px solid rgba(111,166,255,.22);
+  border-radius: 15px;
+  background: #091526;
+  box-shadow: 0 22px 56px rgba(0,0,0,.45);
+}
+.team-assignment-picker-head {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 9px;
+}
+.team-assignment-picker-head strong {
+  color: #fff;
+  font-size: 13px;
+}
+.team-assignment-picker-head small {
+  color: rgba(255,255,255,.45);
+  font-size: 10px;
+}
+.team-assignment-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.user-actions .team-assignment-options button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 42px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  background: rgba(255,255,255,.045);
+  color: #dce5f3;
+  font-size: 11px;
+  font-weight: 760;
+  text-align: left;
+}
+.user-actions .team-assignment-options button.selected {
+  border-color: rgba(242,197,35,.34);
+  background: rgba(242,197,35,.10);
+  color: #fff2a8;
+}
+.team-check {
+  display: grid;
+  place-items: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 6px;
+  background: rgba(0,0,0,.16);
+  color: #f2c523;
+  font-size: 12px;
+  font-weight: 950;
+}
+.selected .team-check {
+  border-color: rgba(242,197,35,.45);
+  background: rgba(242,197,35,.13);
+}
+.user-actions .team-assignment-done {
+  width: 100%;
+  margin-top: 9px;
+  padding: 9px 11px;
+  background: #3978d6;
+  color: #fff;
+}
+.chips .team-chip {
+  background: rgba(57,120,214,.13);
+  color: #aecdff;
+  border: 1px solid rgba(86,145,241,.14);
+}
+
+@media(max-width:850px) {
+  .team-assignment {
+    flex: 1 1 100%;
+    min-width: 100%;
+  }
+  .team-assignment-picker {
+    position: relative;
+    top: auto;
+    right: auto;
+    width: 100%;
+    margin-top: 6px;
+    box-shadow: none;
+  }
+}
+
+@media(max-width:520px) {
+  .user-list article {
+    padding: 12px;
+  }
+  .user-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .user-actions > select,
+  .user-actions > button {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+  }
+  .user-actions > select {
+    grid-column: 1 / -1;
+  }
+  .team-assignment {
+    grid-column: 1 / -1;
+  }
+  .team-assignment-options {
+    grid-template-columns: 1fr 1fr;
+  }
+}

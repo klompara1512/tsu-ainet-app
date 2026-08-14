@@ -21,7 +21,7 @@ type Row = { id: string; [key: string]: RowValue };
 type ClubForm = Record<string, string>;
 
 const roles: AppRole[] = ["admin", "section", "board", "trainer", "player", "member", "fan"];
-const teams = ["KM", "Challenge", "U17", "U12", "U10"];
+const teams = ["KM", "Challenge", "U17", "U12", "U10", "U8"];
 const tabLabels: Record<Tab, string> = {
   users: "Benutzer",
   invites: "Einladungen",
@@ -46,12 +46,20 @@ function rowStringArray(value: RowValue) {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
 }
 
+
+function teamLabel(team: string) {
+  if (team === "KM") return "Kampfmannschaft";
+  if (team === "Challenge") return "Challenge";
+  return team;
+}
+
 export default function ClubAdmin({ onBack }: { onBack: () => void }) {
   const [tab, setTab] = useState<Tab>("users");
   const [rows, setRows] = useState<Row[]>([]);
   const [users, setUsers] = useState<Row[]>([]);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState<ClubForm>({});
+  const [openTeamPicker, setOpenTeamPicker] = useState<string | null>(null);
 
   useEffect(
     () =>
@@ -77,6 +85,15 @@ export default function ClubAdmin({ onBack }: { onBack: () => void }) {
       `${rowText(user.name)} ${rowText(user.email)}`.toLocaleLowerCase("de-AT").includes(needle),
     );
   }, [users, search]);
+
+
+  async function toggleUserTeam(userId: string, currentTeamIds: string[], team: string) {
+    const nextTeamIds = currentTeamIds.includes(team)
+      ? currentTeamIds.filter((item) => item !== team)
+      : [...currentTeamIds, team];
+
+    await updateDoc(doc(db, "users", userId), { teamIds: nextTeamIds });
+  }
 
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -141,6 +158,7 @@ export default function ClubAdmin({ onBack }: { onBack: () => void }) {
                     <div className="chips">
                       {!approved && <span className="warn">Freigabe offen</span>}
                       <span>{roleLabel(role as AppRole)}</span>
+                      {teamIds.map((team) => <span key={team} className="team-chip">{teamLabel(team)}</span>)}
                     </div>
                   </div>
                   <div className="user-actions">
@@ -148,15 +166,58 @@ export default function ClubAdmin({ onBack }: { onBack: () => void }) {
                       <option value="pending">Ausstehend</option>
                       {roles.map((item) => <option key={item} value={item}>{roleLabel(item)}</option>)}
                     </select>
-                    <select
-                      multiple
-                      value={teamIds}
-                      onChange={(event) => void updateDoc(doc(db, "users", user.id), {
-                        teamIds: Array.from(event.target.selectedOptions).map((option) => option.value),
-                      })}
-                    >
-                      {teams.map((team) => <option key={team} value={team}>{team}</option>)}
-                    </select>
+                    <div className="team-assignment">
+                      <button
+                        type="button"
+                        className={`team-assignment-trigger ${teamIds.length ? "has-teams" : ""}`}
+                        aria-expanded={openTeamPicker === user.id}
+                        onClick={() => setOpenTeamPicker((current) => current === user.id ? null : user.id)}
+                      >
+                        <span className="team-assignment-trigger-copy">
+                          <small>Mannschaft</small>
+                          <strong>
+                            {teamIds.length === 0
+                              ? "Keine"
+                              : teamIds.length <= 2
+                                ? teamIds.map(teamLabel).join(", ")
+                                : `${teamIds.length} Mannschaften`}
+                          </strong>
+                        </span>
+                        <span className="team-assignment-chevron">⌄</span>
+                      </button>
+
+                      {openTeamPicker === user.id && (
+                        <div className="team-assignment-picker">
+                          <div className="team-assignment-picker-head">
+                            <strong>Mannschaften zuordnen</strong>
+                            <small>Mehrfachauswahl möglich</small>
+                          </div>
+                          <div className="team-assignment-options">
+                            {teams.map((team) => {
+                              const selected = teamIds.includes(team);
+                              return (
+                                <button
+                                  key={team}
+                                  type="button"
+                                  className={selected ? "selected" : ""}
+                                  onClick={() => void toggleUserTeam(user.id, teamIds, team)}
+                                >
+                                  <span className="team-check">{selected ? "✓" : ""}</span>
+                                  <span>{teamLabel(team)}</span>
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <button
+                            type="button"
+                            className="team-assignment-done"
+                            onClick={() => setOpenTeamPicker(null)}
+                          >
+                            Fertig
+                          </button>
+                        </div>
+                      )}
+                    </div>
                     <button
                       type="button"
                       onClick={() => void updateDoc(doc(db, "users", user.id), {

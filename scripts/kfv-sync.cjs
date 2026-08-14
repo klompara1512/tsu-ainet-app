@@ -1506,7 +1506,7 @@ function importMatchReports(snapshot, target, sourceUrl) {
 async function collectWithBrowser(startUrls) {
   const browser = await puppeteer.launch({
     headless: true,
-    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"],
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled", "--disable-application-cache"],
   });
   const resources = [];
   const diagnostics = [];
@@ -1521,7 +1521,13 @@ async function collectWithBrowser(startUrls) {
       const page = await browser.newPage();
       await page.setViewport({ width: 1440, height: 1600, deviceScaleFactor: 1 });
       page.setDefaultTimeout(45000);
-      await page.setExtraHTTPHeaders({ "Accept-Language": "de-AT,de;q=0.9" });
+      await page.setExtraHTTPHeaders({ "Accept-Language": "de-AT,de;q=0.9", "Cache-Control": "no-cache, no-store, max-age=0", "Pragma": "no-cache" });
+      await page.setCacheEnabled(false);
+      try {
+        const cdp = await page.createCDPSession();
+        await cdp.send("Network.setCacheDisabled", { cacheDisabled: true });
+        await cdp.send("Network.setBypassServiceWorker", { bypass: true });
+      } catch { /* CDP cache bypass optional */ }
       await page.setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/130 Safari/537.36");
 
       page.on("response", async (response) => {
@@ -1539,7 +1545,16 @@ async function collectWithBrowser(startUrls) {
 
       let navigationError = "";
       try {
-        await page.goto(startUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
+        const navigationUrl = (() => {
+          try {
+            const url = new URL(startUrl);
+            if (/vereine\.oefb\.at$/i.test(url.hostname) && /\/Tabellen\/?$/i.test(url.pathname)) {
+              url.searchParams.set("_tsu_sync", `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`);
+            }
+            return url.toString();
+          } catch { return startUrl; }
+        })();
+        await page.goto(navigationUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
         // ÖFB/KFV laden Tabellen und Kader teilweise nach der ersten Navigation nach.
         // Daher auf Netzwerkruhe und anschließend auf sichtbare Datenstrukturen warten.
         await page.waitForNetworkIdle({ idleTime: CORE_SYNC ? 500 : 1200, timeout: CORE_SYNC ? 10000 : 30000 }).catch(() => {});
@@ -2136,6 +2151,8 @@ async function collectWithBrowser(startUrls) {
       resources.push({ text: renderedHtml, contentType: "text/html", finalUrl, origin: "rendered-dom" });
       diagnostics.push({
         url: finalUrl,
+        requestedUrl: startUrl,
+        cacheBypass: /[?&]_tsu_sync=/.test(finalUrl),
         title: await page.title(),
         kind: "browser",
         bytes: Buffer.byteLength(renderedHtml),

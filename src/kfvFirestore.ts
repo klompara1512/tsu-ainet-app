@@ -34,6 +34,7 @@ function cleanVenue(value: unknown): string {
   if (typeof value !== "string") return "";
   const text = value.replace(/\s+/g, " ").trim();
   if (!text || INVALID_VENUE_PATTERN.test(text)) return "";
+  if (/\b(?:leaflet|openstreetmap|mapbox|google\s*maps|apple\s*maps|kartendaten|map\s*data|contributors?|urheberrecht|copyright)\b/i.test(text) || /[©®]/.test(text)) return "";
   return text;
 }
 

@@ -183,7 +183,8 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
 
 function displayVenue(match: KfvMatch): string {
   const venue = (match.venue || "").replace(/\s+/g, " ").trim();
-  if (venue && !INVALID_DISPLAY_VENUE.test(venue)) return venue;
+  const mapAttribution = /\b(?:leaflet|openstreetmap|mapbox|google\s*maps|apple\s*maps|kartendaten|map\s*data|contributors?|urheberrecht|copyright)\b/i.test(venue) || /[©®]/.test(venue);
+  if (venue && !INVALID_DISPLAY_VENUE.test(venue) && !mapAttribution) return venue;
   return /ainet/i.test(match.homeTeam || "") ? "Sandgrubenstadion Ainet" : "";
 }
 

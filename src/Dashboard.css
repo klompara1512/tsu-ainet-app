@@ -1482,3 +1482,131 @@
   .dashboard-content { padding-left: 14px !important; padding-right: 14px !important; }
   .club-menu-card { min-height: 68px !important; border-radius: 14px !important; }
 }
+
+
+/* =========================================================
+   Version 18.3.0-beta.22 – Logo zurück links oben + Wasserzeichen nur Verein
+   ========================================================= */
+/* Kein globales Wasserzeichen auf den normalen App-Seiten. */
+.dashboard::before,
+.dashboard::after { display: none !important; content: none !important; }
+
+/* Klassischer Header: Vereinswappen ausschließlich links oben. */
+.dashboard-header::after { display: none !important; content: none !important; }
+.dashboard-brand { gap: 10px !important; }
+.dashboard-brand-mark {
+  display: grid !important;
+  place-items: center;
+  width: 42px !important;
+  height: 42px !important;
+  padding: 3px !important;
+  flex: 0 0 42px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.10) !important;
+  border-radius: 12px !important;
+  background: rgba(13,26,43,.92) !important;
+  box-shadow: none !important;
+}
+.dashboard-brand-mark img {
+  display: block !important;
+  width: 35px !important;
+  height: 35px !important;
+  object-fit: contain;
+}
+
+/* Verein: genau ein dezentes großes Logo im Hintergrund. */
+.club-menu-modern .club-menu-watermark {
+  display: block !important;
+  position: absolute !important;
+  z-index: 0 !important;
+  top: 54px !important;
+  right: -70px !important;
+  width: min(58%, 460px) !important;
+  opacity: .055 !important;
+  transform: rotate(0deg) !important;
+  pointer-events: none !important;
+  filter: grayscale(.15) saturate(.75) !important;
+}
+.club-menu-modern .club-menu-watermark img {
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+}
+.club-menu-modern > *:not(.club-menu-watermark) { position: relative; z-index: 1; }
+.club-menu-hero-logo { display: none !important; }
+
+@media (max-width: 720px) {
+  .dashboard-brand-mark { width: 38px !important; height: 38px !important; flex-basis: 38px; }
+  .dashboard-brand-mark img { width: 32px !important; height: 32px !important; }
+  .club-menu-modern .club-menu-watermark {
+    top: 68px !important;
+    right: -92px !important;
+    width: 78% !important;
+    opacity: .05 !important;
+  }
+}
+
+
+/* =========================================================
+   Version 18.3.0-beta.23 – Moderner App-Hintergrund
+   Ruhige Stadion-Tiefe ohne zusätzliches globales Vereinslogo.
+   ========================================================= */
+.dashboard {
+  --bg-deep: #050b14;
+  --bg-navy: #07111f;
+  --bg-blue: #0a1930;
+
+  background:
+    radial-gradient(circle at 9% 5%, rgba(47, 112, 224, .16) 0%, rgba(47, 112, 224, .055) 20%, transparent 37%),
+    radial-gradient(circle at 94% 18%, rgba(207, 48, 68, .075) 0%, transparent 28%),
+    radial-gradient(ellipse at 52% 102%, rgba(28, 78, 145, .10) 0%, transparent 46%),
+    repeating-linear-gradient(118deg, rgba(255,255,255,.015) 0 1px, transparent 1px 54px),
+    linear-gradient(180deg, #091528 0%, #07111f 43%, #050b14 100%) !important;
+  background-attachment: fixed !important;
+}
+
+html,
+body,
+#root {
+  background: #050b14 !important;
+}
+
+.dashboard-page {
+  background:
+    linear-gradient(145deg, rgba(18, 36, 59, .78), rgba(10, 23, 39, .72)) !important;
+  border-color: rgba(151,177,221,.105) !important;
+  box-shadow:
+    0 18px 50px rgba(0,0,0,.18),
+    inset 0 1px 0 rgba(255,255,255,.025) !important;
+}
+
+.dashboard-header {
+  background: rgba(6, 14, 27, .82) !important;
+  border-bottom-color: rgba(255,255,255,.055) !important;
+  box-shadow: 0 10px 32px rgba(0,0,0,.10) !important;
+  backdrop-filter: blur(20px) saturate(115%) !important;
+  -webkit-backdrop-filter: blur(20px) saturate(115%) !important;
+}
+
+.bottom-nav {
+  background: rgba(6,14,27,.91) !important;
+  backdrop-filter: blur(18px) saturate(115%) !important;
+  -webkit-backdrop-filter: blur(18px) saturate(115%) !important;
+  border-color: rgba(255,255,255,.065) !important;
+}
+
+@media (max-width: 720px) {
+  .dashboard {
+    background:
+      radial-gradient(circle at 4% 4%, rgba(47, 112, 224, .17) 0%, rgba(47,112,224,.045) 23%, transparent 38%),
+      radial-gradient(circle at 100% 22%, rgba(207,48,68,.065) 0%, transparent 27%),
+      radial-gradient(ellipse at 48% 100%, rgba(28,78,145,.09) 0%, transparent 43%),
+      repeating-linear-gradient(118deg, rgba(255,255,255,.012) 0 1px, transparent 1px 46px),
+      linear-gradient(180deg, #091528 0%, #07111f 44%, #050b14 100%) !important;
+  }
+
+  .dashboard-page {
+    background: linear-gradient(145deg, rgba(16,32,53,.80), rgba(9,21,36,.76)) !important;
+    box-shadow: 0 14px 36px rgba(0,0,0,.15) !important;
+  }
+}

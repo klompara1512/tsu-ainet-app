@@ -87,6 +87,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     return (
       <section className="dashboard-page clear-more-page public-more-page club-menu-modern">
         <div className="club-menu-watermark" aria-hidden="true">
+          <img src="/tsu-ainet-logo.png" alt="" />
         </div>
 
         <header className="club-menu-hero">
@@ -383,9 +384,11 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
             setActivePage("start")
           }
         >
+          <span className="dashboard-brand-mark" aria-hidden="true">
+            <img src="/tsu-ainet-logo.png" alt="" />
+          </span>
           <span>
             <strong>TSU Ainet</strong>
-            
           </span>
         </button>
 

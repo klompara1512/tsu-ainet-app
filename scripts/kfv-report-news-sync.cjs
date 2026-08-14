@@ -101,6 +101,7 @@ const cleanVenueValue = (value) => {
     .trim();
   if (!text || text.length < 3 || text.length > 220) return "";
   if (INVALID_VENUE_PATTERN.test(text)) return "";
+  if (/\b(?:leaflet|openstreetmap|mapbox|google\s*maps|apple\s*maps|kartendaten|map\s*data|contributors?|urheberrecht|copyright)\b/i.test(text) || /[©®]/.test(text)) return "";
   if (/^(?:\d{1,2}[:.]\d{2}(?:\s*uhr)?|\d{1,2}[.:]\d{1,2})$/i.test(text)) return "";
   return text;
 };

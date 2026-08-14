@@ -172,6 +172,7 @@ const cleanVenueValue = (value) => {
     .trim();
   if (!text || text.length < 3 || text.length > 220) return "";
   if (INVALID_VENUE_PATTERN.test(text)) return "";
+  if (/\b(?:leaflet|openstreetmap|mapbox|google\s*maps|apple\s*maps|kartendaten|map\s*data|contributors?|urheberrecht|copyright)\b/i.test(text) || /[©®]/.test(text)) return "";
   return text;
 };
 const lower = (value) => oneLine(value).toLocaleLowerCase("de-AT");

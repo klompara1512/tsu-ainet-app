@@ -15,7 +15,8 @@ function weekRange() {
   return { start:isoLocal(monday), end:isoLocal(sunday), key:isoLocal(monday) };
 }
 function norm(v){return String(v||"").toLowerCase().replace(/[^a-z0-9]+/g,"");}
-function youthKey(team){const t=norm(`${team.id} ${team.name}`); if(t.includes("u17"))return"u17";if(t.includes("u12"))return"u12";if(t.includes("u10"))return"u10";if(t.includes("u08")||t.includes("u8"))return"u8";return"";}
+function teamAlias(v){const t=norm(v);if(["km","kampfmannschaft","kampfmannschaft1"].includes(t))return"km";if(["challenge","reserve","res","kampfmannschaftreserve"].includes(t))return"challenge";if(["u17","u017"].includes(t))return"u17";if(["u12","u012"].includes(t))return"u12";if(["u10","u010"].includes(t))return"u10";if(["u8","u08","u008"].includes(t))return"u8";return t;}
+function youthKey(team){const id=teamAlias(team.id),name=teamAlias(team.name);for(const key of ["u17","u12","u10","u8"]){if(id===key||name===key)return key;}return"";}
 
 async function main(){
   const week=weekRange();
@@ -33,8 +34,9 @@ async function main(){
   for(const trainerDoc of trainersSnap.docs){
     const profile=trainerDoc.data();
     if(profile.active===false || profile.approved===false) continue;
-    const assigned=Array.isArray(profile.teamIds)?profile.teamIds:[];
-    const missing=assigned.map(id=>teams.get(id)).filter(Boolean).filter(team=>youthKey(team)).filter(team=>!planned.has(team.id));
+    const assigned=new Set((Array.isArray(profile.teamIds)?profile.teamIds:[]).map(teamAlias));
+    const relevant=[...teams.values()].filter(team=>assigned.has(teamAlias(team.id))||assigned.has(teamAlias(team.name))).filter(team=>youthKey(team));
+    const missing=relevant.filter(team=>!planned.has(team.id));
     if(!missing.length) continue;
     const logRef=db.doc(`trainingReminderLog/${week.key}_${trainerDoc.id}`);
     if((await logRef.get()).exists && process.env.FORCE_REMINDER!=="true") continue;

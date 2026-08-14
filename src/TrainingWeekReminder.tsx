@@ -17,13 +17,28 @@ function normalize(value: string) {
   return value.toLocaleLowerCase("de-AT").replace(/[^a-z0-9]+/g, "");
 }
 
+function teamAlias(value: string) {
+  const text = normalize(value);
+  if (["km", "kampfmannschaft", "kampfmannschaft1"].includes(text)) return "km";
+  if (["challenge", "reserve", "res", "kampfmannschaftreserve"].includes(text)) return "challenge";
+  if (["u17", "u017"].includes(text)) return "u17";
+  if (["u12", "u012"].includes(text)) return "u12";
+  if (["u10", "u010"].includes(text)) return "u10";
+  if (["u8", "u08", "u008"].includes(text)) return "u8";
+  return text;
+}
+
 function youthKey(team: Team) {
-  const text = normalize(`${team.id} ${team.name}`);
-  if (text.includes("u17")) return "u17";
-  if (text.includes("u12")) return "u12";
-  if (text.includes("u10")) return "u10";
-  if (text.includes("u08") || text.includes("u8")) return "u8";
+  const id = teamAlias(team.id);
+  const name = teamAlias(team.name);
+  for (const key of YOUTH_KEYS) {
+    if (id === key || name === key) return key;
+  }
   return "";
+}
+
+function assignedToTeam(team: Team, assigned: Set<string>) {
+  return assigned.has(teamAlias(team.id)) || assigned.has(teamAlias(team.name));
 }
 
 function isoLocal(date: Date) {
@@ -65,9 +80,9 @@ export default function TrainingWeekReminder({ profile, onOpenPlanner }: Props) 
 
   const status = useMemo(() => {
     if (profile.role !== "trainer") return [];
-    const assigned = new Set(profile.teamIds);
+    const assigned = new Set(profile.teamIds.map(teamAlias));
     const relevantTeams = teams
-      .filter((team) => assigned.has(team.id) && YOUTH_KEYS.includes(youthKey(team) as typeof YOUTH_KEYS[number]));
+      .filter((team) => assignedToTeam(team, assigned) && YOUTH_KEYS.includes(youthKey(team) as typeof YOUTH_KEYS[number]));
     const week = currentWeek();
     return relevantTeams.map((team) => {
       const entries = bookings

@@ -91,6 +91,23 @@ function minutes(time: string) {
   return h * 60 + m;
 }
 
+function teamAlias(value: string) {
+  const normalized = value.toLocaleLowerCase("de-AT").replace(/[^a-z0-9]+/g, "");
+  if (["km", "kampfmannschaft", "kampfmannschaft1"].includes(normalized)) return "km";
+  if (["challenge", "reserve", "res", "kampfmannschaftreserve"].includes(normalized)) return "challenge";
+  if (["u17", "u017"].includes(normalized)) return "u17";
+  if (["u12", "u012"].includes(normalized)) return "u12";
+  if (["u10", "u010"].includes(normalized)) return "u10";
+  if (["u8", "u08", "u008"].includes(normalized)) return "u8";
+  return normalized;
+}
+
+function assignedToTeam(team: Team, assigned: string[]) {
+  const aliases = new Set(assigned.map(teamAlias));
+  return aliases.has(teamAlias(team.id)) || aliases.has(teamAlias(team.name));
+}
+
+
 function slotKeys(date: string, startTime: string, endTime: string, field: Field, area: Area) {
   const start = minutes(startTime);
   const end = minutes(endTime);
@@ -186,8 +203,13 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
   }, []);
 
   const allowedTeams = useMemo(
-    () => isLeader ? teams : teams.filter((team) => profile.teamIds.includes(team.id)),
+    () => isLeader ? teams : teams.filter((team) => assignedToTeam(team, profile.teamIds)),
     [isLeader, profile.teamIds, teams],
+  );
+
+  const allowedTeamIds = useMemo(
+    () => new Set(allowedTeams.map((team) => team.id)),
+    [allowedTeams],
   );
 
   useEffect(() => {
@@ -203,7 +225,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
   );
 
   function canEdit(booking: TrainingBooking) {
-    return isLeader || profile.teamIds.includes(booking.teamId);
+    return isLeader || allowedTeamIds.has(booking.teamId);
   }
 
   function openCreate(date = todayIso(), preset?: { field?: Field; area?: Area }) {
@@ -237,7 +259,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
 
   function validate() {
     if (!form.teamId) return "Bitte eine Mannschaft auswählen.";
-    if (!isLeader && !profile.teamIds.includes(form.teamId)) return "Du kannst nur für deine Mannschaft buchen.";
+    if (!isLeader && !allowedTeamIds.has(form.teamId)) return "Du kannst nur für deine Mannschaft buchen.";
     if (minutes(form.startTime) >= minutes(form.endTime)) return "Die Endzeit muss nach der Startzeit liegen.";
     if (minutes(form.startTime) % 15 !== 0 || minutes(form.endTime) % 15 !== 0) return "Trainingszeiten bitte in 15-Minuten-Schritten eintragen.";
     if (minutes(form.endTime) - minutes(form.startTime) > 240) return "Eine einzelne Reservierung darf maximal 4 Stunden dauern.";

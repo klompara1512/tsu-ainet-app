@@ -24,6 +24,7 @@ import LogoManager from "./LogoManager";
 import SponsorManager from "./SponsorManager";
 import KitManager from "./KitManager";
 import TrainingPlanner from "./TrainingPlanner";
+import TrainingWeekReminder from "./TrainingWeekReminder";
 import ClubPeopleManager from "./ClubPeopleManager";
 import PublicSponsors from "./PublicSponsors";
 import PublicEvents from "./PublicEvents";
@@ -300,6 +301,9 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
 
     return (
       <>
+        {role === "trainer" && (
+          <TrainingWeekReminder profile={profile} onOpenPlanner={() => setActivePage("training-planner")} />
+        )}
         <LiveDashboard
           displayName={profile.name}
           onOpenCalendar={() =>

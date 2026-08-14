@@ -1,0 +1,35 @@
+name: Nachwuchs-Training Erinnerung
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: training-week-reminder
+  cancel-in-progress: true
+
+jobs:
+  remind:
+    name: Fehlende Nachwuchstrainings prüfen
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Europe/Vienna
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - name: Abhängigkeiten installieren
+        run: npm ci
+      - name: Trainingsplanung prüfen und Trainer erinnern
+        run: node scripts/training-week-reminder.cjs

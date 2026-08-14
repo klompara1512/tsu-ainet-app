@@ -2269,3 +2269,41 @@ tr[data-team*="ainet"] {
     border-radius: 14px !important;
   }
 }
+
+
+/* 18.3.0-beta.28 · Trainer-Wochenerinnerung */
+.trainer-training-reminder {
+  display: grid;
+  grid-template-columns: 42px minmax(0,1fr) auto;
+  align-items: center;
+  gap: 13px;
+  width: min(100%, 1540px);
+  margin: 0 auto 14px;
+  padding: 13px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255,255,255,.09);
+  background: rgba(12,27,46,.94);
+  box-shadow: 0 10px 24px rgba(0,0,0,.11);
+}
+.trainer-training-reminder.needs-action {
+  border-color: rgba(242,197,35,.28);
+  background: linear-gradient(135deg,rgba(52,43,13,.45),rgba(12,27,46,.96) 48%);
+}
+.trainer-training-reminder-icon {
+  display:grid; place-items:center; width:42px; height:42px; border-radius:13px;
+  background:rgba(242,197,35,.12); color:#f2c523; font-weight:900; font-size:1.1rem;
+}
+.trainer-training-reminder.is-planned .trainer-training-reminder-icon { background:rgba(51,190,121,.12); color:#64d99c; }
+.trainer-training-reminder-copy { min-width:0; display:grid; gap:2px; }
+.trainer-training-kicker { color:#f2c523; font-size:.68rem; font-weight:850; letter-spacing:.07em; }
+.trainer-training-reminder-copy strong { color:#f8fafc; font-size:.96rem; }
+.trainer-training-reminder-copy p { margin:0; color:#9cacc0; font-size:.79rem; line-height:1.35; }
+.trainer-training-reminder button {
+  border:1px solid rgba(242,197,35,.28); border-radius:11px; padding:9px 12px;
+  background:rgba(242,197,35,.10); color:#f6d85d; font-weight:800; cursor:pointer;
+}
+@media(max-width:720px){
+  .trainer-training-reminder{grid-template-columns:38px minmax(0,1fr);gap:10px;margin-bottom:10px;padding:12px;border-radius:15px;}
+  .trainer-training-reminder-icon{width:38px;height:38px;border-radius:12px;}
+  .trainer-training-reminder button{grid-column:1/-1;width:100%;padding:10px;}
+}

@@ -1,7 +1,7 @@
 {
   "name": "tsu-ainet-app",
   "private": true,
-  "version": "18.3.0-beta.27",
+  "version": "18.3.0-beta.28",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -36,7 +36,8 @@
     "sync:challenge-table": "node scripts/challenge-table-sync.cjs",
     "sync:challenge-table:selftest": "node scripts/challenge-table-selftest.cjs",
     "sync:exact-table": "node scripts/exact-team-table-sync.cjs",
-    "sync:exact-table:selftest": "node scripts/exact-team-table-selftest.cjs"
+    "sync:exact-table:selftest": "node scripts/exact-team-table-selftest.cjs",
+    "training:reminder": "node scripts/training-week-reminder.cjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

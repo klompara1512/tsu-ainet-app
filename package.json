@@ -1,7 +1,7 @@
 {
   "name": "tsu-ainet-app",
   "private": true,
-  "version": "18.3.0-beta.34",
+  "version": "18.3.0-beta.36",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,7 @@
     "sync:kfv": "node scripts/kfv-core-sync.cjs",
     "check": "npm run sync:check && npm run typecheck",
     "typecheck": "tsc -b --pretty false",
-    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node --check scripts/kfv-games-sync.cjs && node --check scripts/kfv-table-sync.cjs && node --check scripts/challenge-table-sync.cjs && node --check scripts/challenge-table-parser.cjs && node --check scripts/exact-team-table-sync.cjs && node --check scripts/exact-team-table-parser.cjs && node --check scripts/exact-team-table-selftest.cjs && node --check scripts/table-matchday-gate.cjs && node --check scripts/weekend-holiday-gate.cjs && node --check scripts/game-sync-time-gate.cjs && node --check scripts/kfv-club-sync.cjs && node --check scripts/kfv-squad-sync.cjs && node --check scripts/kfv-report-news-sync.cjs && node --check scripts/send-push.cjs && node scripts/table-parser-selftest.cjs && node scripts/challenge-table-selftest.cjs && node scripts/push-selftest.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs",
+    "sync:check": "node --check scripts/kfv-sync.cjs && node --check scripts/kfv-core-sync.cjs && node --check scripts/kfv-games-sync.cjs && node --check scripts/kfv-table-sync.cjs && node --check scripts/challenge-table-sync.cjs && node --check scripts/challenge-table-parser.cjs && node --check scripts/exact-team-table-sync.cjs && node --check scripts/exact-team-table-parser.cjs && node --check scripts/exact-team-table-selftest.cjs && node --check scripts/table-matchday-gate.cjs && node --check scripts/weekend-holiday-gate.cjs && node --check scripts/game-sync-time-gate.cjs && node --check scripts/kfv-club-sync.cjs && node --check scripts/kfv-squad-sync.cjs && node --check scripts/kfv-report-news-sync.cjs && node --check scripts/send-push.cjs && node scripts/table-parser-selftest.cjs && node scripts/challenge-table-selftest.cjs && node scripts/push-selftest.cjs && node scripts/official-sync-selftest.cjs && node scripts/validate-project.cjs && node --check scripts/smart-sync-gate.cjs && node --check scripts/smart-sync-runner.cjs && node --check scripts/sync-exact-tables.cjs && node --check scripts/publish-public-snapshot.cjs",
     "sync:selftest": "node scripts/official-sync-selftest.cjs",
     "sync:core": "node scripts/kfv-core-sync.cjs",
     "sync:full": "node scripts/kfv-sync.cjs",
@@ -20,7 +20,7 @@
     "sync:squad": "node scripts/kfv-squad-sync.cjs",
     "sync:reports": "node scripts/kfv-report-news-sync.cjs",
     "sync:games": "node scripts/kfv-games-sync.cjs",
-    "sync:tables": "node scripts/kfv-table-sync.cjs",
+    "sync:tables": "node scripts/sync-exact-tables.cjs",
     "sync:holiday-gate": "node scripts/weekend-holiday-gate.cjs",
     "release:audit": "node scripts/release-audit.cjs",
     "release:check": "npm run release:cleanup && npm run sync:check && npm run typecheck && npm run lint && npm run release:audit && npm run release:ui-audit && npm run release:performance-audit && npm run build",
@@ -37,7 +37,10 @@
     "sync:challenge-table:selftest": "node scripts/challenge-table-selftest.cjs",
     "sync:exact-table": "node scripts/exact-team-table-sync.cjs",
     "sync:exact-table:selftest": "node scripts/exact-team-table-selftest.cjs",
-    "training:reminder": "node scripts/training-week-reminder.cjs"
+    "training:reminder": "node scripts/training-week-reminder.cjs",
+    "sync:smart:gate": "node scripts/smart-sync-gate.cjs",
+    "sync:smart": "node scripts/smart-sync-runner.cjs",
+    "sync:public-snapshot": "node scripts/publish-public-snapshot.cjs"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",

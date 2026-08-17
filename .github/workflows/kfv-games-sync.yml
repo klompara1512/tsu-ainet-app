@@ -2,11 +2,6 @@ name: KFV / ÖFB Spieltermine und Kalender synchronisieren
 
 on:
   workflow_dispatch:
-  schedule:
-    # Dreimal täglich in österreichischer Lokalzeit.
-    # GitHub berücksichtigt damit Sommer- und Winterzeit automatisch.
-    - cron: "15 6,13,19 * * *"
-      timezone: "Europe/Vienna"
 
 permissions:
   contents: read

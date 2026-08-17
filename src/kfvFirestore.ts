@@ -1,5 +1,6 @@
 import {
   collection,
+  doc,
   onSnapshot,
   orderBy,
   query,
@@ -89,10 +90,12 @@ function readMatchEvents(value: unknown): KfvMatchEvent[] {
         playerName: typeof data.playerName === "string" ? data.playerName : "",
         secondaryPlayerName: typeof data.secondaryPlayerName === "string" ? data.secondaryPlayerName : "",
         description: typeof data.description === "string" ? data.description : "",
+        rawText: typeof data.rawText === "string" ? data.rawText : "",
+        sourceOrder: typeof data.sourceOrder === "number" ? data.sourceOrder : index,
       } satisfies KfvMatchEvent;
     })
     .filter((item): item is KfvMatchEvent => item !== null)
-    .sort((a, b) => (a.minute ?? 999) - (b.minute ?? 999));
+    .sort((a, b) => (a.sourceOrder ?? 9999) - (b.sourceOrder ?? 9999));
 }
 
 function mapMatchReportDocument(
@@ -339,113 +342,185 @@ function deduplicateMatches(matches: KfvMatch[]) {
     .sort((a, b) => a.kickoffAt.getTime() - b.kickoffAt.getTime());
 }
 
+type PublicFootballSnapshotPayload = {
+  matches: Array<Record<string, unknown>>;
+  standings: Array<Record<string, unknown>>;
+};
+
+type PublicFootballListener = (payload: PublicFootballSnapshotPayload | null) => void;
+const publicFootballListeners = new Set<PublicFootballListener>();
+const publicFootballErrorListeners = new Set<(message: string) => void>();
+let publicFootballUnsubscribe: (() => void) | null = null;
+let publicFootballCurrent: PublicFootballSnapshotPayload | null | undefined;
+
+function ensurePublicFootballSnapshot() {
+  if (publicFootballUnsubscribe) return;
+  publicFootballUnsubscribe = onSnapshot(
+    doc(db, "publicSnapshots", "football"),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        publicFootballCurrent = null;
+      } else {
+        const data = snapshot.data();
+        publicFootballCurrent = {
+          matches: Array.isArray(data.matches) ? data.matches.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [],
+          standings: Array.isArray(data.standings) ? data.standings.filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object")) : [],
+        };
+      }
+      publicFootballListeners.forEach((listener) => listener(publicFootballCurrent ?? null));
+    },
+    (error) => {
+      console.error("Fehler beim Laden des öffentlichen Fußball-Snapshots:", error);
+      publicFootballErrorListeners.forEach((listener) => listener("Der kompakte Fußball-Datenstand konnte nicht geladen werden."));
+    },
+  );
+}
+
+function subscribePublicFootballSnapshot(onData: PublicFootballListener, onError: (message: string) => void) {
+  publicFootballListeners.add(onData);
+  publicFootballErrorListeners.add(onError);
+  ensurePublicFootballSnapshot();
+  if (publicFootballCurrent !== undefined) onData(publicFootballCurrent ?? null);
+  return () => {
+    publicFootballListeners.delete(onData);
+    publicFootballErrorListeners.delete(onError);
+    if (!publicFootballListeners.size && publicFootballUnsubscribe) {
+      publicFootballUnsubscribe();
+      publicFootballUnsubscribe = null;
+      publicFootballCurrent = undefined;
+    }
+  };
+}
+
+function mapMatchRecord(id: string, data: Record<string, unknown>): KfvMatch {
+  return {
+    id,
+    teamId: typeof data.teamId === "string" ? data.teamId : "",
+    teamName: typeof data.teamName === "string" ? data.teamName : "TSU Ainet",
+    competitionName: typeof data.competitionName === "string" ? data.competitionName : "",
+    homeTeam: typeof data.homeTeam === "string" ? data.homeTeam : "",
+    awayTeam: typeof data.awayTeam === "string" ? data.awayTeam : "",
+    homeClubId: typeof data.homeClubId === "string" ? data.homeClubId : "",
+    awayClubId: typeof data.awayClubId === "string" ? data.awayClubId : "",
+    homeClubUrl: typeof data.homeClubUrl === "string" ? data.homeClubUrl : "",
+    awayClubUrl: typeof data.awayClubUrl === "string" ? data.awayClubUrl : "",
+    homeLogoUrl: typeof data.homeLogoUrl === "string" ? data.homeLogoUrl : "",
+    awayLogoUrl: typeof data.awayLogoUrl === "string" ? data.awayLogoUrl : "",
+    homeScore: typeof data.homeScore === "number" ? data.homeScore : null,
+    awayScore: typeof data.awayScore === "number" ? data.awayScore : null,
+    kickoffAt: readDate(data.kickoffAt),
+    venue: cleanVenue(data.venue) || (typeof data.homeTeam === "string" && /ainet/i.test(data.homeTeam) ? "Sandgrubenstadion Ainet" : ""),
+    venueAddress: typeof data.venueAddress === "string" ? data.venueAddress : "",
+    referee: typeof data.referee === "string" ? data.referee : "",
+    liveUrl: typeof data.liveUrl === "string" ? data.liveUrl : "",
+    status: readStatus(data.status),
+    reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
+    gameId: typeof data.gameId === "string" ? data.gameId : "",
+    oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : (typeof data.gameId === "string" ? data.gameId : ""),
+    sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),
+    active: typeof data.active === "boolean" ? data.active : true,
+  } satisfies KfvMatch;
+}
+
+function mapStandingRecord(id: string, data: Record<string, unknown>): KfvStandingRow {
+  return {
+    id,
+    teamId: typeof data.teamId === "string" ? data.teamId : "",
+    teamName: typeof data.teamName === "string" ? data.teamName : "TSU Ainet",
+    competitionName: typeof data.competitionName === "string" ? data.competitionName : "",
+    position: typeof data.position === "number" ? data.position : 999,
+    clubName: typeof data.clubName === "string" ? data.clubName : "",
+    clubId: typeof data.clubId === "string" ? data.clubId : "",
+    clubUrl: typeof data.clubUrl === "string" ? data.clubUrl : "",
+    teamLogoUrl: typeof data.teamLogoUrl === "string" ? data.teamLogoUrl : "",
+    played: typeof data.played === "number" ? data.played : 0,
+    won: typeof data.won === "number" ? data.won : 0,
+    drawn: typeof data.drawn === "number" ? data.drawn : 0,
+    lost: typeof data.lost === "number" ? data.lost : 0,
+    goalsFor: typeof data.goalsFor === "number" ? data.goalsFor : 0,
+    goalsAgainst: typeof data.goalsAgainst === "number" ? data.goalsAgainst : 0,
+    goalDifference: typeof data.goalDifference === "number" ? data.goalDifference : 0,
+    points: typeof data.points === "number" ? data.points : 0,
+    active: typeof data.active === "boolean" ? data.active : true,
+  } satisfies KfvStandingRow;
+}
+
 export function subscribeKfvMatches(
   onData: (matches: KfvMatch[]) => void,
   onError: (message: string) => void,
 ) {
-  const matchesQuery = query(
-    collection(db, "oefbV12Matches"),
-    orderBy("kickoffAt", "asc"),
-  );
+  let fallbackUnsubscribe: (() => void) | null = null;
 
-  return onSnapshot(
-    matchesQuery,
-    (snapshot) => {
-      const matches = snapshot.docs
-        .map((document) => {
-          const data = document.data();
-          return {
-            id: document.id,
-            teamId: typeof data.teamId === "string" ? data.teamId : "",
-            teamName: typeof data.teamName === "string" ? data.teamName : "TSU Ainet",
-            competitionName:
-              typeof data.competitionName === "string" ? data.competitionName : "",
-            homeTeam: typeof data.homeTeam === "string" ? data.homeTeam : "",
-            awayTeam: typeof data.awayTeam === "string" ? data.awayTeam : "",
-            homeClubId: typeof data.homeClubId === "string" ? data.homeClubId : "",
-            awayClubId: typeof data.awayClubId === "string" ? data.awayClubId : "",
-            homeClubUrl: typeof data.homeClubUrl === "string" ? data.homeClubUrl : "",
-            awayClubUrl: typeof data.awayClubUrl === "string" ? data.awayClubUrl : "",
-            homeLogoUrl: typeof data.homeLogoUrl === "string" ? data.homeLogoUrl : "",
-            awayLogoUrl: typeof data.awayLogoUrl === "string" ? data.awayLogoUrl : "",
-            homeScore: typeof data.homeScore === "number" ? data.homeScore : null,
-            awayScore: typeof data.awayScore === "number" ? data.awayScore : null,
-            kickoffAt: readDate(data.kickoffAt),
-            venue: cleanVenue(data.venue) || (typeof data.homeTeam === "string" && /ainet/i.test(data.homeTeam) ? "Sandgrubenstadion Ainet" : ""),
-            venueAddress: typeof data.venueAddress === "string" ? data.venueAddress : "",
-            referee: typeof data.referee === "string" ? data.referee : "",
-            liveUrl: typeof data.liveUrl === "string" ? data.liveUrl : "",
-            status: readStatus(data.status),
-            reportUrl: typeof data.reportUrl === "string" ? data.reportUrl : "",
-            gameId: typeof data.gameId === "string" ? data.gameId : "",
-            oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : (typeof data.gameId === "string" ? data.gameId : ""),
-            sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),
-            active: typeof data.active === "boolean" ? data.active : true,
-          } satisfies KfvMatch;
-        })
-        .filter(
-          (match) =>
-            match.active &&
-            match.kickoffAt.getTime() > 0 &&
-            match.homeTeam &&
-            match.awayTeam,
-        );
+  const startFallback = () => {
+    if (fallbackUnsubscribe) return;
+    const matchesQuery = query(collection(db, "oefbV12Matches"), orderBy("kickoffAt", "asc"));
+    fallbackUnsubscribe = onSnapshot(
+      matchesQuery,
+      (snapshot) => {
+        const matches = snapshot.docs
+          .map((document) => mapMatchRecord(document.id, document.data()))
+          .filter((match) => match.active && match.kickoffAt.getTime() > 0 && match.homeTeam && match.awayTeam);
+        onData(deduplicateMatches(matches));
+      },
+      (error) => {
+        console.error("Fehler beim Laden der KFV-Spiele:", error);
+        onError("Die KFV-Spiele konnten nicht geladen werden.");
+      },
+    );
+  };
+
+  const unsubscribeSnapshot = subscribePublicFootballSnapshot(
+    (payload) => {
+      if (!payload) { startFallback(); return; }
+      if (fallbackUnsubscribe) { fallbackUnsubscribe(); fallbackUnsubscribe = null; }
+      const matches = payload.matches
+        .map((data) => mapMatchRecord(typeof data.id === "string" ? data.id : "", data))
+        .filter((match) => match.id && match.active && match.kickoffAt.getTime() > 0 && match.homeTeam && match.awayTeam);
       onData(deduplicateMatches(matches));
     },
-    (error) => {
-      console.error("Fehler beim Laden der KFV-Spiele:", error);
-      onError("Die KFV-Spiele konnten nicht geladen werden.");
-    },
+    () => startFallback(),
   );
+
+  return () => { unsubscribeSnapshot(); fallbackUnsubscribe?.(); };
 }
 
 export function subscribeKfvStandings(
   onData: (rows: KfvStandingRow[]) => void,
   onError: (message: string) => void,
 ) {
-  const standingsQuery = query(
-    collection(db, "oefbV12Standings"),
-    orderBy("position", "asc"),
-  );
+  let fallbackUnsubscribe: (() => void) | null = null;
 
-  return onSnapshot(
-    standingsQuery,
-    (snapshot) => {
-      const rows = snapshot.docs
-        .map((document) => {
-          const data = document.data();
-          return {
-            id: document.id,
-            teamId: typeof data.teamId === "string" ? data.teamId : "",
-            teamName: typeof data.teamName === "string" ? data.teamName : "TSU Ainet",
-            competitionName:
-              typeof data.competitionName === "string" ? data.competitionName : "",
-            position: typeof data.position === "number" ? data.position : 999,
-            clubName: typeof data.clubName === "string" ? data.clubName : "",
-            clubId: typeof data.clubId === "string" ? data.clubId : "",
-            clubUrl: typeof data.clubUrl === "string" ? data.clubUrl : "",
-            teamLogoUrl: typeof data.teamLogoUrl === "string" ? data.teamLogoUrl : "",
-            played: typeof data.played === "number" ? data.played : 0,
-            won: typeof data.won === "number" ? data.won : 0,
-            drawn: typeof data.drawn === "number" ? data.drawn : 0,
-            lost: typeof data.lost === "number" ? data.lost : 0,
-            goalsFor: typeof data.goalsFor === "number" ? data.goalsFor : 0,
-            goalsAgainst:
-              typeof data.goalsAgainst === "number" ? data.goalsAgainst : 0,
-            goalDifference:
-              typeof data.goalDifference === "number" ? data.goalDifference : 0,
-            points: typeof data.points === "number" ? data.points : 0,
-            active: typeof data.active === "boolean" ? data.active : true,
-          } satisfies KfvStandingRow;
-        })
-        .filter((row) => row.active && row.clubName);
+  const startFallback = () => {
+    if (fallbackUnsubscribe) return;
+    const standingsQuery = query(collection(db, "oefbV12Standings"), orderBy("position", "asc"));
+    fallbackUnsubscribe = onSnapshot(
+      standingsQuery,
+      (snapshot) => {
+        const rows = snapshot.docs
+          .map((document) => mapStandingRecord(document.id, document.data()))
+          .filter((row) => row.active && row.clubName);
+        onData(rows);
+      },
+      (error) => {
+        console.error("Fehler beim Laden der KFV-Tabelle:", error);
+        onError("Die KFV-Tabelle konnte nicht geladen werden.");
+      },
+    );
+  };
+
+  const unsubscribeSnapshot = subscribePublicFootballSnapshot(
+    (payload) => {
+      if (!payload) { startFallback(); return; }
+      if (fallbackUnsubscribe) { fallbackUnsubscribe(); fallbackUnsubscribe = null; }
+      const rows = payload.standings
+        .map((data) => mapStandingRecord(typeof data.id === "string" ? data.id : "", data))
+        .filter((row) => row.id && row.active && row.clubName);
       onData(rows);
     },
-    (error) => {
-      console.error("Fehler beim Laden der KFV-Tabelle:", error);
-      onError("Die KFV-Tabelle konnte nicht geladen werden.");
-    },
+    () => startFallback(),
   );
+
+  return () => { unsubscribeSnapshot(); fallbackUnsubscribe?.(); };
 }
 
 export function isTsuAinet(name: string) {

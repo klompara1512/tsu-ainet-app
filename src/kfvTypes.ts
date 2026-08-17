@@ -111,6 +111,8 @@ export type KfvMatchEvent = {
   playerName: string;
   secondaryPlayerName: string;
   description: string;
+  rawText?: string;
+  sourceOrder?: number;
 };
 
 export type KfvMatchReport = {

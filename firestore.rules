@@ -65,6 +65,7 @@ match /oefbV12Standings/{d=**}{allow read:if true;allow write:if football();}
     && request.resource.data.schemaVersion == 1;
   allow delete: if leaders();
  }
+ match /publicSnapshots/{d=**}{allow read:if true;allow write:if false;}
  match /syncStatus/{d=**}{allow read:if true;allow write:if football();}
  match /kfvSyncRuns/{d=**}{allow read:if leaders();allow write:if false;}
  match /fcmTokens/{id}{

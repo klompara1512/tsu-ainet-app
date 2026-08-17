@@ -2,12 +2,6 @@ name: ÖFB Challenge Tabelle exakt
 
 on:
   workflow_dispatch:
-  schedule:
-    # GitHub-Cron = UTC. In Österreich während der Sommerzeit etwa 06/12/18/22 Uhr.
-    - cron: "0 4 * * *"
-    - cron: "0 10 * * *"
-    - cron: "0 16 * * *"
-    - cron: "0 20 * * *"
 
 permissions:
   contents: read

@@ -1,0 +1,77 @@
+name: TSU Ainet Smart-Synchronisierung
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Grundprüfung stündlich von 06:10 bis 23:10 Uhr österreichischer Lokalzeit.
+    - cron: "10 6-23 * * *"
+      timezone: "Europe/Vienna"
+    # Fr–So rund um typische Spieltage zusätzliche Prüfung zur halben Stunde.
+    - cron: "40 8-22 * * 5,6,0"
+      timezone: "Europe/Vienna"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tsu-ainet-smart-sync
+  cancel-in-progress: false
+
+jobs:
+  smart-sync:
+    name: Intelligente Vereinsdaten-Synchronisierung
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TZ: Europe/Vienna
+      CI: "true"
+      FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      REPORT_SYNC_CONCURRENCY: "2"
+      REPORT_NAVIGATION_TIMEOUT: "45000"
+      REPORT_PRE_KICKOFF_MINUTES: "10080"
+      REPORT_POST_KICKOFF_MINUTES: "720"
+      CLUB_SYNC_CONCURRENCY: "2"
+      MAX_CLUB_PAGES: "40"
+      SQUAD_SYNC_CONCURRENCY: "2"
+      SQUAD_NAVIGATION_TIMEOUT: "50000"
+
+    steps:
+      - name: Projekt laden
+        uses: actions/checkout@v4
+
+      - name: Node.js einrichten
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: package-lock.json
+
+      - name: Abhängigkeiten installieren
+        run: npm ci
+
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+
+      - name: Sync-Code prüfen
+        run: npm run sync:check
+
+      - name: Intelligenten Bedarf ermitteln
+        id: gate
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: node scripts/smart-sync-gate.cjs
+
+      - name: Ausgewählte Synchronisierungen mit Retry ausführen
+        env:
+          RUN_GAMES: ${{ steps.gate.outputs.run_games }}
+          RUN_REPORTS: ${{ steps.gate.outputs.run_reports }}
+          TABLE_TEAMS: ${{ steps.gate.outputs.table_teams }}
+          RUN_CLUBS: ${{ steps.gate.outputs.run_clubs }}
+          RUN_SQUAD: ${{ steps.gate.outputs.run_squad }}
+          RUN_PUSH: ${{ steps.gate.outputs.run_push }}
+        run: node scripts/smart-sync-runner.cjs

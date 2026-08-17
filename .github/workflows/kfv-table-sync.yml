@@ -2,13 +2,6 @@ name: KFV / ÖFB Tabellen täglich
 
 on:
   workflow_dispatch:
-  schedule:
-    # Täglich vier automatische Tabellenprüfungen. GitHub-Cron läuft in UTC.
-    # Während der österreichischen Sommerzeit: 06:00, 12:00, 18:00 und 22:00 Uhr.
-    - cron: "0 4 * * *"
-    - cron: "0 10 * * *"
-    - cron: "0 16 * * *"
-    - cron: "0 20 * * *"
 
 permissions:
   contents: read

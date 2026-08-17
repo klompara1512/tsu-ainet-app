@@ -2,11 +2,6 @@ name: ÖFB Kampfmannschaft Tabelle exakt
 
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 4 * * *"
-    - cron: "0 10 * * *"
-    - cron: "0 16 * * *"
-    - cron: "0 20 * * *"
 
 permissions:
   contents: read

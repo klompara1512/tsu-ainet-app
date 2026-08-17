@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.1-official-report-runtime-fix";
+const VERSION = "18.3.0-beta.36-strict-team-report-ticker";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -242,6 +242,25 @@ function categoryForTeam(teamId, teamName) {
   return "kampfmannschaft";
 }
 
+
+function canonicalTeamKey(match) {
+  const direct = compact(match?.teamKey).toUpperCase();
+  if (direct === "KM") return "KM";
+  if (["CHALLENGE", "RES", "RESERVE", "KM-RES", "KM-RESERVE"].includes(direct)) return "CHALLENGE";
+  if (direct === "U17") return "U17";
+  const value = normalizeText(`${match?.teamId || ""} ${match?.teamName || ""} ${match?.competitionName || ""}`);
+  if (/\bu17\b/.test(value)) return "U17";
+  if (/\bchallenge\b|\breserve\b|\bkm res\b/.test(value)) return "CHALLENGE";
+  if (/\bkampfmannschaft\b|(?:^|\s)km(?:\s|$)/.test(value)) return "KM";
+  return direct || "";
+}
+
+function sameReportTeam(match, sourceTeamKey) {
+  const expected = canonicalTeamKey(match);
+  const source = compact(sourceTeamKey).toUpperCase();
+  return Boolean(expected && source && expected === source);
+}
+
 function scoreText(match) {
   return Number.isFinite(match.homeScore) &&
     Number.isFinite(match.awayScore)
@@ -276,6 +295,12 @@ function validateReportPage(match, raw) {
 
   if (!isIndividualReportUrl(finalUrl)) {
     reasons.push("Geladene Seite ist keine einzelne ÖFB-Spielberichtseite");
+  }
+
+  const expectedTeamKey = canonicalTeamKey(match);
+  const sourceTeamKey = compact(match._reportSourceTeamKey).toUpperCase();
+  if (sourceTeamKey && expectedTeamKey && sourceTeamKey !== expectedTeamKey) {
+    reasons.push(`Spielbericht stammt aus falscher Mannschaftsquelle (${sourceTeamKey} statt ${expectedTeamKey})`);
   }
 
   const requestedGameId = extractOefbGameId(requestedUrl);
@@ -605,6 +630,7 @@ async function collectReportCandidates(browser) {
 }
 
 function scoreReportCandidate(match, candidate) {
+  if (!sameReportTeam(match, candidate.teamKey)) return -10000;
   const text = candidate.text || "";
   let score = 0;
   if (pageContainsClub(text, match.homeTeam)) score += 45;
@@ -632,35 +658,35 @@ async function resolveMatchReports(browser, matches) {
     let source = override ? "official-override" : "";
     let score = override ? 999 : 0;
 
-    // Wenn Firestore bereits eine eindeutige ÖFB-Spiel-ID kennt, ist diese
-    // stärker als jede heuristische Suche über Mannschafts-/Spielplanseiten.
-    // Dadurch werden Spielort, Schiedsrichter und Aufstellung direkt von der
-    // offiziellen Einzel-Spielberichtseite desselben Spiels gelesen.
+    // Gespeicherte ÖFB-ID nur verwenden, wenn sie auf der Spielplanseite
+    // derselben Mannschaft bestätigt wird.
     if (!url) {
       const storedGameId = compact(match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl));
-      if (storedGameId) {
-        url = `https://vereine.oefb.at/TsuAinet/Spielbericht/?spiel-vs-spiel&:s=${encodeURIComponent(storedGameId)}`;
-        score = 500;
-        source = "stored-game-id-direct";
+      const verifiedStored = storedGameId
+        ? index.find((candidate) => candidate.gameId === storedGameId && sameReportTeam(match, candidate.teamKey))
+        : null;
+      if (verifiedStored) {
+        url = verifiedStored.url;
+        score = 600;
+        source = "stored-game-id-team-verified";
       }
     }
 
     if (!url) {
       const ranked = index
+        .filter((candidate) => sameReportTeam(match, candidate.teamKey))
         .map((candidate) => ({ candidate, score: scoreReportCandidate(match, candidate) }))
         .sort((a, b) => b.score - a.score);
       if (ranked[0] && ranked[0].score >= 80) {
         url = ranked[0].candidate.url;
         score = ranked[0].score;
-        source = "games-page-index";
+        source = "team-specific-games-page-index";
       }
     }
 
-    if (!url && isIndividualReportUrl(match.reportUrl)) {
-      url = match.reportUrl;
-      score = 1;
-      source = "stored-fallback";
-    }
+    // Kein unbestätigter Firestore-Fallback mehr: eine alte reportUrl kann aus
+    // einer früheren Fehlzuordnung stammen. Ohne Bestätigung durch dieselbe
+    // Mannschafts-Spielplanseite wird sie bewusst NICHT übernommen.
     if (!isIndividualReportUrl(url)) continue;
 
     const gameId = extractOefbGameId(url);
@@ -673,6 +699,8 @@ async function resolveMatchReports(browser, matches) {
       _resolvedGameId: gameId,
       _reportResolutionSource: source,
       _reportResolutionScore: score,
+      _reportSourceTeamKey: override ? canonicalTeamKey(match) :
+        (index.find((candidate) => candidate.gameId === gameId && sameReportTeam(match, candidate.teamKey))?.teamKey || ""),
     };
 
     console.log(
@@ -759,6 +787,26 @@ async function waitForReport(page) {
         }
       };
 
+      const captureExactTicker = () => {
+        const selectors = [
+          "[class*='ticker'] li", "[class*='ticker'] [class*='item']",
+          "[class*='timeline'] li", "[class*='timeline'] [class*='item']",
+          "[data-event]", "[data-minute]", "[data-testid*='event']",
+        ];
+        const nodes = [...new Set(selectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
+          .filter((node) => {
+            const rect = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+          });
+        const rows = nodes.map((node, sourceOrder) => ({
+          sourceOrder,
+          rawText: String(node.innerText || node.textContent || "").trim(),
+          minuteAttr: compact(node.getAttribute("data-minute") || node.querySelector("[data-minute]")?.getAttribute("data-minute") || ""),
+        })).filter((row) => row.rawText.length >= 2);
+        if (rows.length) window.__TSU_EXACT_TICKER_ROWS__ = rows;
+      };
+
       const clickTab = async (labels) => {
         const normalized = labels.map((label) => label.toLowerCase());
         // ÖFB rendert die Reiter je nach Breakpoint nicht immer als <a>/<button>.
@@ -795,6 +843,7 @@ async function waitForReport(page) {
         target.click();
         await sleep(1800);
         rememberVisibleEventContent();
+        if (normalized.some((label) => label.includes("ticker"))) captureExactTicker();
         return true;
       };
 
@@ -1569,10 +1618,13 @@ async function extractReport(browser, match) {
           return "neutral";
         };
 
+        const exactTickerRows = Array.isArray(window.__TSU_EXACT_TICKER_ROWS__)
+          ? window.__TSU_EXACT_TICKER_ROWS__
+          : [];
         const events = [];
         const seenEvents = new Set();
 
-        const addEvent = (rawValue, forcedMinute = null) => {
+        const addEvent = (rawValue, forcedMinute = null, sourceOrder = null) => {
           const rawText = compact(rawValue);
           if (!rawText || rawText.length < 5 || rawText.length > 1400) return;
           if (eventNoise.test(rawText)) return;
@@ -1603,9 +1655,18 @@ async function extractReport(browser, match) {
             playerName: "",
             secondaryPlayerName: "",
             description,
+            rawText,
+            sourceOrder: Number.isInteger(sourceOrder) ? sourceOrder : events.length,
             _sortValue: parsedMinute.sortValue,
           });
         };
+
+        // Primärquelle: sichtbare ÖFB-Liveticker-Zeilen, Originaltext + Originalreihenfolge.
+        if (exactTickerRows.length) {
+          exactTickerRows.forEach((row, index) => {
+            addEvent(row.rawText, row.minuteAttr ? parseMinute(row.minuteAttr) : null, index);
+          });
+        }
 
         // 1. Strukturierte DOM-Elemente aus dem aktuell sichtbaren Reiter.
         const structuredSelectors = [
@@ -1622,18 +1683,20 @@ async function extractReport(browser, match) {
         const structuredNodes = [...new Set(
           structuredSelectors.flatMap((selector) => [...document.querySelectorAll(selector)]),
         )];
-        for (const node of structuredNodes) {
-          const text = compact(node.innerText || node.textContent || "");
-          const minuteAttribute = compact(
-            node.getAttribute("data-minute") ||
-            node.querySelector("[data-minute]")?.getAttribute("data-minute") ||
-            "",
-          );
-          addEvent(text, minuteAttribute ? parseMinute(minuteAttribute) : null);
+        if (!exactTickerRows.length) {
+          for (const node of structuredNodes) {
+            const text = compact(node.innerText || node.textContent || "");
+            const minuteAttribute = compact(
+              node.getAttribute("data-minute") ||
+              node.querySelector("[data-minute]")?.getAttribute("data-minute") ||
+              "",
+            );
+            addEvent(text, minuteAttribute ? parseMinute(minuteAttribute) : null);
+          }
         }
 
-        // 2. Gesicherte Reiter-Inhalte zeilen- und blockweise analysieren.
-        const sourceTexts = [...eventSnapshots, bodyText];
+        // Fallback nur wenn kein strukturierter ÖFB-Liveticker vorhanden ist.
+        const sourceTexts = exactTickerRows.length ? [] : [...eventSnapshots, bodyText];
         for (const sourceText of sourceTexts) {
           const lines = String(sourceText || "")
             .split(/\n+/)
@@ -1666,7 +1729,9 @@ async function extractReport(browser, match) {
           }
         }
 
-        events.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
+        if (!exactTickerRows.length) {
+          events.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
+        }
 
         // ÖFB liefert in manchen Ansichten einen Ereignisblock mit mehreren bereits
         // gefallenen Toren. Dadurch konnten mehrere Tore derselben Spielminute
@@ -1675,7 +1740,7 @@ async function extractReport(browser, match) {
         // davon unberührt.
         const goalByMinute = new Map();
         const filteredEvents = [];
-        for (const event of events) {
+        for (const event of exactTickerRows.length ? [] : events) {
           if (event.type !== "goal") {
             filteredEvents.push(event);
             continue;
@@ -1695,10 +1760,14 @@ async function extractReport(browser, match) {
           if (eventScore < existingScore) goalByMinute.set(minuteKey, event);
         }
 
-        filteredEvents.push(...goalByMinute.values());
-        filteredEvents.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
-        events.length = 0;
-        events.push(...filteredEvents);
+        if (!exactTickerRows.length) {
+          filteredEvents.push(...goalByMinute.values());
+          filteredEvents.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
+          events.length = 0;
+          events.push(...filteredEvents);
+        } else {
+          events.sort((a, b) => (a.sourceOrder ?? 9999) - (b.sourceOrder ?? 9999));
+        }
 
         for (const event of events) delete event._sortValue;
 
@@ -1857,6 +1926,7 @@ async function extractReport(browser, match) {
       oefbMatchId: validation.finalGameId ||
         compact(match._resolvedGameId || match.gameId || match.oefbMatchId),
       teamId: compact(match.teamId),
+      teamKey: canonicalTeamKey(match),
       teamName: compact(match.teamName),
       competitionName: compact(
         match.competitionName,

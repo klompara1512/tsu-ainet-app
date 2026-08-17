@@ -495,7 +495,7 @@ function formatDate(date: Date) {
                     <article key={event.id} className={`event-${event.type} event-${event.team}`}>
                       <time>{event.minuteText || (event.minute !== null ? `${event.minute}'` : "")}</time>
                       <span className="event-marker"><EventSymbol type={event.type} /></span>
-                      <div><small>{eventLabel(event.type)}</small><strong>{event.playerName || event.description || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</div>
+                      <div>{event.rawText ? <strong className="official-event-raw">{event.rawText}</strong> : <><small>{eventLabel(event.type)}</small><strong>{event.playerName || event.description || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</>}</div>
                     </article>
                   ))}
                 </div>

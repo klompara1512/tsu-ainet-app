@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.2-beta.36-id-first-report-binding";
+const VERSION = "18.3.3-beta.36-strict-team-id-binding";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -40,23 +40,32 @@ const SYNC_CONFIG = fs.existsSync(CONFIG_PATH)
 // Weitere Spiele werden automatisch aus den ÖFB-Spielplanseiten ermittelt.
 const REPORT_OVERRIDES = [
   {
+    teamKey: "KM",
     date: "2026-08-01",
     home: "Lurnfeld",
     away: "TSU Ainet",
     url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?Lurnfeld-vs-Ainet&:s=4074032",
   },
   {
+    teamKey: "U17",
     // Offizielle ÖFB-Spielberichtseite als verbindliche Quelle für dieses Spiel.
-    // Aufstellung, Schiedsrichter, Zuschauer, Spielort und Liveticker kommen
-    // direkt von derselben Seite mit der eindeutigen ÖFB-Spiel-ID.
     date: "2026-08-09",
     home: "SPG TSU Ainet/SU Oberlienz U17",
     away: "SPG Lienzer Talboden U15 A",
     url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?SPG-TSU-Ainet-SU-Oberlienz-U17-vs-SPG-Lienzer-Talboden-U15-A&:s=4173991",
   },
   {
-    // Challenge 15.08.2026: Metadaten (insbesondere Spielort) verbindlich
-    // aus der offiziellen Einzel-Spielberichtseite beziehen.
+    teamKey: "KM",
+    // Kampfmannschaft Kötschach - Ainet: ausschließlich diese ÖFB-Spiel-ID.
+    date: "2026-08-15",
+    home: "Kötschach",
+    away: "TSU Ainet",
+    url: "https://vereine.oefb.at/TsuAinet/Spielbericht/?Koetschach-vs-Ainet&:s=4073895",
+    venue: "OSK-Arena Kötschach-Mauthen",
+  },
+  {
+    teamKey: "CHALLENGE",
+    // Challenge/Reserve Kötschach/Grafendorf - Ainet: eigene, getrennte Spiel-ID.
     date: "2026-08-15",
     home: "SG OSK Kötschach - Mauthen / SK Grafendorf",
     away: "TSU Ainet",
@@ -591,7 +600,13 @@ function sameClubName(a, b) {
 
 function matchingOverride(match, { allowTeamOnly = false } = {}) {
   const date = localDateKey(match.kickoffDate || match.kickoffAt);
+  const expectedTeamKey = canonicalTeamKey(match);
+
+  // HARTE MANNSCHAFTSBINDUNG:
+  // Ein Override darf nur für dieselbe Mannschaft gelten. Damit kann z.B.
+  // Challenge-ID 4074039 niemals mehr ein KM-Spiel überschreiben.
   const byTeams = REPORT_OVERRIDES.filter((item) =>
+    compact(item.teamKey).toUpperCase() === expectedTeamKey &&
     sameClubName(item.home, match.homeTeam) &&
     sameClubName(item.away, match.awayTeam)
   );
@@ -602,9 +617,7 @@ function matchingOverride(match, { allowTeamOnly = false } = {}) {
   const exact = byTeams.find((item) => item.date === date);
   if (exact) return exact;
 
-  // Bei manuellen Reparaturläufen kann kickoffAt in Firestore fehlen oder falsch
-  // sein. Ist die Paarung unter den Overrides eindeutig, darf die offizielle
-  // ÖFB-ID trotzdem anhand Heim/Gast zugeordnet werden.
+  // Auch im manuellen Reparaturlauf bleibt die Mannschaftskennung zwingend.
   if (allowTeamOnly && byTeams.length === 1) return byTeams[0];
 
   return null;
@@ -758,7 +771,7 @@ async function resolveMatchReports(browser, matches) {
     console.log(
       `ÖFB-Zuordnung: ${compact(match.homeTeam)} - ${compact(match.awayTeam)} | ` +
       `kickoff=${localDateKey(match.kickoffDate || match.kickoffAt) || "unbekannt"} | ` +
-      `ÖFB-ID=${gameId || "keine"} | Quelle=${source || "keine"}`,
+      `Team=${canonicalTeamKey(match) || "unbekannt"} | ÖFB-ID=${gameId || "keine"} | Quelle=${source || "keine"}`,
     );
     resolved.push(next);
 

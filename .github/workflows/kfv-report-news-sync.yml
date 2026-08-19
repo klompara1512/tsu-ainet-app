@@ -47,7 +47,6 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-          echo "Firebase-Service-Account ist vorhanden."
 
       - name: Spielbericht-Sync-Code prüfen
         run: node --check scripts/kfv-report-news-sync.cjs

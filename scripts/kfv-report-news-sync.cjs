@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.1-beta.36-lineup-identity-fix";
+const VERSION = "18.3.2-beta.36-id-first-report-binding";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -311,6 +311,17 @@ function validateReportPage(match, raw) {
     expectedCanonicalGameId && finalGameId && expectedCanonicalGameId === finalGameId
   );
 
+  // Sobald der Kalendereintrag eine ÖFB-ID enthält, ist eine fehlende oder
+  // abweichende Bericht-ID ein harter Fehler. Es gibt dann keinen Namens-Fallback.
+  if (storedGameId && !finalGameId) {
+    reasons.push(`ÖFB-Spiel-ID ${storedGameId} fehlt auf der geladenen Berichtseite`);
+  }
+  if (storedGameId && finalGameId && storedGameId !== finalGameId) {
+    reasons.push(
+      `ÖFB-Spiel-ID stimmt nicht überein: Kalender ${storedGameId}, Bericht ${finalGameId}`,
+    );
+  }
+
   if (requestedGameId && finalGameId && requestedGameId !== finalGameId) {
     reasons.push(
       `Weiterleitung auf andere Spiel-ID (${requestedGameId} → ${finalGameId})`,
@@ -390,24 +401,20 @@ function validateReportPage(match, raw) {
       .match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1];
     return profileId || normalizeText(player?.name || "");
   };
-
-  const homePlayerKeys = new Set(
+  const homeKeys = new Set(
     [...(raw.homeLineup || []), ...(raw.homeBench || [])]
       .map(lineupIdentityKey)
       .filter(Boolean),
   );
-  const awayPlayerKeys = new Set(
+  const awayKeys = new Set(
     [...(raw.awayLineup || []), ...(raw.awayBench || [])]
       .map(lineupIdentityKey)
       .filter(Boolean),
   );
-  const duplicateAcrossTeams = [...homePlayerKeys].filter((key) =>
-    awayPlayerKeys.has(key),
-  );
-
-  if (duplicateAcrossTeams.length) {
+  const crossTeamDuplicates = [...homeKeys].filter((key) => awayKeys.has(key));
+  if (crossTeamDuplicates.length) {
     reasons.push(
-      `Aufstellung enthält ${duplicateAcrossTeams.length} Spieler gleichzeitig bei Heim und Gast`,
+      `Aufstellung enthält ${crossTeamDuplicates.length} Spieler gleichzeitig bei Heim und Gast`,
     );
   }
 
@@ -699,14 +706,33 @@ async function resolveMatchReports(browser, matches) {
     }
 
     if (!url) {
-      const ranked = index
-        .filter((candidate) => sameReportTeam(match, candidate.teamKey))
-        .map((candidate) => ({ candidate, score: scoreReportCandidate(match, candidate) }))
+      const storedGameId = compact(
+        match.gameId || match.oefbMatchId || extractOefbGameId(match.reportUrl),
+      );
+
+      // ID-FIRST: Wenn der Kalender bereits eine ÖFB-Spiel-ID kennt, darf niemals
+      // über Datum, Vereinsnamen oder Ähnlichkeit auf einen anderen Bericht geraten werden.
+      const candidatesForMatch = storedGameId
+        ? index.filter(
+            (candidate) =>
+              candidate.gameId === storedGameId &&
+              sameReportTeam(match, candidate.teamKey),
+          )
+        : index.filter((candidate) => sameReportTeam(match, candidate.teamKey));
+
+      const ranked = candidatesForMatch
+        .map((candidate) => ({
+          candidate,
+          score: scoreReportCandidate(match, candidate),
+        }))
         .sort((a, b) => b.score - a.score);
-      if (ranked[0] && ranked[0].score >= 80) {
+
+      if (ranked[0] && (storedGameId || ranked[0].score >= 80)) {
         url = ranked[0].candidate.url;
-        score = ranked[0].score;
-        source = "team-specific-games-page-index";
+        score = storedGameId ? 700 : ranked[0].score;
+        source = storedGameId
+          ? "calendar-game-id-exact"
+          : "team-specific-games-page-index";
       }
     }
 
@@ -1346,25 +1372,11 @@ async function extractReport(browser, match) {
           buckets[`${side}${role === "starter" ? "Starter" : "Bench"}`].push(item);
         }
 
-        // Fallback nur dann ergänzend verwenden, wenn die strukturierte
-        // Erkennung noch nicht genügend Spieler geliefert hat. ÖFB rendert Heim
-        // und Gast teilweise in gemeinsamen Containern; ein immer parallel
-        // laufender Fallback kann sonst Spieler der falschen Seite zuschlagen.
-        const structuredPlayerCount =
-          buckets.homeStarter.length +
-          buckets.awayStarter.length +
-          buckets.homeBench.length +
-          buckets.awayBench.length;
-
-        const sectionHeadings = structuredPlayerCount < 18
-          ? [
-              ...document.querySelectorAll(
-                "h1,h2,h3,h4,h5,strong,[role='heading'],button,[class*='title']",
-              ),
-            ].filter((node) =>
-              /startelf|ersatzbank|aufstellung|bank/i.test(compact(node.textContent)),
-            )
-          : [];
+        // Fallback für ÖFB-Seiten ohne eindeutige Spielerlinks: Abschnitte anhand
+        // ihrer Überschriften auswerten und danach links/rechts zuordnen.
+        const sectionHeadings = [
+          ...document.querySelectorAll("h1,h2,h3,h4,h5,strong,[role='heading'],button,[class*='title']"),
+        ].filter((node) => /startelf|ersatzbank|aufstellung|bank/i.test(compact(node.textContent)));
 
         for (const heading of sectionHeadings) {
           const headingText = compact(heading.textContent);
@@ -1600,9 +1612,8 @@ async function extractReport(browser, match) {
         homeLineup = homeLineup.slice(0, 11);
         awayLineup = awayLineup.slice(0, 11);
 
-        // Harte Identitätsregel: Derselbe Spieler darf niemals gleichzeitig
-        // Heim UND Gast zugeordnet sein. Bei einem Konflikt wird der unsichere
-        // Eintrag auf beiden Seiten entfernt, statt eine Mannschaft zu erraten.
+        // Spieleridentität pro Bericht absichern. Derselbe Spieler darf niemals
+        // gleichzeitig Heim UND Gast zugeordnet sein.
         const playerKey = (item) =>
           String(item.playerUrl || "").match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalize(item.name);
 
@@ -1617,14 +1628,20 @@ async function extractReport(browser, match) {
         );
 
         if (crossTeamKeys.size) {
-          homeLineup = homeLineup.filter((item) => !crossTeamKeys.has(playerKey(item)));
-          awayLineup = awayLineup.filter((item) => !crossTeamKeys.has(playerKey(item)));
-          homeBench = homeBench.filter((item) => !crossTeamKeys.has(playerKey(item)));
-          awayBench = awayBench.filter((item) => !crossTeamKeys.has(playerKey(item)));
+          homeLineup = homeLineup.filter(
+            (item) => !crossTeamKeys.has(playerKey(item)),
+          );
+          awayLineup = awayLineup.filter(
+            (item) => !crossTeamKeys.has(playerKey(item)),
+          );
+          homeBench = homeBench.filter(
+            (item) => !crossTeamKeys.has(playerKey(item)),
+          );
+          awayBench = awayBench.filter(
+            (item) => !crossTeamKeys.has(playerKey(item)),
+          );
         }
 
-        // Innerhalb derselben Mannschaft darf ein Spieler außerdem nicht
-        // gleichzeitig in Startelf und Ersatzbank stehen.
         const homeStarterKeys = new Set(homeLineup.map(playerKey));
         const awayStarterKeys = new Set(awayLineup.map(playerKey));
         homeBench = homeBench
@@ -2146,8 +2163,8 @@ async function upsertReport(report, runId) {
   const awayScore = Number.isInteger(report.awayScore)
     ? report.awayScore
     : (Number.isInteger(old.awayScore) ? old.awayScore : null);
-  // Aufstellungen spiegeln exakt den aktuellen erfolgreichen ÖFB-Abruf.
-  // Alte, eventuell falsch zugeordnete Spieler werden nicht wieder eingesetzt.
+  // Aufstellungen gehören ausschließlich zu dieser exakten ÖFB-Spiel-ID.
+  // Alte Aufstellungen werden bei einem erfolgreichen neuen Bericht nie zurückkopiert.
   const homeLineup = Array.isArray(report.homeLineup) ? report.homeLineup : [];
   const awayLineup = Array.isArray(report.awayLineup) ? report.awayLineup : [];
   const homeBench = Array.isArray(report.homeBench) ? report.homeBench : [];

@@ -74,28 +74,62 @@ function readLineupPlayers(value: unknown): KfvLineupPlayer[] {
 
 function readMatchEvents(value: unknown): KfvMatchEvent[] {
   if (!Array.isArray(value)) return [];
-  const validTypes = new Set(["goal", "yellow", "yellowRed", "red", "substitution", "halfTime", "fullTime", "other"]);
-  return value
-    .map((item, index) => {
-      if (!item || typeof item !== "object") return null;
-      const data = item as Record<string, unknown>;
-      const type = typeof data.type === "string" && validTypes.has(data.type) ? data.type as KfvMatchEvent["type"] : "other";
-      const team = data.team === "home" || data.team === "away" ? data.team : "neutral";
-      return {
-        id: typeof data.id === "string" ? data.id : `event-${index}`,
-        type,
-        minute: typeof data.minute === "number" ? data.minute : null,
-        minuteText: typeof data.minuteText === "string" ? data.minuteText : "",
-        team,
-        playerName: typeof data.playerName === "string" ? data.playerName : "",
-        secondaryPlayerName: typeof data.secondaryPlayerName === "string" ? data.secondaryPlayerName : "",
-        description: typeof data.description === "string" ? data.description : "",
-        rawText: typeof data.rawText === "string" ? data.rawText : "",
-        sourceOrder: typeof data.sourceOrder === "number" ? data.sourceOrder : index,
-      } satisfies KfvMatchEvent;
-    })
-    .filter((item): item is KfvMatchEvent => item !== null)
-    .sort((a, b) => (a.sourceOrder ?? 9999) - (b.sourceOrder ?? 9999));
+
+  const validTypes = new Set<KfvMatchEvent["type"]>([
+    "goal",
+    "yellow",
+    "yellowRed",
+    "red",
+    "substitution",
+    "halfTime",
+    "fullTime",
+    "other",
+  ]);
+
+  const events: KfvMatchEvent[] = [];
+
+  value.forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
+
+    const data = item as Record<string, unknown>;
+    const candidateType =
+      typeof data.type === "string"
+        ? (data.type as KfvMatchEvent["type"])
+        : "other";
+
+    const type: KfvMatchEvent["type"] = validTypes.has(candidateType)
+      ? candidateType
+      : "other";
+
+    const team: KfvMatchEvent["team"] =
+      data.team === "home" || data.team === "away"
+        ? data.team
+        : "neutral";
+
+    const event: KfvMatchEvent = {
+      id: typeof data.id === "string" ? data.id : `event-${index}`,
+      type,
+      minute: typeof data.minute === "number" ? data.minute : null,
+      minuteText: typeof data.minuteText === "string" ? data.minuteText : "",
+      team,
+      playerName: typeof data.playerName === "string" ? data.playerName : "",
+      secondaryPlayerName:
+        typeof data.secondaryPlayerName === "string"
+          ? data.secondaryPlayerName
+          : "",
+      description:
+        typeof data.description === "string" ? data.description : "",
+      rawText: typeof data.rawText === "string" ? data.rawText : "",
+      sourceOrder:
+        typeof data.sourceOrder === "number" ? data.sourceOrder : index,
+    };
+
+    events.push(event);
+  });
+
+  return events.sort(
+    (a, b) => (a.sourceOrder ?? 9999) - (b.sourceOrder ?? 9999),
+  );
 }
 
 function mapMatchReportDocument(

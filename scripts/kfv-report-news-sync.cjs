@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.0-beta.36-strict-team-report-ticker";
+const VERSION = "18.3.1-beta.36-lineup-identity-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -383,6 +383,32 @@ function validateReportPage(match, raw) {
 
   if ((raw.homeBench || []).length > 18 || (raw.awayBench || []).length > 18) {
     reasons.push("Ersatzbank-Erkennung enthält unplausibel viele Spieler");
+  }
+
+  const lineupIdentityKey = (player) => {
+    const profileId = String(player?.playerUrl || "")
+      .match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1];
+    return profileId || normalizeText(player?.name || "");
+  };
+
+  const homePlayerKeys = new Set(
+    [...(raw.homeLineup || []), ...(raw.homeBench || [])]
+      .map(lineupIdentityKey)
+      .filter(Boolean),
+  );
+  const awayPlayerKeys = new Set(
+    [...(raw.awayLineup || []), ...(raw.awayBench || [])]
+      .map(lineupIdentityKey)
+      .filter(Boolean),
+  );
+  const duplicateAcrossTeams = [...homePlayerKeys].filter((key) =>
+    awayPlayerKeys.has(key),
+  );
+
+  if (duplicateAcrossTeams.length) {
+    reasons.push(
+      `Aufstellung enthält ${duplicateAcrossTeams.length} Spieler gleichzeitig bei Heim und Gast`,
+    );
   }
 
   return {
@@ -1320,11 +1346,25 @@ async function extractReport(browser, match) {
           buckets[`${side}${role === "starter" ? "Starter" : "Bench"}`].push(item);
         }
 
-        // Fallback für ÖFB-Seiten ohne eindeutige Spielerlinks: Abschnitte anhand
-        // ihrer Überschriften auswerten und danach links/rechts zuordnen.
-        const sectionHeadings = [
-          ...document.querySelectorAll("h1,h2,h3,h4,h5,strong,[role='heading'],button,[class*='title']"),
-        ].filter((node) => /startelf|ersatzbank|aufstellung|bank/i.test(compact(node.textContent)));
+        // Fallback nur dann ergänzend verwenden, wenn die strukturierte
+        // Erkennung noch nicht genügend Spieler geliefert hat. ÖFB rendert Heim
+        // und Gast teilweise in gemeinsamen Containern; ein immer parallel
+        // laufender Fallback kann sonst Spieler der falschen Seite zuschlagen.
+        const structuredPlayerCount =
+          buckets.homeStarter.length +
+          buckets.awayStarter.length +
+          buckets.homeBench.length +
+          buckets.awayBench.length;
+
+        const sectionHeadings = structuredPlayerCount < 18
+          ? [
+              ...document.querySelectorAll(
+                "h1,h2,h3,h4,h5,strong,[role='heading'],button,[class*='title']",
+              ),
+            ].filter((node) =>
+              /startelf|ersatzbank|aufstellung|bank/i.test(compact(node.textContent)),
+            )
+          : [];
 
         for (const heading of sectionHeadings) {
           const headingText = compact(heading.textContent);
@@ -1560,14 +1600,39 @@ async function extractReport(browser, match) {
         homeLineup = homeLineup.slice(0, 11);
         awayLineup = awayLineup.slice(0, 11);
 
-        // Ein Spieler darf pro Mannschaft nicht gleichzeitig in Startelf und
-        // Ersatzbank stehen. Profil-ID hat Vorrang, sonst wird der Name genutzt.
+        // Harte Identitätsregel: Derselbe Spieler darf niemals gleichzeitig
+        // Heim UND Gast zugeordnet sein. Bei einem Konflikt wird der unsichere
+        // Eintrag auf beiden Seiten entfernt, statt eine Mannschaft zu erraten.
         const playerKey = (item) =>
           String(item.playerUrl || "").match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalize(item.name);
+
+        const homeAllKeys = new Set(
+          [...homeLineup, ...homeBench].map(playerKey).filter(Boolean),
+        );
+        const awayAllKeys = new Set(
+          [...awayLineup, ...awayBench].map(playerKey).filter(Boolean),
+        );
+        const crossTeamKeys = new Set(
+          [...homeAllKeys].filter((key) => awayAllKeys.has(key)),
+        );
+
+        if (crossTeamKeys.size) {
+          homeLineup = homeLineup.filter((item) => !crossTeamKeys.has(playerKey(item)));
+          awayLineup = awayLineup.filter((item) => !crossTeamKeys.has(playerKey(item)));
+          homeBench = homeBench.filter((item) => !crossTeamKeys.has(playerKey(item)));
+          awayBench = awayBench.filter((item) => !crossTeamKeys.has(playerKey(item)));
+        }
+
+        // Innerhalb derselben Mannschaft darf ein Spieler außerdem nicht
+        // gleichzeitig in Startelf und Ersatzbank stehen.
         const homeStarterKeys = new Set(homeLineup.map(playerKey));
         const awayStarterKeys = new Set(awayLineup.map(playerKey));
-        homeBench = homeBench.filter((item) => !homeStarterKeys.has(playerKey(item))).slice(0, 15);
-        awayBench = awayBench.filter((item) => !awayStarterKeys.has(playerKey(item))).slice(0, 15);
+        homeBench = homeBench
+          .filter((item) => !homeStarterKeys.has(playerKey(item)))
+          .slice(0, 15);
+        awayBench = awayBench
+          .filter((item) => !awayStarterKeys.has(playerKey(item)))
+          .slice(0, 15);
 
         const eventSnapshots = Array.isArray(window.__TSU_EVENT_SNAPSHOTS__)
           ? window.__TSU_EVENT_SNAPSHOTS__.filter((value) => typeof value === "string")
@@ -2081,18 +2146,12 @@ async function upsertReport(report, runId) {
   const awayScore = Number.isInteger(report.awayScore)
     ? report.awayScore
     : (Number.isInteger(old.awayScore) ? old.awayScore : null);
-  const homeLineup = report.homeLineup.length
-    ? report.homeLineup
-    : (isFutureReport ? [] : (old.homeLineup || []));
-  const awayLineup = report.awayLineup.length
-    ? report.awayLineup
-    : (isFutureReport ? [] : (old.awayLineup || []));
-  const homeBench = report.homeBench.length
-    ? report.homeBench
-    : (isFutureReport ? [] : (old.homeBench || []));
-  const awayBench = report.awayBench.length
-    ? report.awayBench
-    : (isFutureReport ? [] : (old.awayBench || []));
+  // Aufstellungen spiegeln exakt den aktuellen erfolgreichen ÖFB-Abruf.
+  // Alte, eventuell falsch zugeordnete Spieler werden nicht wieder eingesetzt.
+  const homeLineup = Array.isArray(report.homeLineup) ? report.homeLineup : [];
+  const awayLineup = Array.isArray(report.awayLineup) ? report.awayLineup : [];
+  const homeBench = Array.isArray(report.homeBench) ? report.homeBench : [];
+  const awayBench = Array.isArray(report.awayBench) ? report.awayBench : [];
   const referee = report.referee || (isFutureReport ? "" : (old.referee || ""));
   const venue = cleanVenueValue(report.venue) || (isFutureReport ? "" : cleanVenueValue(old.venue)) || "";
   const refereeAssistants = report.refereeAssistants.length
@@ -2174,14 +2233,10 @@ async function updateMatchFromReport(report) {
   // im zentralen Spiel-Dokument verändern. Diese Felder gehören ausschließlich
   // dem offiziellen Spielplan-Sync (kfv-games-sync.cjs). Dadurch können Uhrzeiten
   // wie 15:00, 12:30 oder 13:45 nicht mehr als Resultate interpretiert werden.
-  if (Array.isArray(report.homeLineup) && report.homeLineup.length) patch.homeLineup = report.homeLineup;
-  else if (isFutureMatch && Array.isArray(snapshotData.homeLineup) && snapshotData.homeLineup.length) patch.homeLineup = [];
-  if (Array.isArray(report.awayLineup) && report.awayLineup.length) patch.awayLineup = report.awayLineup;
-  else if (isFutureMatch && Array.isArray(snapshotData.awayLineup) && snapshotData.awayLineup.length) patch.awayLineup = [];
-  if (Array.isArray(report.homeBench) && report.homeBench.length) patch.homeBench = report.homeBench;
-  else if (isFutureMatch && Array.isArray(snapshotData.homeBench) && snapshotData.homeBench.length) patch.homeBench = [];
-  if (Array.isArray(report.awayBench) && report.awayBench.length) patch.awayBench = report.awayBench;
-  else if (isFutureMatch && Array.isArray(snapshotData.awayBench) && snapshotData.awayBench.length) patch.awayBench = [];
+  patch.homeLineup = Array.isArray(report.homeLineup) ? report.homeLineup : [];
+  patch.awayLineup = Array.isArray(report.awayLineup) ? report.awayLineup : [];
+  patch.homeBench = Array.isArray(report.homeBench) ? report.homeBench : [];
+  patch.awayBench = Array.isArray(report.awayBench) ? report.awayBench : [];
   if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
   else if (isFutureMatch && Array.isArray(snapshotData.refereeAssistants) && snapshotData.refereeAssistants.length) patch.refereeAssistants = [];
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;

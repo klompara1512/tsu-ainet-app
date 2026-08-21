@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.4-beta.36-visual-home-away-columns";
+const VERSION = "18.3.5-beta.36-visible-row-pairing";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -1479,6 +1479,8 @@ async function extractReport(browser, match) {
           const positionNode = img || anchor;
           const positionRect = positionNode.getBoundingClientRect();
           const cardRect = card.getBoundingClientRect();
+          const style = window.getComputedStyle(positionNode);
+          if (positionRect.width <= 2 || positionRect.height <= 2 || style.display === "none" || style.visibility === "hidden" || Number(style.opacity || "1") === 0) continue;
           directProfiles.push({
             name,
             number: extractNumber(compact(card.textContent)),
@@ -1504,21 +1506,38 @@ async function extractReport(browser, match) {
           .map((node)=>({node,rect:node.getBoundingClientRect()}))
           .filter(({rect})=>rect.width>0&&rect.height>0);
         const benchHeadingY=benchHeadingCandidates.length?Math.min(...benchHeadingCandidates.map(({rect})=>rect.top+window.scrollY+rect.height/2)):null;
-        for (const player of directProfiles) {
-          const side=player.x<columnSplitX?"home":"away";
-          directSides[side].push(player);
-        }
-        directSides.home.sort((a,b)=>a.top-b.top);
-        directSides.away.sort((a,b)=>a.top-b.top);
-        let directOfficialStructure=null;
-        if (benchHeadingY!==null && largestGap>=20) {
-          const homeStarterVisual=uniquePlayers(directSides.home.filter((item)=>item.top<benchHeadingY),11);
-          const awayStarterVisual=uniquePlayers(directSides.away.filter((item)=>item.top<benchHeadingY),11);
-          const homeBenchVisual=uniquePlayers(directSides.home.filter((item)=>item.top>benchHeadingY),15);
-          const awayBenchVisual=uniquePlayers(directSides.away.filter((item)=>item.top>benchHeadingY),15);
-          if (homeStarterVisual.length>=7 && awayStarterVisual.length>=7) {
-            directOfficialStructure={homeLineup:homeStarterVisual.slice(0,11),awayLineup:awayStarterVisual.slice(0,11),homeBench:homeBenchVisual,awayBench:awayBenchVisual};
+        // ÖFB-Aufstellung zeilenweise auswerten. Sichtbar gilt: links Heim, rechts Gast.
+        const pairByRows = (players) => {
+          const sorted=[...players].sort((a,b)=>a.top-b.top||a.x-b.x);
+          const rows=[];
+          for (const player of sorted) {
+            let row=rows.find((candidate)=>Math.abs(candidate.top-player.top)<=18);
+            if (!row) { row={top:player.top,players:[]}; rows.push(row); }
+            row.players.push(player);
           }
+          rows.sort((a,b)=>a.top-b.top);
+          const home=[],away=[];
+          for (const row of rows) {
+            const items=row.players.sort((a,b)=>a.x-b.x);
+            if (items.length>=2) { home.push(items[0]); away.push(items[items.length-1]); }
+            else if (items.length===1) { (items[0].x<columnSplitX?home:away).push(items[0]); }
+          }
+          return {home:uniquePlayers(home,30),away:uniquePlayers(away,30)};
+        };
+        const startersVisible=benchHeadingY===null?directProfiles:directProfiles.filter((item)=>item.top<benchHeadingY);
+        const benchVisible=benchHeadingY===null?[]:directProfiles.filter((item)=>item.top>benchHeadingY);
+        const starterRows=pairByRows(startersVisible);
+        const benchRows=pairByRows(benchVisible);
+        directSides.home=[...starterRows.home,...benchRows.home];
+        directSides.away=[...starterRows.away,...benchRows.away];
+        let directOfficialStructure=null;
+        if (benchHeadingY!==null && starterRows.home.length>=7 && starterRows.away.length>=7) {
+          directOfficialStructure={
+            homeLineup:starterRows.home.slice(0,11),
+            awayLineup:starterRows.away.slice(0,11),
+            homeBench:benchRows.home.slice(0,15),
+            awayBench:benchRows.away.slice(0,15),
+          };
         }
 
         let homeLineup = uniquePlayers(buckets.homeStarter, 30);
@@ -1629,10 +1648,10 @@ async function extractReport(browser, match) {
         // und enthält mindestens 20 eindeutige Namen, wird exakt nach elf
         // Spielern in Heim und Gast getrennt. Überschriften wie „Tor“ wurden
         // davor bereits herausgefiltert.
-        if (homeLineup.length >= 20 && awayLineup.length === 0) {
+        if (!directOfficialStructure && homeLineup.length >= 20 && awayLineup.length === 0) {
           awayLineup = homeLineup.slice(11, 22);
           homeLineup = homeLineup.slice(0, 11);
-        } else if (awayLineup.length >= 20 && homeLineup.length === 0) {
+        } else if (!directOfficialStructure && awayLineup.length >= 20 && homeLineup.length === 0) {
           homeLineup = awayLineup.slice(0, 11);
           awayLineup = awayLineup.slice(11, 22);
         }
@@ -1640,12 +1659,12 @@ async function extractReport(browser, match) {
         // Bei einer nur teilweise erkannten Gegenseite darf ein Überhang
         // ebenfalls als zweite Startelf genutzt werden, jedoch nur wenn die
         // Zielseite noch deutlich unvollständig ist.
-        if (homeLineup.length > 11 && awayLineup.length < 7) {
+        if (!directOfficialStructure && homeLineup.length > 11 && awayLineup.length < 7) {
           const overflow = homeLineup.slice(11);
           homeLineup = homeLineup.slice(0, 11);
           awayLineup = uniquePlayers([...awayLineup, ...overflow], 11);
         }
-        if (awayLineup.length > 11 && homeLineup.length < 7) {
+        if (!directOfficialStructure && awayLineup.length > 11 && homeLineup.length < 7) {
           const overflow = awayLineup.slice(11);
           awayLineup = awayLineup.slice(0, 11);
           homeLineup = uniquePlayers([...homeLineup, ...overflow], 11);

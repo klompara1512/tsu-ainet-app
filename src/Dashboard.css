@@ -15,23 +15,12 @@
 
   color: var(--dashboard-text);
 
+  /* TSU Ainet Hintergrund: dezente dunkelblaue Struktur.
+     Ein dunkler Overlay hält Karten und Texte klar lesbar. */
   background:
-    radial-gradient(
-      circle at 8% 0%,
-      rgba(39, 95, 187, 0.22),
-      transparent 32%
-    ),
-    radial-gradient(
-      circle at 92% 18%,
-      rgba(183, 43, 65, 0.1),
-      transparent 30%
-    ),
-    linear-gradient(
-      180deg,
-      #091425 0%,
-      #07101f 42%,
-      #050b16 100%
-    );
+    linear-gradient(rgba(3, 9, 20, 0.34), rgba(3, 9, 20, 0.48)),
+    url("/tsu-app-background.png") center top / cover fixed no-repeat,
+    #050b16;
 
   overflow-x: hidden;
 }

@@ -20,7 +20,10 @@ html {
   padding: 0;
 
   color-scheme: dark;
-  background: #050b16;
+  background:
+    linear-gradient(rgba(3, 9, 20, 0.38), rgba(3, 9, 20, 0.5)),
+    url("/tsu-app-background.png") center top / cover fixed no-repeat,
+    #050b16;
 
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -44,7 +47,10 @@ body {
     "Segoe UI",
     sans-serif;
 
-  background: #050b16;
+  background:
+    linear-gradient(rgba(3, 9, 20, 0.38), rgba(3, 9, 20, 0.5)),
+    url("/tsu-app-background.png") center top / cover fixed no-repeat,
+    #050b16;
 
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

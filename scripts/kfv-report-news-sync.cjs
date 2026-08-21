@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.3-beta.36-strict-team-id-binding";
+const VERSION = "18.3.4-beta.36-official-lineup-order";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -951,9 +951,28 @@ async function waitForReport(page) {
   await new Promise((resolve) => setTimeout(resolve, 1800));
 }
 
+
+async function loadAinetSquadNameSet() {
+  try {
+    const snapshot = await db.collection("kfvSquad").get();
+    const names = new Set();
+    for (const document of snapshot.docs) {
+      const data = document.data() || {};
+      if (data.active === false) continue;
+      const name = normalizeText(data.name || "");
+      if (name) names.add(name);
+    }
+    return names;
+  } catch (error) {
+    console.warn("Kader-Hinweis konnte nicht geladen werden:", error.message || String(error));
+    return new Set();
+  }
+}
+
 async function extractReport(browser, match) {
   const page = await browser.newPage();
   const started = Date.now();
+  const ainetSquadNames = await loadAinetSquadNameSet();
 
   try {
     await page.setViewport({
@@ -1464,6 +1483,7 @@ async function extractReport(browser, match) {
         )];
         const directSides = { home: [], away: [] };
         const directSeen = new Set();
+        const officialProfileOrder = [];
         for (const anchor of profileAnchors) {
           const img = anchor.querySelector("img");
           const card = anchor.closest("li,tr,[class*='player'],[class*='spieler'],article,section,div") || anchor;
@@ -1485,6 +1505,13 @@ async function extractReport(browser, match) {
           const profileKey = String(playerUrl).match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalize(name);
           if (!profileKey || directSeen.has(profileKey)) continue;
           directSeen.add(profileKey);
+          officialProfileOrder.push({
+            name,
+            number: extractNumber(compact(card.textContent)),
+            playerUrl,
+            captain: /kapitän|captain|\(c\)/i.test(compact(card.textContent)),
+            goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(compact(card.textContent)),
+          });
           const rect = card.getBoundingClientRect();
           const side = rect.left + rect.width / 2 < window.innerWidth / 2 ? "home" : "away";
           directSides[side].push({
@@ -1892,6 +1919,7 @@ async function extractReport(browser, match) {
           heroImage,
           playerCandidateCount: candidates.length,
           directProfileCount: directSeen.size,
+          officialProfileOrder,
           visualLineupDebug: window.__TSU_VISUAL_LINEUP_DEBUG__ || null,
           preview: textLines.slice(0, 35).join(" | ").slice(0, 1800),
         };
@@ -1987,6 +2015,72 @@ async function extractReport(browser, match) {
       }
       raw.deepFramePlayerCount = unique.length;
       raw.frameDiagnostics = frameDiagnostics;
+    }
+
+    // KANONISCHE ÖFB-AUFSTELLUNGSREIHENFOLGE:
+    // 1-11 Heim-Startelf, 12-22 Gast-Startelf,
+    // danach Heim-Ersatzbank und anschließend Gast-Ersatzbank.
+    const orderedPlayers = [];
+    const orderedSeen = new Set();
+    for (const player of (Array.isArray(raw.officialProfileOrder) ? raw.officialProfileOrder : [])) {
+      const profileId = String(player?.playerUrl || "")
+        .match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || "";
+      const key = profileId || normalizeText(player?.name || "");
+      if (!key || orderedSeen.has(key)) continue;
+      orderedSeen.add(key);
+      orderedPlayers.push(player);
+    }
+
+    if (orderedPlayers.length >= 22) {
+      let orderedHome = orderedPlayers.slice(0, 11);
+      let orderedAway = orderedPlayers.slice(11, 22);
+      const remaining = orderedPlayers.slice(22);
+
+      const isAinetName = (player) =>
+        ainetSquadNames.has(normalizeText(player?.name || ""));
+      const ainetIsHome = isAinet(match.homeTeam);
+      const ainetIsAway = isAinet(match.awayTeam);
+
+      // Der TSU-Ainet-Kader ist eine Plausibilitätskontrolle, nicht die Hauptquelle.
+      // Nur bei einem klaren Widerspruch werden die beiden kompletten 11er-Blöcke getauscht.
+      const firstHits = orderedHome.filter(isAinetName).length;
+      const secondHits = orderedAway.filter(isAinetName).length;
+      if (
+        ainetSquadNames.size >= 5 &&
+        ((ainetIsHome && secondHits >= 5 && secondHits > firstHits + 2) ||
+         (ainetIsAway && firstHits >= 5 && firstHits > secondHits + 2))
+      ) {
+        [orderedHome, orderedAway] = [orderedAway, orderedHome];
+      }
+
+      raw.homeLineup = orderedHome;
+      raw.awayLineup = orderedAway;
+
+      if (remaining.length) {
+        if (ainetSquadNames.size >= 5 && (ainetIsHome || ainetIsAway)) {
+          // Nach den 22 Startern kommt zuerst die Heim-Bank und danach die Gast-Bank.
+          // Für die Grenze dient der Ainet-Kader als zusätzlicher Hinweis.
+          const ainetBench = remaining.filter(isAinetName);
+          const opponentBench = remaining.filter((player) => !isAinetName(player));
+          if (ainetIsHome) {
+            raw.homeBench = ainetBench;
+            raw.awayBench = opponentBench;
+          } else {
+            raw.homeBench = opponentBench;
+            raw.awayBench = ainetBench;
+          }
+        }
+      }
+
+      raw.officialOrderApplied = true;
+      raw.officialOrderPlayerCount = orderedPlayers.length;
+      raw.ainetRosterHint = {
+        squadSize: ainetSquadNames.size,
+        homeStarterHits: raw.homeLineup.filter(isAinetName).length,
+        awayStarterHits: raw.awayLineup.filter(isAinetName).length,
+        homeBenchHits: (raw.homeBench || []).filter(isAinetName).length,
+        awayBenchHits: (raw.awayBench || []).filter(isAinetName).length,
+      };
     }
 
     // Vor einem zukünftigen Spiel dürfen nur tatsächlich veröffentlichte

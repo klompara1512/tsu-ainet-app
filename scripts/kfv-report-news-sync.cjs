@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.4-beta.36-official-lineup-order";
+const VERSION = "18.3.4-beta.36-visual-home-away-columns";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -951,28 +951,9 @@ async function waitForReport(page) {
   await new Promise((resolve) => setTimeout(resolve, 1800));
 }
 
-
-async function loadAinetSquadNameSet() {
-  try {
-    const snapshot = await db.collection("kfvSquad").get();
-    const names = new Set();
-    for (const document of snapshot.docs) {
-      const data = document.data() || {};
-      if (data.active === false) continue;
-      const name = normalizeText(data.name || "");
-      if (name) names.add(name);
-    }
-    return names;
-  } catch (error) {
-    console.warn("Kader-Hinweis konnte nicht geladen werden:", error.message || String(error));
-    return new Set();
-  }
-}
-
 async function extractReport(browser, match) {
   const page = await browser.newPage();
   const started = Date.now();
-  const ainetSquadNames = await loadAinetSquadNameSet();
 
   try {
     await page.setViewport({
@@ -1483,61 +1464,82 @@ async function extractReport(browser, match) {
         )];
         const directSides = { home: [], away: [] };
         const directSeen = new Set();
-        const officialProfileOrder = [];
+        const directProfiles = [];
         for (const anchor of profileAnchors) {
           const img = anchor.querySelector("img");
           const card = anchor.closest("li,tr,[class*='player'],[class*='spieler'],article,section,div") || anchor;
-          const possibleNames = [
-            anchor.textContent,
-            anchor.getAttribute("aria-label"),
-            anchor.getAttribute("title"),
-            img?.getAttribute("alt"),
-            img?.getAttribute("title"),
-            card.textContent,
-          ];
+          const possibleNames = [anchor.textContent,anchor.getAttribute("aria-label"),anchor.getAttribute("title"),img?.getAttribute("alt"),img?.getAttribute("title"),card.textContent];
           let name = "";
-          for (const candidateName of possibleNames) {
-            name = cleanPlayerName(candidateName);
-            if (name) break;
-          }
+          for (const candidateName of possibleNames) { name = cleanPlayerName(candidateName); if (name) break; }
           if (!name) continue;
           const playerUrl = absolute(anchor.href);
           const profileKey = String(playerUrl).match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || normalize(name);
           if (!profileKey || directSeen.has(profileKey)) continue;
           directSeen.add(profileKey);
-          officialProfileOrder.push({
+          const positionNode = img || anchor;
+          const positionRect = positionNode.getBoundingClientRect();
+          const cardRect = card.getBoundingClientRect();
+          directProfiles.push({
             name,
             number: extractNumber(compact(card.textContent)),
             playerUrl,
             captain: /kapitän|captain|\(c\)/i.test(compact(card.textContent)),
             goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(compact(card.textContent)),
-          });
-          const rect = card.getBoundingClientRect();
-          const side = rect.left + rect.width / 2 < window.innerWidth / 2 ? "home" : "away";
-          directSides[side].push({
-            name,
-            number: extractNumber(compact(card.textContent)),
-            playerUrl,
-            captain: /kapitän|captain|\(c\)/i.test(compact(card.textContent)),
-            goalkeeper: /torwart|goalkeeper|\btw\b|\bgk\b/i.test(compact(card.textContent)),
-            top: rect.top + window.scrollY,
+            x: positionRect.left + positionRect.width / 2,
+            top: positionRect.top + window.scrollY,
+            cardTop: cardRect.top + window.scrollY,
           });
         }
-        directSides.home.sort((a, b) => a.top - b.top);
-        directSides.away.sort((a, b) => a.top - b.top);
+        const xValues = directProfiles.map((item) => item.x).filter(Number.isFinite).sort((a,b)=>a-b);
+        let columnSplitX = window.innerWidth / 2;
+        let largestGap = 0;
+        if (xValues.length >= 6) {
+          for (let index=1; index<xValues.length; index+=1) {
+            const gap=xValues[index]-xValues[index-1];
+            if (gap>largestGap) { largestGap=gap; columnSplitX=(xValues[index]+xValues[index-1])/2; }
+          }
+        }
+        const benchHeadingCandidates=[...document.querySelectorAll("h1,h2,h3,h4,h5,h6,strong,div,span,p,[role='heading']")]
+          .filter((node)=>compact(node.textContent).toLowerCase()==="ersatzspieler")
+          .map((node)=>({node,rect:node.getBoundingClientRect()}))
+          .filter(({rect})=>rect.width>0&&rect.height>0);
+        const benchHeadingY=benchHeadingCandidates.length?Math.min(...benchHeadingCandidates.map(({rect})=>rect.top+window.scrollY+rect.height/2)):null;
+        for (const player of directProfiles) {
+          const side=player.x<columnSplitX?"home":"away";
+          directSides[side].push(player);
+        }
+        directSides.home.sort((a,b)=>a.top-b.top);
+        directSides.away.sort((a,b)=>a.top-b.top);
+        let directOfficialStructure=null;
+        if (benchHeadingY!==null && largestGap>=20) {
+          const homeStarterVisual=uniquePlayers(directSides.home.filter((item)=>item.top<benchHeadingY),11);
+          const awayStarterVisual=uniquePlayers(directSides.away.filter((item)=>item.top<benchHeadingY),11);
+          const homeBenchVisual=uniquePlayers(directSides.home.filter((item)=>item.top>benchHeadingY),15);
+          const awayBenchVisual=uniquePlayers(directSides.away.filter((item)=>item.top>benchHeadingY),15);
+          if (homeStarterVisual.length>=7 && awayStarterVisual.length>=7) {
+            directOfficialStructure={homeLineup:homeStarterVisual.slice(0,11),awayLineup:awayStarterVisual.slice(0,11),homeBench:homeBenchVisual,awayBench:awayBenchVisual};
+          }
+        }
 
         let homeLineup = uniquePlayers(buckets.homeStarter, 30);
         let awayLineup = uniquePlayers(buckets.awayStarter, 30);
         let homeBench = uniquePlayers(buckets.homeBench, 20);
         let awayBench = uniquePlayers(buckets.awayBench, 20);
 
-        if (homeLineup.length < 7 && directSides.home.length >= 7) {
+        if (directOfficialStructure) {
+          homeLineup = directOfficialStructure.homeLineup;
+          awayLineup = directOfficialStructure.awayLineup;
+          homeBench = directOfficialStructure.homeBench;
+          awayBench = directOfficialStructure.awayBench;
+        }
+
+        if (!directOfficialStructure && homeLineup.length < 7 && directSides.home.length >= 7) {
           homeLineup = uniquePlayers(directSides.home.slice(0, 11), 11);
           if (!homeBench.length && directSides.home.length > 11) {
             homeBench = uniquePlayers(directSides.home.slice(11), 15);
           }
         }
-        if (awayLineup.length < 7 && directSides.away.length >= 7) {
+        if (!directOfficialStructure && awayLineup.length < 7 && directSides.away.length >= 7) {
           awayLineup = uniquePlayers(directSides.away.slice(0, 11), 11);
           if (!awayBench.length && directSides.away.length > 11) {
             awayBench = uniquePlayers(directSides.away.slice(11), 15);
@@ -1548,7 +1550,7 @@ async function extractReport(browser, match) {
         // anordnet, kann die Links/Rechts-Erkennung versagen. In diesem Fall
         // wird die offizielle Reihenfolge der Profile verwendet: zuerst Heim,
         // danach Gast.
-        if ((homeLineup.length < 7 || awayLineup.length < 7) && directSeen.size >= 18) {
+        if (!directOfficialStructure && (homeLineup.length < 7 || awayLineup.length < 7) && directSeen.size >= 18) {
           const combinedDirect = uniquePlayers(
             [...directSides.home, ...directSides.away].sort((a, b) => a.top - b.top),
             40,
@@ -1565,7 +1567,7 @@ async function extractReport(browser, match) {
         // position der Heim- bzw. Gastspalte zugeordnet. Damit funktionieren
         // auch Spielberichte, bei denen die Spielernamen nur als Text und nicht
         // als verlinkte Spielerprofile ausgegeben werden.
-        if (homeLineup.length < 7 || awayLineup.length < 7) {
+        if (!directOfficialStructure && (homeLineup.length < 7 || awayLineup.length < 7)) {
           const visible = (node) => {
             const style = getComputedStyle(node);
             const rect = node.getBoundingClientRect();
@@ -1919,7 +1921,7 @@ async function extractReport(browser, match) {
           heroImage,
           playerCandidateCount: candidates.length,
           directProfileCount: directSeen.size,
-          officialProfileOrder,
+          officialColumnDebug: { applied: Boolean(directOfficialStructure), columnSplitX, largestGap, benchHeadingY, homeProfiles: directSides.home.length, awayProfiles: directSides.away.length },
           visualLineupDebug: window.__TSU_VISUAL_LINEUP_DEBUG__ || null,
           preview: textLines.slice(0, 35).join(" | ").slice(0, 1800),
         };
@@ -2015,72 +2017,6 @@ async function extractReport(browser, match) {
       }
       raw.deepFramePlayerCount = unique.length;
       raw.frameDiagnostics = frameDiagnostics;
-    }
-
-    // KANONISCHE ÖFB-AUFSTELLUNGSREIHENFOLGE:
-    // 1-11 Heim-Startelf, 12-22 Gast-Startelf,
-    // danach Heim-Ersatzbank und anschließend Gast-Ersatzbank.
-    const orderedPlayers = [];
-    const orderedSeen = new Set();
-    for (const player of (Array.isArray(raw.officialProfileOrder) ? raw.officialProfileOrder : [])) {
-      const profileId = String(player?.playerUrl || "")
-        .match(/spielerdetails\/[^/]+\/([^~/?]+)/i)?.[1] || "";
-      const key = profileId || normalizeText(player?.name || "");
-      if (!key || orderedSeen.has(key)) continue;
-      orderedSeen.add(key);
-      orderedPlayers.push(player);
-    }
-
-    if (orderedPlayers.length >= 22) {
-      let orderedHome = orderedPlayers.slice(0, 11);
-      let orderedAway = orderedPlayers.slice(11, 22);
-      const remaining = orderedPlayers.slice(22);
-
-      const isAinetName = (player) =>
-        ainetSquadNames.has(normalizeText(player?.name || ""));
-      const ainetIsHome = isAinet(match.homeTeam);
-      const ainetIsAway = isAinet(match.awayTeam);
-
-      // Der TSU-Ainet-Kader ist eine Plausibilitätskontrolle, nicht die Hauptquelle.
-      // Nur bei einem klaren Widerspruch werden die beiden kompletten 11er-Blöcke getauscht.
-      const firstHits = orderedHome.filter(isAinetName).length;
-      const secondHits = orderedAway.filter(isAinetName).length;
-      if (
-        ainetSquadNames.size >= 5 &&
-        ((ainetIsHome && secondHits >= 5 && secondHits > firstHits + 2) ||
-         (ainetIsAway && firstHits >= 5 && firstHits > secondHits + 2))
-      ) {
-        [orderedHome, orderedAway] = [orderedAway, orderedHome];
-      }
-
-      raw.homeLineup = orderedHome;
-      raw.awayLineup = orderedAway;
-
-      if (remaining.length) {
-        if (ainetSquadNames.size >= 5 && (ainetIsHome || ainetIsAway)) {
-          // Nach den 22 Startern kommt zuerst die Heim-Bank und danach die Gast-Bank.
-          // Für die Grenze dient der Ainet-Kader als zusätzlicher Hinweis.
-          const ainetBench = remaining.filter(isAinetName);
-          const opponentBench = remaining.filter((player) => !isAinetName(player));
-          if (ainetIsHome) {
-            raw.homeBench = ainetBench;
-            raw.awayBench = opponentBench;
-          } else {
-            raw.homeBench = opponentBench;
-            raw.awayBench = ainetBench;
-          }
-        }
-      }
-
-      raw.officialOrderApplied = true;
-      raw.officialOrderPlayerCount = orderedPlayers.length;
-      raw.ainetRosterHint = {
-        squadSize: ainetSquadNames.size,
-        homeStarterHits: raw.homeLineup.filter(isAinetName).length,
-        awayStarterHits: raw.awayLineup.filter(isAinetName).length,
-        homeBenchHits: (raw.homeBench || []).filter(isAinetName).length,
-        awayBenchHits: (raw.awayBench || []).filter(isAinetName).length,
-      };
     }
 
     // Vor einem zukünftigen Spiel dürfen nur tatsächlich veröffentlichte

@@ -73,15 +73,22 @@
 
 .v101-match-hero::after {
   position: absolute;
-  right: -90px;
-  bottom: -150px;
-  width: 330px;
-  height: 330px;
+  right: -54px;
+  bottom: -92px;
+  width: 300px;
+  height: 260px;
   content: "";
-  background: rgba(246,201,69,.08);
-  border-radius: 50%;
-  filter: blur(4px);
   pointer-events: none;
+  opacity: .42;
+  background:
+    linear-gradient(30deg, rgba(246,201,69,.10) 12%, transparent 12.5%, transparent 87%, rgba(246,201,69,.10) 87.5%),
+    linear-gradient(150deg, rgba(91,145,235,.12) 12%, transparent 12.5%, transparent 87%, rgba(91,145,235,.12) 87.5%),
+    linear-gradient(30deg, rgba(255,255,255,.035) 12%, transparent 12.5%, transparent 87%, rgba(255,255,255,.035) 87.5%);
+  background-size: 72px 124px;
+  background-position: 0 0, 0 0, 36px 62px;
+  transform: rotate(-8deg);
+  -webkit-mask-image: linear-gradient(135deg, transparent 4%, #000 38%, #000 78%, transparent 100%);
+  mask-image: linear-gradient(135deg, transparent 4%, #000 38%, #000 78%, transparent 100%);
 }
 
 .v101-match-head,
@@ -145,10 +152,11 @@
   height: 82px;
   padding: 8px;
   object-fit: contain;
-  background: rgba(255,255,255,.96);
-  border: 1px solid rgba(255,255,255,.24);
-  border-radius: 22px;
-  box-shadow: 0 15px 28px rgba(0,0,0,.25);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 16px rgba(0,0,0,.34));
 }
 
 .v101-team strong {
@@ -915,8 +923,11 @@
   object-fit: contain;
   object-position: center;
   transform: none;
-  background: #fff;
-  border-radius: 24px;
+  background: transparent;
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+  filter: drop-shadow(0 10px 16px rgba(0,0,0,.34));
 }
 @media(max-width:640px) {
   .v101-sponsor-track button {
@@ -1733,4 +1744,35 @@
     flex-direction: column;
     gap: 3px;
   }
+}
+
+
+/* Beta 36: Logos ohne weiße Kachel + moderner Matchday-Look */
+.v186-matchday-team .team-logo,
+.v186-matchday-team .team-logo-small {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  filter: drop-shadow(0 5px 8px rgba(0,0,0,.34));
+}
+
+.v101-match-hero {
+  background:
+    linear-gradient(135deg, rgba(18, 45, 84, .96), rgba(7, 19, 38, .985) 58%, rgba(8, 24, 48, .98)),
+    repeating-linear-gradient(60deg, rgba(255,255,255,.018) 0 1px, transparent 1px 18px);
+}
+
+.v186-matchday-item {
+  background:
+    linear-gradient(120deg, rgba(9, 24, 47, .90), rgba(5, 15, 31, .82));
+  border-color: rgba(123, 164, 226, .13);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.018);
+}
+
+.v186-matchday-item:hover,
+.v186-matchday-item:focus-visible {
+  background:
+    linear-gradient(120deg, rgba(14, 38, 72, .96), rgba(7, 21, 42, .92));
 }

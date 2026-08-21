@@ -1065,9 +1065,26 @@
   --dashboard-text:#f8fbff;
   --dashboard-text-muted:#a8b5ca;
   background:
-    radial-gradient(ellipse at 8% -8%,rgba(28,93,190,.20),transparent 31%),
-    radial-gradient(ellipse at 98% 24%,rgba(190,24,48,.075),transparent 26%),
-    linear-gradient(180deg,#07111f 0%,#050b16 52%,#040a13 100%);
+    radial-gradient(circle at 50% -8%, rgba(39, 103, 205, .16), transparent 35%),
+    linear-gradient(30deg, rgba(91, 139, 217, .04) 12%, transparent 12.5%, transparent 87%, rgba(91, 139, 217, .04) 87.5%, rgba(91, 139, 217, .04)),
+    linear-gradient(150deg, rgba(91, 139, 217, .04) 12%, transparent 12.5%, transparent 87%, rgba(91, 139, 217, .04) 87.5%, rgba(91, 139, 217, .04)),
+    linear-gradient(30deg, rgba(91, 139, 217, .04) 12%, transparent 12.5%, transparent 87%, rgba(91, 139, 217, .04) 87.5%, rgba(91, 139, 217, .04)),
+    linear-gradient(150deg, rgba(91, 139, 217, .04) 12%, transparent 12.5%, transparent 87%, rgba(91, 139, 217, .04) 87.5%, rgba(91, 139, 217, .04)),
+    linear-gradient(180deg, rgba(5, 11, 22, .92), rgba(4, 10, 19, .96));
+  background-size:
+    auto,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    auto;
+  background-position:
+    center top,
+    0 0,
+    0 0,
+    28px 49px,
+    28px 49px,
+    0 0;
 }
 .dashboard-header{
   min-height:68px;

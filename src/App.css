@@ -21,9 +21,30 @@ html {
 
   color-scheme: dark;
   background:
-    linear-gradient(rgba(3, 9, 20, 0.38), rgba(3, 9, 20, 0.5)),
-    url("/tsu-app-background.png") center top / cover fixed no-repeat,
+    radial-gradient(circle at 50% -10%, rgba(37, 102, 205, 0.20), transparent 34%),
+    linear-gradient(30deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(150deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(30deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(150deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(60deg, rgba(255,255,255,0.018) 25%, transparent 25.5%, transparent 75%, rgba(255,255,255,0.018) 75%, rgba(255,255,255,0.018)),
     #050b16;
+  background-size:
+    auto,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    auto;
+  background-position:
+    center top,
+    0 0,
+    0 0,
+    28px 49px,
+    28px 49px,
+    0 0,
+    0 0;
+  background-attachment: fixed;
 
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -48,9 +69,30 @@ body {
     sans-serif;
 
   background:
-    linear-gradient(rgba(3, 9, 20, 0.38), rgba(3, 9, 20, 0.5)),
-    url("/tsu-app-background.png") center top / cover fixed no-repeat,
+    radial-gradient(circle at 50% -10%, rgba(37, 102, 205, 0.20), transparent 34%),
+    linear-gradient(30deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(150deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(30deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(150deg, rgba(94, 145, 225, 0.045) 12%, transparent 12.5%, transparent 87%, rgba(94, 145, 225, 0.045) 87.5%, rgba(94, 145, 225, 0.045)),
+    linear-gradient(60deg, rgba(255,255,255,0.018) 25%, transparent 25.5%, transparent 75%, rgba(255,255,255,0.018) 75%, rgba(255,255,255,0.018)),
     #050b16;
+  background-size:
+    auto,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    56px 98px,
+    auto;
+  background-position:
+    center top,
+    0 0,
+    0 0,
+    28px 49px,
+    28px 49px,
+    0 0,
+    0 0;
+  background-attachment: fixed;
 
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;

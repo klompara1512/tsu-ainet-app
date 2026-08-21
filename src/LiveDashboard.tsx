@@ -112,6 +112,10 @@ function canonicalMatchKey(match: KfvMatch) {
   return [teamBucket, day, home, away].join("|");
 }
 
+function matchdayTeamLabel(teamName: string) {
+  return teamName === "Kampfmannschaft" ? "KM" : teamName;
+}
+
 function localMatchDayKey(date: Date) {
   return [
     date.getFullYear(),
@@ -490,7 +494,7 @@ function LiveDashboard({
                       <div className="v186-matchday-time">
                         <small>{index === 0 ? "Erstes Spiel" : "Anstoß"}</small>
                         <strong>{formatTime(match.kickoffAt)}</strong>
-                        <span>{match.teamName}</span>
+                        <span>{matchdayTeamLabel(match.teamName)}</span>
                       </div>
 
                       <div className="v186-matchday-team">

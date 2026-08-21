@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "18.3.5-beta.36-visible-row-pairing";
+const VERSION = "1.0.1-prematch-officials-7days";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -22,7 +22,10 @@ const NAVIGATION_TIMEOUT = Math.max(
 );
 const PRE_KICKOFF_MINUTES = Math.max(
   0,
-  Number(process.env.REPORT_PRE_KICKOFF_MINUTES || 60),
+  // Schiedsrichter und Spielort werden auf der offiziellen ÖFB-Seite oft
+  // bereits mehrere Tage vor dem Match veröffentlicht. Deshalb beginnen wir
+  // den Bericht-Sync standardmäßig 7 Tage vor dem Anpfiff.
+  Number(process.env.REPORT_PRE_KICKOFF_MINUTES || 10080),
 );
 const POST_KICKOFF_MINUTES = Math.max(
   0,
@@ -561,12 +564,31 @@ async function keepMatchesNeedingPrematchData(matches) {
     const kickoffMs = match.kickoffDate?.getTime?.() || asDate(match.kickoffAt).getTime();
     const hasStarted = kickoffMs > 0 && Date.now() >= kickoffMs;
 
-    // Vor Anpfiff reichen Aufstellung, Spielort und Schiedsrichter. Nach Anpfiff
-    // bleibt das Spiel so lange im Sync, bis zusätzlich ein Ergebnis vorliegt.
-    const complete = hasLineup && hasReferee && hasVenue && (!hasStarted || hasResult);
+    const hoursUntilKickoff = kickoffMs > 0
+      ? (kickoffMs - Date.now()) / 3_600_000
+      : 0;
+
+    // Gestaffelter Prematch-Sync:
+    // >24h vor Anpfiff sind Schiedsrichter + Spielort die entscheidenden Daten.
+    // Innerhalb der letzten 24h prüfen wir zusätzlich die veröffentlichte Aufstellung.
+    // Nach Anpfiff bleibt das Spiel bis zu einem Ergebnis im Sync.
+    const complete = hasStarted
+      ? hasLineup && hasReferee && hasVenue && hasResult
+      : hoursUntilKickoff > 24
+        ? hasReferee && hasVenue
+        : hasLineup && hasReferee && hasVenue;
 
     if (complete) {
-      console.log(`Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: Kerndaten vollständig (Heim ${homeLineupCount}, Gast ${awayLineupCount}, Schiedsrichter, Spielort${hasStarted ? ", Ergebnis" : ""}).`);
+      const stage = hasStarted
+        ? "Nachspiel"
+        : hoursUntilKickoff > 24
+          ? "Prematch >24h"
+          : "Matchday";
+      console.log(
+        `Smart-Skip: ${match.homeTeam} - ${match.awayTeam}: ${stage} vollständig ` +
+        `(Heim ${homeLineupCount}, Gast ${awayLineupCount}, Schiedsrichter=${hasReferee ? "ja" : "nein"}, ` +
+        `Spielort=${hasVenue ? "ja" : "nein"}${hasStarted ? `, Ergebnis=${hasResult ? "ja" : "nein"}` : ""}).`
+      );
       return null;
     }
 

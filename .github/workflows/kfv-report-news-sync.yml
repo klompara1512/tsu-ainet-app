@@ -2,6 +2,10 @@ name: KFV / ÖFB Spielberichte, Aufstellungen und Liveticker synchronisieren
 
 on:
   workflow_dispatch:
+  schedule:
+    # Einmal täglich. So werden Schiedsrichter und Spielort automatisch
+    # übernommen, sobald sie in der Woche vor dem Spiel offiziell erscheinen.
+    - cron: "17 4 * * *"
 
 permissions:
   contents: read
@@ -22,7 +26,7 @@ jobs:
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
-      REPORT_PRE_KICKOFF_MINUTES: "60"
+      REPORT_PRE_KICKOFF_MINUTES: "10080"
       REPORT_POST_KICKOFF_MINUTES: "720"
       REPORT_FORCE_WINDOW_MINUTES: "10080"
 

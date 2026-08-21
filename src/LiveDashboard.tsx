@@ -112,6 +112,14 @@ function canonicalMatchKey(match: KfvMatch) {
   return [teamBucket, day, home, away].join("|");
 }
 
+function localMatchDayKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function preferDashboardMatch(current: KfvMatch, candidate: KfvMatch) {
   const score = (match: KfvMatch) =>
     (match.status === "finished" ? 20 : 0) +
@@ -301,6 +309,25 @@ function LiveDashboard({
 
   const nextMatch = dashboardMatch;
 
+  const matchdayMatches = useMemo(() => {
+    if (!nextMatch) return [];
+    const dayKey = localMatchDayKey(nextMatch.kickoffAt);
+
+    return uniqueMatches
+      .filter(
+        (match) =>
+          localMatchDayKey(match.kickoffAt) === dayKey &&
+          match.status !== "cancelled" &&
+          match.status !== "postponed",
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          a.kickoffAt.getTime() - b.kickoffAt.getTime() ||
+          a.teamName.localeCompare(b.teamName, "de-AT"),
+      );
+  }, [nextMatch, uniqueMatches]);
+
   const recentMatches = useMemo(
     () =>
       uniqueMatches
@@ -418,8 +445,14 @@ function LiveDashboard({
       <section className="v101-match-hero">
         <div className="v101-match-head">
           <div>
-            <span className="v101-overline">Nächstes Spiel</span>
-            <h2>{nextMatch?.teamName || "TSU Ainet"}</h2>
+            <span className="v101-overline">
+              {matchdayMatches.length > 1 ? "Matchday · Alle Spiele" : "Nächstes Spiel"}
+            </span>
+            <h2>
+              {matchdayMatches.length > 1
+                ? `${formatDate(nextMatch!.kickoffAt)} · ${matchdayMatches.length} Spiele`
+                : nextMatch?.teamName || "TSU Ainet"}
+            </h2>
             {nextMatch && <span className={`v104-status ${isLive ? "is-live" : isToday ? "is-today" : ""}`}>{isLive ? "LIVE" : isFinishedToday ? "Beendet" : isToday ? "Heute" : "Geplant"}</span>}
           </div>
           {nextMatch && !isLive && !isFinishedToday && (
@@ -434,42 +467,127 @@ function LiveDashboard({
           <div className="v101-empty">ÖFB-Daten werden geladen …</div>
         ) : nextMatch ? (
           <>
-            <div className="v101-fixture">
-              <div className="v101-team">
-                <TeamLogo
-                  url={nextMatch.homeLogoUrl}
-                  name={nextMatch.homeTeam}
-                  size="hero"
-                />
-                <strong>{nextMatch.homeTeam}</strong>
+            {matchdayMatches.length > 1 ? (
+              <div className="v186-matchday-list">
+                {matchdayMatches.map((match, index) => {
+                  const matchIsToday = localMatchDayKey(match.kickoffAt) === localMatchDayKey(clock);
+                  const matchIsLive =
+                    match.status === "scheduled" &&
+                    clock.getTime() >= match.kickoffAt.getTime() - 15 * 60_000 &&
+                    clock.getTime() <= match.kickoffAt.getTime() + 150 * 60_000;
+                  const matchFinished =
+                    match.status === "finished" ||
+                    (match.homeScore !== null && match.awayScore !== null);
+
+                  return (
+                    <button
+                      type="button"
+                      className={`v186-matchday-item ${matchIsLive ? "is-live" : ""}`}
+                      key={match.id}
+                      onClick={() => onOpenMatch(match.id)}
+                      aria-label={`${match.teamName}: ${match.homeTeam} gegen ${match.awayTeam} öffnen`}
+                    >
+                      <div className="v186-matchday-time">
+                        <small>{index === 0 ? "Erstes Spiel" : "Anstoß"}</small>
+                        <strong>{formatTime(match.kickoffAt)}</strong>
+                        <span>{match.teamName}</span>
+                      </div>
+
+                      <div className="v186-matchday-team">
+                        <TeamLogo
+                          url={match.homeLogoUrl}
+                          name={match.homeTeam}
+                          clubId={match.homeClubId}
+                          size="small"
+                        />
+                        <strong>{match.homeTeam}</strong>
+                      </div>
+
+                      <div className="v186-matchday-score">
+                        {match.homeScore !== null && match.awayScore !== null ? (
+                          <b>{match.homeScore}:{match.awayScore}</b>
+                        ) : (
+                          <b>VS</b>
+                        )}
+                        <small>
+                          {matchIsLive
+                            ? "LIVE"
+                            : matchFinished
+                              ? "Beendet"
+                              : matchIsToday
+                                ? "Heute"
+                                : "Geplant"}
+                        </small>
+                      </div>
+
+                      <div className="v186-matchday-team is-away">
+                        <TeamLogo
+                          url={match.awayLogoUrl}
+                          name={match.awayTeam}
+                          clubId={match.awayClubId}
+                          size="small"
+                        />
+                        <strong>{match.awayTeam}</strong>
+                      </div>
+
+                      <span className="v186-matchday-open" aria-hidden="true">›</span>
+                    </button>
+                  );
+                })}
+
+                <div className="v186-matchday-footer">
+                  <span>
+                    <Icon name="calendar" />
+                    {formatDate(nextMatch.kickoffAt)}
+                  </span>
+                  <small>Nach Anstoßzeit sortiert · jedes Spiel direkt antippbar</small>
+                </div>
               </div>
+            ) : (
+              <>
+                <div className="v101-fixture">
+                  <div className="v101-team">
+                    <TeamLogo
+                      url={nextMatch.homeLogoUrl}
+                      name={nextMatch.homeTeam}
+                      size="hero"
+                    />
+                    <strong>{nextMatch.homeTeam}</strong>
+                  </div>
 
-              <div className="v101-kickoff">
-                <small>{isFinishedToday ? "Endstand" : isLive ? "LIVE" : formatDate(nextMatch.kickoffAt)}</small>
-                <b>{nextMatch.homeScore !== null && nextMatch.awayScore !== null ? `${nextMatch.homeScore}:${nextMatch.awayScore}` : formatTime(nextMatch.kickoffAt)}</b>
-                <span>{isLive ? "● LIVE" : isFinishedToday ? "Beendet" : "VS"}</span>
-              </div>
+                  <div className="v101-kickoff">
+                    <small>{isFinishedToday ? "Endstand" : isLive ? "LIVE" : formatDate(nextMatch.kickoffAt)}</small>
+                    <b>{nextMatch.homeScore !== null && nextMatch.awayScore !== null ? `${nextMatch.homeScore}:${nextMatch.awayScore}` : formatTime(nextMatch.kickoffAt)}</b>
+                    <span>{isLive ? "● LIVE" : isFinishedToday ? "Beendet" : "VS"}</span>
+                  </div>
 
-              <div className="v101-team">
-                <TeamLogo
-                  url={nextMatch.awayLogoUrl}
-                  name={nextMatch.awayTeam}
-                  size="hero"
-                />
-                <strong>{nextMatch.awayTeam}</strong>
-              </div>
-            </div>
+                  <div className="v101-team">
+                    <TeamLogo
+                      url={nextMatch.awayLogoUrl}
+                      name={nextMatch.awayTeam}
+                      size="hero"
+                    />
+                    <strong>{nextMatch.awayTeam}</strong>
+                  </div>
+                </div>
 
-            <div className="v101-match-meta">
-              <span><Icon name="calendar" />{formatDate(nextMatch.kickoffAt)} · {formatTime(nextMatch.kickoffAt)} Uhr</span>
-              <span><Icon name="map" />{nextMatch.venue || "Spielort wird vom KFV ergänzt"}</span>
-              <span><Icon name="ball" />{isTsuAinet(nextMatch.homeTeam) ? "Heimspiel" : "Auswärtsspiel"}</span>
-            </div>
+                <div className="v101-match-meta">
+                  <span><Icon name="calendar" />{formatDate(nextMatch.kickoffAt)} · {formatTime(nextMatch.kickoffAt)} Uhr</span>
+                  <span><Icon name="map" />{nextMatch.venue || "Spielort wird vom KFV ergänzt"}</span>
+                  <span><Icon name="ball" />{isTsuAinet(nextMatch.homeTeam) ? "Heimspiel" : "Auswärtsspiel"}</span>
+                </div>
 
-            <button type="button" className="v101-primary" onClick={() => onOpenMatch(nextMatch.id)}>
-              {isLive && nextMatch.liveUrl ? "Jetzt zum Liveticker" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
-            </button>
-            <small className="v104-data-freshness">{nextMatch.sourceUpdatedAt ? `KFV zuletzt aktualisiert: ${formatDate(nextMatch.sourceUpdatedAt)} · ${formatTime(nextMatch.sourceUpdatedAt)}` : "KFV-Aktualisierung ausständig"}</small>
+                <button type="button" className="v101-primary" onClick={() => onOpenMatch(nextMatch.id)}>
+                  {isLive && nextMatch.liveUrl ? "Jetzt zum Liveticker" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
+                </button>
+              </>
+            )}
+
+            <small className="v104-data-freshness">
+              {nextMatch.sourceUpdatedAt
+                ? `KFV zuletzt aktualisiert: ${formatDate(nextMatch.sourceUpdatedAt)} · ${formatTime(nextMatch.sourceUpdatedAt)}`
+                : "KFV-Aktualisierung ausständig"}
+            </small>
           </>
         ) : (
           <div className="v101-empty">

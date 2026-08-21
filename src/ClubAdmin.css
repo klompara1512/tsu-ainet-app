@@ -170,3 +170,106 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+
+
+/* Beta 36 · Mobile Benutzerverwaltung:
+   Mannschaften dürfen weder von Rollen noch von Aktionsfeldern überdeckt werden. */
+@media (max-width: 750px) {
+  .user-list article {
+    grid-template-columns: 46px minmax(0, 1fr) !important;
+    align-items: start !important;
+    gap: 10px 12px !important;
+    padding: 14px 12px !important;
+    overflow: visible !important;
+  }
+
+  .user-main {
+    min-width: 0 !important;
+    width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .user-main .chips {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 5px !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+  }
+
+  .user-main .chips span,
+  .user-main .chips .team-chip {
+    flex: 0 0 auto !important;
+    max-width: 100% !important;
+    white-space: nowrap !important;
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  .user-actions {
+    grid-column: 1 / -1 !important;
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+    gap: 8px !important;
+    width: 100% !important;
+    margin-top: 4px !important;
+    position: relative !important;
+    z-index: 2 !important;
+  }
+
+  .user-actions > select {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0 !important;
+  }
+
+  .user-actions .team-assignment {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .team-assignment-trigger {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .team-assignment-trigger-copy {
+    min-width: 0 !important;
+  }
+
+  .team-assignment-trigger-copy strong {
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    white-space: nowrap !important;
+  }
+
+  .user-actions > button {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .team-assignment-picker {
+    left: 0 !important;
+    right: auto !important;
+    width: min(310px, calc(100vw - 32px)) !important;
+    max-width: calc(100vw - 32px) !important;
+    z-index: 30 !important;
+  }
+}
+
+@media (max-width: 470px) {
+  .user-actions {
+    grid-template-columns: 1fr !important;
+  }
+
+  .user-actions > select,
+  .user-actions .team-assignment,
+  .user-actions > button {
+    grid-column: 1 !important;
+  }
+
+  .user-main .chips {
+    padding-right: 2px !important;
+  }
+}

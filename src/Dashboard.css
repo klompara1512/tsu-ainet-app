@@ -2431,3 +2431,20 @@ tr[data-team*="ainet"] {
   font-size: 10px !important;
   line-height: 1.35;
 }
+
+
+/* Beta 36 · Verein: nur EIN großes Wasserzeichen.
+   Das primäre .club-menu-watermark bleibt bestehen; zusätzliche Logo-Ebenen
+   der Vereinskarte werden abgeschaltet. */
+.club-menu-modern::before,
+.club-menu-modern::after,
+.club-menu-shell::before,
+.club-menu-shell::after {
+  background-image: none !important;
+  content: none !important;
+}
+
+/* Falls ältere Beta-Regeln noch ein zweites Vereinslogo auf den Container legen. */
+.club-menu-modern {
+  background-image: none !important;
+}

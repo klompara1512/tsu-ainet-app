@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.0.1-prematch-officials-7days";
+const VERSION = "1.0.2-lineup-plausibility-gate";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -294,6 +294,124 @@ function reportIdFor(match) {
   return gameId
     ? `report_oefb_${gameId}`
     : `report_${sha(match.id || match.reportUrl)}`;
+}
+
+
+function isPlausibleLineupPlayerName(value) {
+  const name = compact(value);
+  if (!name || name.length < 4 || name.length > 70) return false;
+
+  // Diese Texte stammen aus Spielbericht/Statistik/Navigation und sind niemals Spieler.
+  if (
+    /^(?:live\s*ticker|liveticker|spielbericht|ersatzspieler|aufstellung|startelf|bank)$/i.test(name) ||
+    /\b(?:leider\s+wurde|noch\s+kein\s+spielbericht|spiel(?:e)?\s+gegen|tore?\s+gegen|tore?\s+in\s+der|eins[aä]tze?\s+f[uü]r|die\s+torj[aä]ger|die\s+spezialisten|die\s+routiniers|laufenden\s+saison|sportplatz|stadion|arena)\b/i.test(name)
+  ) {
+    return false;
+  }
+
+  const parts = name
+    .replace(/[0-9()[\]{}|]+/g, " ")
+    .split(/\s+/)
+    .filter(Boolean);
+
+  // Normale Spielernamen bestehen hier aus mindestens Vor- und Nachname.
+  if (parts.length < 2 || parts.length > 6) return false;
+
+  return parts.filter((part) => /[A-Za-zÄÖÜäöüßÀ-ÿ]/.test(part)).length >= 2;
+}
+
+function lineupPlausibility(raw) {
+  const home = Array.isArray(raw.homeLineup) ? raw.homeLineup : [];
+  const away = Array.isArray(raw.awayLineup) ? raw.awayLineup : [];
+
+  const statsFor = (group) => {
+    const plausibleNames = group.filter((player) =>
+      isPlausibleLineupPlayerName(
+        player?.name || player?.playerName || player?.fullName || player,
+      ),
+    ).length;
+
+    const profileLinks = group.filter((player) =>
+      /spielerdetails|\/spieler\//i.test(String(player?.playerUrl || "")),
+    ).length;
+
+    return {
+      count: group.length,
+      plausibleNames,
+      profileLinks,
+    };
+  };
+
+  const homeStats = statsFor(home);
+  const awayStats = statsFor(away);
+  const officialColumns = Boolean(raw?.officialColumnDebug?.applied);
+
+  const countsPlausible =
+    homeStats.count >= 10 && homeStats.count <= 11 &&
+    awayStats.count >= 10 && awayStats.count <= 11;
+
+  const namesPlausible =
+    homeStats.plausibleNames >= Math.min(9, homeStats.count) &&
+    awayStats.plausibleNames >= Math.min(9, awayStats.count);
+
+  const profilesPlausible =
+    homeStats.profileLinks >= Math.ceil(homeStats.count * 0.5) &&
+    awayStats.profileLinks >= Math.ceil(awayStats.count * 0.5);
+
+  return {
+    valid:
+      countsPlausible &&
+      namesPlausible &&
+      profilesPlausible &&
+      officialColumns,
+    officialColumns,
+    homeStats,
+    awayStats,
+  };
+}
+
+function applyLineupPlausibilityGate(raw, match) {
+  const check = lineupPlausibility(raw);
+
+  if (!check.valid) {
+    if (
+      (raw.homeLineup?.length || 0) ||
+      (raw.awayLineup?.length || 0) ||
+      (raw.homeBench?.length || 0) ||
+      (raw.awayBench?.length || 0)
+    ) {
+      console.log(
+        `Aufstellung NICHT gespeichert – unplausibel: ${match.homeTeam} - ${match.awayTeam} | ` +
+        `Heim ${check.homeStats.count} Spieler / ${check.homeStats.plausibleNames} plausible Namen / ${check.homeStats.profileLinks} Profile | ` +
+        `Gast ${check.awayStats.count} Spieler / ${check.awayStats.plausibleNames} plausible Namen / ${check.awayStats.profileLinks} Profile | ` +
+        `offizielle Spalten=${check.officialColumns ? "ja" : "nein"}`,
+      );
+    }
+
+    raw.homeLineup = [];
+    raw.awayLineup = [];
+    raw.homeBench = [];
+    raw.awayBench = [];
+    raw.lineupPublished = false;
+    raw.lineupPlausibility = check;
+    return false;
+  }
+
+  // Ersatzspieler ebenfalls nur übernehmen, wenn der Text wie ein echter Spielername aussieht.
+  raw.homeBench = (raw.homeBench || []).filter((player) =>
+    isPlausibleLineupPlayerName(
+      player?.name || player?.playerName || player?.fullName || player,
+    ),
+  );
+  raw.awayBench = (raw.awayBench || []).filter((player) =>
+    isPlausibleLineupPlayerName(
+      player?.name || player?.playerName || player?.fullName || player,
+    ),
+  );
+
+  raw.lineupPublished = true;
+  raw.lineupPlausibility = check;
+  return true;
 }
 
 function validateReportPage(match, raw) {
@@ -2060,26 +2178,10 @@ async function extractReport(browser, match) {
       raw.frameDiagnostics = frameDiagnostics;
     }
 
-    // Vor einem zukünftigen Spiel dürfen nur tatsächlich veröffentlichte
-    // Spielberichts-Daten übernommen werden. ÖFB-Seiten enthalten auch Kader-
-    // und Profil-Links außerhalb der offiziellen Aufstellung; diese wurden
-    // bisher teilweise fälschlich als Startelf interpretiert. Eine zukünftige
-    // Aufstellung gilt deshalb erst als veröffentlicht, wenn beide Startelfen
-    // praktisch vollständig erkannt werden.
-    const isFutureMatch = Boolean(
-      match.kickoffDate && match.kickoffDate.getTime() > Date.now()
-    );
-    if (isFutureMatch) {
-      const homeCount = Array.isArray(raw.homeLineup) ? raw.homeLineup.length : 0;
-      const awayCount = Array.isArray(raw.awayLineup) ? raw.awayLineup.length : 0;
-      const officialFutureLineupPublished = homeCount >= 10 && awayCount >= 10;
-      if (!officialFutureLineupPublished) {
-        raw.homeLineup = [];
-        raw.awayLineup = [];
-        raw.homeBench = [];
-        raw.awayBench = [];
-      }
-    }
+    // Eine Aufstellung wird erst gespeichert, wenn die erkennbare ÖFB-Struktur
+    // wirklich plausibel ist. Schiedsrichter und Spielort werden davon NICHT
+    // blockiert und können weiterhin bereits Tage vorher übernommen werden.
+    applyLineupPlausibilityGate(raw, match);
 
     const validation = validateReportPage(match, raw);
 
@@ -2132,6 +2234,8 @@ async function extractReport(browser, match) {
       awayLineup: raw.awayLineup,
       homeBench: raw.homeBench || [],
       awayBench: raw.awayBench || [],
+      lineupPublished: raw.lineupPublished === true,
+      lineupPlausibility: raw.lineupPlausibility || null,
       events: raw.events,
       eventCount: raw.events.length,
       lineupPlayerCount:
@@ -2249,10 +2353,11 @@ async function upsertReport(report, runId) {
     : (Number.isInteger(old.awayScore) ? old.awayScore : null);
   // Aufstellungen gehören ausschließlich zu dieser exakten ÖFB-Spiel-ID.
   // Alte Aufstellungen werden bei einem erfolgreichen neuen Bericht nie zurückkopiert.
-  const homeLineup = Array.isArray(report.homeLineup) ? report.homeLineup : [];
-  const awayLineup = Array.isArray(report.awayLineup) ? report.awayLineup : [];
-  const homeBench = Array.isArray(report.homeBench) ? report.homeBench : [];
-  const awayBench = Array.isArray(report.awayBench) ? report.awayBench : [];
+  const lineupPublished = report.lineupPublished === true;
+  const homeLineup = lineupPublished && Array.isArray(report.homeLineup) ? report.homeLineup : [];
+  const awayLineup = lineupPublished && Array.isArray(report.awayLineup) ? report.awayLineup : [];
+  const homeBench = lineupPublished && Array.isArray(report.homeBench) ? report.homeBench : [];
+  const awayBench = lineupPublished && Array.isArray(report.awayBench) ? report.awayBench : [];
   const referee = report.referee || (isFutureReport ? "" : (old.referee || ""));
   const venue = cleanVenueValue(report.venue) || (isFutureReport ? "" : cleanVenueValue(old.venue)) || "";
   const refereeAssistants = report.refereeAssistants.length
@@ -2334,10 +2439,18 @@ async function updateMatchFromReport(report) {
   // im zentralen Spiel-Dokument verändern. Diese Felder gehören ausschließlich
   // dem offiziellen Spielplan-Sync (kfv-games-sync.cjs). Dadurch können Uhrzeiten
   // wie 15:00, 12:30 oder 13:45 nicht mehr als Resultate interpretiert werden.
-  patch.homeLineup = Array.isArray(report.homeLineup) ? report.homeLineup : [];
-  patch.awayLineup = Array.isArray(report.awayLineup) ? report.awayLineup : [];
-  patch.homeBench = Array.isArray(report.homeBench) ? report.homeBench : [];
-  patch.awayBench = Array.isArray(report.awayBench) ? report.awayBench : [];
+  if (report.lineupPublished === true) {
+    patch.homeLineup = Array.isArray(report.homeLineup) ? report.homeLineup : [];
+    patch.awayLineup = Array.isArray(report.awayLineup) ? report.awayLineup : [];
+    patch.homeBench = Array.isArray(report.homeBench) ? report.homeBench : [];
+    patch.awayBench = Array.isArray(report.awayBench) ? report.awayBench : [];
+  } else if (isFutureMatch) {
+    // Falsch erkannte Vorab-Aufstellungen aktiv entfernen.
+    patch.homeLineup = [];
+    patch.awayLineup = [];
+    patch.homeBench = [];
+    patch.awayBench = [];
+  }
   if (Array.isArray(report.refereeAssistants) && report.refereeAssistants.length) patch.refereeAssistants = report.refereeAssistants;
   else if (isFutureMatch && Array.isArray(snapshotData.refereeAssistants) && snapshotData.refereeAssistants.length) patch.refereeAssistants = [];
   if (Number.isInteger(report.attendance)) patch.attendance = report.attendance;

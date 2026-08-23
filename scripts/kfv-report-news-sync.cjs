@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.0.2-lineup-plausibility-gate";
+const VERSION = "1.0.3-ticker-referee-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -998,17 +998,79 @@ async function waitForReport(page) {
           "[class*='timeline'] li", "[class*='timeline'] [class*='item']",
           "[data-event]", "[data-minute]", "[data-testid*='event']",
         ];
-        const nodes = [...new Set(selectors.flatMap((selector) => [...document.querySelectorAll(selector)]))]
-          .filter((node) => {
-            const rect = node.getBoundingClientRect();
-            const style = getComputedStyle(node);
-            return rect.width > 0 && rect.height > 0 && style.display !== "none" && style.visibility !== "hidden";
+        const eventWord = /(?:tor\b|trifft|spielstand|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
+        const minuteWord = /(?:^|\s)\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]?/;
+
+        const visibleNodes = [...new Set(
+          selectors.flatMap((selector) => [...document.querySelectorAll(selector)]),
+        )].filter((node) => {
+          const rect = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          const text = compact(node.innerText || node.textContent || "");
+          return (
+            rect.width > 0 &&
+            rect.height > 0 &&
+            style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            text.length >= 5 &&
+            eventWord.test(text) &&
+            (minuteWord.test(text) || node.hasAttribute("data-minute") || node.querySelector("[data-minute]"))
+          );
+        });
+
+        // Wichtig: Elterncontainer enthalten auf oefb.at oft den GESAMTEN Ticker.
+        // Nur die kleinsten echten Ereigniscontainer verwenden.
+        const leafEventNodes = visibleNodes.filter((node) =>
+          !visibleNodes.some((other) => other !== node && node.contains(other)),
+        );
+
+        const eventTextFromNode = (node) => {
+          const original = String(node.innerText || node.textContent || "").trim();
+          const lines = original
+            .split(/\n+/)
+            .map(compact)
+            .filter(Boolean);
+
+          const minuteLine = lines.find((line) =>
+            /^\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]?$/.test(line),
+          );
+
+          // Spieler-Namen unter Fotos/Wechselgrafiken nicht an den Ereignissatz anhängen.
+          const descriptionLines = lines.filter((line) =>
+            eventWord.test(line) &&
+            !/^\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]?$/.test(line),
+          );
+
+          if (descriptionLines.length) {
+            const description = descriptionLines
+              .sort((a, b) => b.length - a.length)[0];
+            return minuteLine && !minuteWord.test(description)
+              ? `${minuteLine} ${description}`
+              : description;
+          }
+
+          return original;
+        };
+
+        const seenRows = new Set();
+        const rows = [];
+        for (const node of leafEventNodes) {
+          const rawText = eventTextFromNode(node);
+          const minuteAttr = compact(
+            node.getAttribute("data-minute") ||
+            node.querySelector("[data-minute]")?.getAttribute("data-minute") ||
+            "",
+          );
+          const key = `${minuteAttr}|${compact(rawText).toLocaleLowerCase("de-AT")}`;
+          if (!rawText || seenRows.has(key)) continue;
+          seenRows.add(key);
+          rows.push({
+            sourceOrder: rows.length,
+            rawText,
+            minuteAttr,
           });
-        const rows = nodes.map((node, sourceOrder) => ({
-          sourceOrder,
-          rawText: String(node.innerText || node.textContent || "").trim(),
-          minuteAttr: compact(node.getAttribute("data-minute") || node.querySelector("[data-minute]")?.getAttribute("data-minute") || ""),
-        })).filter((row) => row.rawText.length >= 2);
+        }
+
         if (rows.length) window.__TSU_EXACT_TICKER_ROWS__ = rows;
       };
 
@@ -1461,10 +1523,30 @@ async function extractReport(browser, match) {
           return !/(?:termine|spielbericht|aufstellung|tabelle|kader|zuschauer|spielort)/i.test(normalized);
         }) || "";
 
-        // Für die exakt zugeordnete Einzel-Spielberichtseite ist ausschließlich
-        // das strikte Label/Wert-Feld maßgeblich. Kein globaler/heuristischer Fallback.
-        // Fehlt dort ein Schiedsrichter, ist für dieses Spiel offiziell keiner veröffentlicht.
-        robustReferee = cleanOfficial(referee);
+        // Schiedsrichter für exakt DIESES Spiel:
+        // 1. striktes Label/Wert-Feld,
+        // 2. sicherer Kandidat aus einem lokalen Match-Container, der Heim UND Gast enthält,
+        // 3. sichtbarer Text direkt nach dem Schiedsrichter-Label.
+        // Kein ungebundener globaler Vereins-/Spielplan-Fallback.
+        robustReferee = cleanOfficial(
+          referee ||
+          scopedReferee ||
+          textValueAfterLabel(
+            ["Schiedsrichter", "Referee", "Hauptschiedsrichter", "Schiedsrichter 1", "SR 1"],
+            160,
+          ),
+        );
+
+        // Offensichtliche UI-/Navigationstexte niemals als Schiedsrichter speichern.
+        if (
+          robustReferee &&
+          /(?:termine|spielbericht|aufstellung|tabelle|kader|zuschauer|spielort|liveticker|statistik|noch\s+nicht\s+veröffentlicht)/i.test(
+            normalize(robustReferee),
+          )
+        ) {
+          robustReferee = "";
+        }
+
         if (!robustReferee) robustRefereeAssistants = [];
 
         const classifyRole = (context) => {
@@ -1912,6 +1994,15 @@ async function extractReport(browser, match) {
           if (!rawText || rawText.length < 5 || rawText.length > 1400) return;
           if (eventNoise.test(rawText)) return;
           if (!eventKeyword.test(rawText)) return;
+
+          // Schutz gegen einen kompletten Ticker-Container, der als EIN Ereignis
+          // gelesen wird. Mehrere unterschiedliche Minuten + mehrere Ereigniswörter
+          // bedeuten: Sammelcontainer statt Einzelereignis.
+          const minuteHits = [...rawText.matchAll(/\b(\d{1,3})(?:\s*\+\s*\d{1,2})?\s*(?:[.'’:]\s+|(?=(?:TOR|Tor|Wechsel|Foulspiel|Gelbe|Rote)))/g)]
+            .map((match) => match[1]);
+          const distinctMinuteHits = new Set(minuteHits);
+          const keywordHits = rawText.match(/(?:\bTOR\b|\bWechsel\b|\bSpielerwechsel\b|\bGelbe\s+Karte\b|\bRote\s+Karte\b|\bFoulspiel\b|\btrifft\b)/gi) || [];
+          if (distinctMinuteHits.size >= 3 && keywordHits.length >= 3) return;
 
           const parsedMinute = forcedMinute || parseMinute(rawText);
           if (!parsedMinute) return;

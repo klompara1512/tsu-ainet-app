@@ -582,7 +582,7 @@ function LiveDashboard({
                 </div>
 
                 <button type="button" className="v101-primary" onClick={() => onOpenMatch(nextMatch.id)}>
-                  {isLive && nextMatch.liveUrl ? "Jetzt zum Liveticker" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
+                  {isLive && nextMatch.liveUrl ? "Spielbericht öffnen" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
                 </button>
               </>
             )}

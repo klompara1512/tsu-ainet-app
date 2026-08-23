@@ -338,7 +338,7 @@ function formatDate(date: Date) {
 
     const tabItems = [
       { id: "overview" as const, label: "Übersicht", icon: "ball" as const },
-      { id: "live" as const, label: "Liveticker", icon: "live" as const },
+      { id: "live" as const, label: "Spielbericht", icon: "live" as const },
       { id: "lineups" as const, label: "Aufstellungen", icon: "users" as const },
       { id: "stats" as const, label: "Statistik", icon: "target" as const },
     ];
@@ -400,7 +400,7 @@ function formatDate(date: Date) {
             )}
             {(selectedMatch.liveUrl || selectedMatch.reportUrl) && (
               <a href={selectedMatch.liveUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer" className="primary">
-                <Icon name="live" /> {liveWindow ? "Liveticker öffnen" : selectedMatch.status === "finished" ? "Spielbericht öffnen" : "Spieldetails öffnen"}
+                <Icon name="live" /> {"Spielbericht öffnen"}
               </a>
             )}
           </div>
@@ -482,7 +482,7 @@ function formatDate(date: Date) {
             <section className="premium-match-section premium-tab-feature">
               <header>
                 <div>
-<h3>{liveWindow ? "Liveticker" : "Spielverlauf"}</h3></div>
+<h3>Spielbericht</h3></div>
                 {liveWindow && <span className="premium-live-pill">LIVE</span>}
               </header>
               {loadingMatchReport ? (
@@ -595,7 +595,7 @@ function formatDate(date: Date) {
 
         <nav className="premium-match-shortcuts" aria-label="Spielcenter Schnellzugriffe">
           <button type="button" onClick={() => setMatchDetailTab("overview")} className={matchDetailTab === "overview" ? "active" : ""}><Icon name="ball" /><span>Übersicht</span></button>
-          <button type="button" onClick={() => setMatchDetailTab("live")} className={matchDetailTab === "live" ? "active" : ""}><Icon name="live" /><span>Live</span></button>
+          <button type="button" onClick={() => setMatchDetailTab("live")} className={matchDetailTab === "live" ? "active" : ""}><Icon name="live" /><span>Spielbericht</span></button>
           <button type="button" onClick={() => setMatchDetailTab("lineups")} className={matchDetailTab === "lineups" ? "active" : ""}><Icon name="users" /><span>Aufstellung</span></button>
           <button type="button" onClick={() => setMatchDetailTab("stats")} className={matchDetailTab === "stats" ? "active" : ""}><Icon name="target" /><span>Statistik</span></button>
         </nav>

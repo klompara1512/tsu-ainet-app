@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.0.3-ticker-referee-fix";
+const VERSION = "1.0.4-goals-report-ui";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -998,7 +998,7 @@ async function waitForReport(page) {
           "[class*='timeline'] li", "[class*='timeline'] [class*='item']",
           "[data-event]", "[data-minute]", "[data-testid*='event']",
         ];
-        const eventWord = /(?:tor\b|trifft|spielstand|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
+        const eventWord = /(?:\btor\b|\btor\s+für\b|\btrifft\b|\bneuer\s+spielstand\b|\bspielstand\b|\b\d+\s*:\s*\d+\b|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
         const minuteWord = /(?:^|\s)\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]?/;
 
         const visibleNodes = [...new Set(
@@ -1939,7 +1939,7 @@ async function extractReport(browser, match) {
           : [];
 
         const eventNoise = /(?:leaflet|openstreetmap|sportplatz\s+möllbrücke|waldweg\s+1|programm\s+(?:sa|so|mo|di|mi|do|fr)\.?|tabellen?|resultate|torverteilung|vereins-homepage|datenschutz|impressum|cookie|navigation|spielort\s+sportplatz|\+\s*−)/i;
-        const eventKeyword = /(?:tor\b|trifft|spielstand|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
+        const eventKeyword = /(?:\btor\b|\btor\s+für\b|\btrifft\b|\bneuer\s+spielstand\b|\bspielstand\b|\b\d+\s*:\s*\d+\b|wechsel|ersetzt|kommt\s+für|verlässt\s+das\s+spielfeld|gelbe?\s+karte|gelb-?rote?\s+karte|rote?\s+karte|ausschluss|elfmeter|eigentor|halbzeit|pause|spielende|endstand|abpfiff)/i;
 
         const cleanEventDescription = (value) => compact(value)
           .replace(/^\s*(?:\d{1,3})(?:\s*\+\s*\d{1,2})?\s*[.'’:]?\s*/, "")
@@ -1971,7 +1971,7 @@ async function extractReport(browser, match) {
           if (/wechsel|ersetzt|kommt\s+fur|verlasst\s+das\s+spielfeld|einwechslung|auswechslung/.test(text)) return "substitution";
           if (/halbzeit|pause/.test(text)) return "halfTime";
           if (/spielende|endstand|abpfiff/.test(text)) return "fullTime";
-          if (/tor\b|trifft|spielstand|elfmeter|eigentor/.test(text)) return "goal";
+          if (/\btor\b|\btor\s+fur\b|\btrifft\b|\bneuer\s+spielstand\b|\bspielstand\b|\b\d+\s*:\s*\d+\b|elfmeter|eigentor/.test(text)) return "goal";
           return "other";
         };
 
@@ -1991,7 +1991,7 @@ async function extractReport(browser, match) {
 
         const addEvent = (rawValue, forcedMinute = null, sourceOrder = null) => {
           const rawText = compact(rawValue);
-          if (!rawText || rawText.length < 5 || rawText.length > 1400) return;
+          if (!rawText || rawText.length < 3 || rawText.length > 1400) return;
           if (eventNoise.test(rawText)) return;
           if (!eventKeyword.test(rawText)) return;
 

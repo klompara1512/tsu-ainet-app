@@ -380,20 +380,40 @@ function formatDate(date: Date) {
           </div>
         </article>
 
-        <nav className="premium-detail-tabs" role="tablist" aria-label="Spielcenter Bereiche">
-          {tabItems.map((tab) => (
-            <button
-              key={tab.id}
-              type="button"
-              role="tab"
-              aria-selected={matchDetailTab === tab.id}
-              className={matchDetailTab === tab.id ? "active" : ""}
-              onClick={() => setMatchDetailTab(tab.id)}
-            >
-              <Icon name={tab.icon} />
-              <span>{tab.label}</span>
-            </button>
-          ))}
+        <nav
+          className="premium-detail-tabs"
+          role="tablist"
+          aria-label="Spielcenter Bereiche"
+          style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: "12px", margin: "18px 0" }}
+        >
+          {tabItems.map((tab) => {
+            const active = matchDetailTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                className={active ? "active" : ""}
+                onClick={() => setMatchDetailTab(tab.id)}
+                style={{
+                  minHeight: "72px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  flexDirection: "column",
+                  borderRadius: "14px",
+                  fontWeight: 700,
+                  fontSize: "15px",
+                  cursor: "pointer",
+                }}
+              >
+                <Icon name={tab.icon} />
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
         </nav>
 
         <div className="premium-tab-panel" role="tabpanel">
@@ -483,10 +503,6 @@ function formatDate(date: Date) {
 
         </div>
 
-        <nav className="premium-match-shortcuts" aria-label="Spielcenter Schnellzugriffe">
-          <button type="button" onClick={() => setMatchDetailTab("overview")} className={matchDetailTab === "overview" ? "active" : ""}><Icon name="ball" /><span>Übersicht</span></button>
-          <button type="button" onClick={() => setMatchDetailTab("lineups")} className={matchDetailTab === "lineups" ? "active" : ""}><Icon name="users" /><span>Aufstellungen</span></button>
-        </nav>
       </section>
     );
   }

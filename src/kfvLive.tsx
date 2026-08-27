@@ -16,6 +16,23 @@ import "./assets/kfvLive.css";
 type KfvLiveTab = "matches" | "table" | "squad";
 type KfvLiveProps = { initialMatchId?: string; initialTab?: KfvLiveTab };
 
+function formatReportMinute(event: { minuteText?: string | null; minute?: number | null }) {
+  const raw = String(event.minuteText ?? event.minute ?? "").trim();
+  if (!raw) return "";
+  const match = raw.match(/^(\d{1,3})(?:\s*\+\s*(\d{1,2}))?/);
+  if (!match) return raw.endsWith("'") ? raw : `${raw}'`;
+  return `${Number(match[1])}${match[2] ? `+${Number(match[2])}` : ""}'`;
+}
+
+function displayEventText(event: { rawText?: string; description?: string; playerName?: string; type?: string; minuteText?: string | null; minute?: number | null }) {
+  if (event.type === "goal" && event.playerName) return event.playerName;
+  const text = String(event.rawText || event.description || event.playerName || "").trim();
+  if (!text) return "";
+  // Minute steht links bereits separat. Eine führende Minute im ÖFB-Rohtext
+  // entfernen, damit z. B. nicht "32' 32' Tor ..." angezeigt wird.
+  return text.replace(/^\s*\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]\s*/, "").trim();
+}
+
 function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) {
   const [matches, setMatches] = useState<KfvMatch[]>([]);
   const [standings, setStandings] = useState<KfvStandingRow[]>([]);
@@ -493,9 +510,9 @@ function formatDate(date: Date) {
                 <div className="official-event-timeline">
                   {reportEvents.map((event) => (
                     <article key={event.id} className={`event-${event.type} event-${event.team}`}>
-                      <time>{event.minuteText || (event.minute !== null ? `${event.minute}'` : "")}</time>
+                      <time>{formatReportMinute(event)}</time>
                       <span className="event-marker"><EventSymbol type={event.type} /></span>
-                      <div>{event.rawText ? <strong className="official-event-raw">{event.rawText}</strong> : <><small>{eventLabel(event.type)}</small><strong>{event.playerName || event.description || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</>}</div>
+                      <div><small>{eventLabel(event.type)}</small><strong className={event.rawText ? "official-event-raw" : undefined}>{displayEventText(event) || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</div>
                     </article>
                   ))}
                 </div>

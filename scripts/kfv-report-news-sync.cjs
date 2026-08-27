@@ -6,7 +6,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 
-const VERSION = "1.0.4-goals-report-ui";
+const VERSION = "1.0.8-goal-symbol-and-minute-order-fix";
 const STATUS_DOC = "kfvReportNewsSyncStatus";
 const REPORT_COLLECTION = "kfvMatchReports";
 const MATCH_COLLECTION = "oefbV12Matches";
@@ -1061,7 +1061,20 @@ async function waitForReport(page) {
             node.querySelector("[data-minute]")?.getAttribute("data-minute") ||
             "",
           );
-          const key = `${minuteAttr}|${compact(rawText).toLocaleLowerCase("de-AT")}`;
+          // Im offiziellen ÖFB-Ticker kennzeichnet das Fußballsymbol ein Tor.
+          // Das Symbol ist die zuverlässigere Information als der Beschreibungstext.
+          const iconText = compact([
+            node.getAttribute("aria-label"),
+            node.getAttribute("title"),
+            ...[...node.querySelectorAll("[aria-label],[title]")].map((el) => `${el.getAttribute("aria-label") || ""} ${el.getAttribute("title") || ""}`),
+          ].join(" "));
+          const iconClassText = compact([
+            node.className && typeof node.className === "string" ? node.className : "",
+            ...[...node.querySelectorAll("*")].map((el) => typeof el.className === "string" ? el.className : ""),
+          ].join(" "));
+          const isGoal = /\b(?:fußball|fussball|football|goal|tor)\b/i.test(`${iconText} ${iconClassText}`) ||
+            Boolean(node.querySelector("svg[class*='goal' i],svg[class*='football' i],[data-icon*='goal' i],[data-icon*='football' i]"));
+          const key = `${minuteAttr}|${isGoal ? "goal" : "event"}|${compact(rawText).toLocaleLowerCase("de-AT")}`;
           if (!rawText || seenRows.has(key)) continue;
           seenRows.add(key);
           rows.push({
@@ -1111,6 +1124,16 @@ async function waitForReport(page) {
         await sleep(1800);
         rememberVisibleEventContent();
         if (normalized.some((label) => label.includes("ticker"))) captureExactTicker();
+
+        // Der ÖFB-Reiter „Tore“ enthält die Torschützen teilweise NICHT im
+        // Liveticker-Format. Häufig steht die Minute am Ende (z. B.
+        // „Manuel Hertscheg 71.“) oder zusammen mit dem Spielstand. Diesen
+        // Reiter deshalb separat sichern; der Ereignisparser wertet ihn später
+        // als vertrauenswürdige Tor-Quelle aus.
+        if (normalized.some((label) => label === "tore" || label === "tor")) {
+          const goalText = String(document.body?.innerText || "").trim();
+          if (goalText) window.__TSU_GOAL_TAB_TEXT__ = goalText.slice(0, 50000);
+        }
         return true;
       };
 
@@ -1950,11 +1973,26 @@ async function extractReport(browser, match) {
 
         const parseMinute = (value) => {
           const text = compact(value);
-          const match = text.match(/(?:^|\s)(\d{1,3})(?:\s*\+\s*(\d{1,2}))?\s*[.'’:]?(?=\s|$)/);
+          if (!text) return null;
+
+          // ÖFB-Minuten kommen u. a. als 32., 32', 45+2', (71.) oder
+          // über data-minute. Spielstände wie 1:0 dürfen niemals als Minute
+          // interpretiert werden.
+          const patterns = [
+            /(?:^|\s|[(\[])(\d{1,3})\s*\+\s*(\d{1,2})\s*(?:[.'’]|minute|min\.?)(?=\s|$|[)\]])/i,
+            /(?:^|\s|[(\[])(\d{1,3})\s*(?:[.'’]|minute|min\.?)(?=\s|$|[)\]])/i,
+            /^\s*(\d{1,3})(?:\s*\+\s*(\d{1,2}))?\s*$/,
+          ];
+          let match = null;
+          for (const pattern of patterns) {
+            match = text.match(pattern);
+            if (match) break;
+          }
           if (!match) return null;
+
           const base = Number(match[1]);
           const added = match[2] ? Number(match[2]) : 0;
-          if (!Number.isFinite(base) || base < 0 || base > 130) return null;
+          if (!Number.isFinite(base) || base < 1 || base > 130 || added < 0 || added > 30) return null;
           return {
             minute: base,
             added,
@@ -1986,10 +2024,13 @@ async function extractReport(browser, match) {
         const exactTickerRows = Array.isArray(window.__TSU_EXACT_TICKER_ROWS__)
           ? window.__TSU_EXACT_TICKER_ROWS__
           : [];
+        const goalTabText = typeof window.__TSU_GOAL_TAB_TEXT__ === "string"
+          ? window.__TSU_GOAL_TAB_TEXT__
+          : "";
         const events = [];
         const seenEvents = new Set();
 
-        const addEvent = (rawValue, forcedMinute = null, sourceOrder = null) => {
+        const addEvent = (rawValue, forcedMinute = null, sourceOrder = null, forcedType = null) => {
           const rawText = compact(rawValue);
           if (!rawText || rawText.length < 3 || rawText.length > 1400) return;
           if (eventNoise.test(rawText)) return;
@@ -2011,7 +2052,7 @@ async function extractReport(browser, match) {
           if (!description || description.length < 4 || eventNoise.test(description)) return;
           if (!eventKeyword.test(description)) return;
 
-          const type = classifyEventType(description);
+          const type = forcedType || classifyEventType(description);
           const normalizedDescription = normalize(description)
             .replace(/\b(?:neuerlicher|erneuter|nochmaliger)\b/g, "")
             .replace(/\s+/g, " ")
@@ -2038,8 +2079,102 @@ async function extractReport(browser, match) {
         // Primärquelle: sichtbare ÖFB-Liveticker-Zeilen, Originaltext + Originalreihenfolge.
         if (exactTickerRows.length) {
           exactTickerRows.forEach((row, index) => {
-            addEvent(row.rawText, row.minuteAttr ? parseMinute(row.minuteAttr) : null, index);
+            addEvent(row.rawText, row.minuteAttr ? parseMinute(row.minuteAttr) : null, index, row.isGoal ? "goal" : null);
           });
+        }
+
+        // Zusätzliche Torquelle: Im ÖFB-Reiter „Tore“ steht die Spielminute
+        // nicht zuverlässig am Anfang. Der normale addEvent()-Parser würde
+        // solche Torschützen verwerfen. Hier werden ausschließlich Zeilen aus
+        // dem zuvor explizit geöffneten Tore-Reiter ausgewertet.
+        if (goalTabText) {
+          const goalLines = goalTabText
+            .split(/\n+/)
+            .map(compact)
+            .filter((line) => line.length >= 3 && line.length <= 260);
+
+          const goalHeaderNoise = /^(?:tore?|heim|gast|spielstand|ergebnis|halbzeit|endstand|aufstellung|karten|wechsel|liveticker|spielbericht)$/i;
+          const allReportPlayers = [
+            ...homeLineup,
+            ...homeBench,
+            ...awayLineup,
+            ...awayBench,
+          ]
+            .map((item) => compact(item?.name || item?.playerName || item?.fullName || ""))
+            .filter((name) => name.length >= 4);
+
+          const normalizedPlayerNames = allReportPlayers.map((name) => ({
+            name,
+            key: normalize(name),
+          }));
+
+          const findKnownScorer = (line) => {
+            const normalizedLine = normalize(line);
+            // ÖFB zeigt den Torschützen im Reiter „Tore“ als echten Spielernamen.
+            // Deshalb akzeptieren wir hier ausschließlich Namen, die im offiziellen
+            // Kader dieses Spielberichts vorkommen. Dadurch werden Navigation,
+            // Uhrzeiten, Spielstände und sonstige Seitentexte sicher ausgeschlossen.
+            let best = null;
+            for (const candidate of normalizedPlayerNames) {
+              if (!candidate.key || !normalizedLine.includes(candidate.key)) continue;
+              if (!best || candidate.key.length > best.key.length) best = candidate;
+            }
+            return best?.name || "";
+          };
+
+          const minuteAnywhere = /(?:^|[^0-9])(\d{1,3})(?:\s*\+\s*(\d{1,2}))?\s*(?:[.'’:]|minute|min\.?)(?=$|[^0-9])/i;
+          const minuteAtEnd = /(?:^|\s)(\d{1,3})(?:\s*\+\s*(\d{1,2}))?\s*[.'’:]?\s*$/;
+
+          const addGoalSummary = (line, order) => {
+            if (!line || goalHeaderNoise.test(line)) return;
+            const scorer = findKnownScorer(line);
+            if (!scorer) return;
+
+            // Minute kann im ÖFB-Reiter vor ODER nach dem Namen stehen:
+            // „32. Max Mustermann“, „Max Mustermann 32.“ oder „Max Mustermann (32.)“.
+            const minuteMatch = line.match(minuteAnywhere) || line.match(minuteAtEnd);
+            if (!minuteMatch) return;
+            const base = Number(minuteMatch[1]);
+            const added = minuteMatch[2] ? Number(minuteMatch[2]) : 0;
+            if (!Number.isFinite(base) || base < 1 || base > 130 || added > 30) return;
+
+            const minuteText = added ? `${base}+${added}` : String(base);
+            const playerKey = normalize(scorer);
+            const homePlayerKeys = new Set([...homeLineup, ...homeBench].map((item) => normalize(item?.name)).filter(Boolean));
+            const awayPlayerKeys = new Set([...awayLineup, ...awayBench].map((item) => normalize(item?.name)).filter(Boolean));
+            const team = homePlayerKeys.has(playerKey) ? "home" : awayPlayerKeys.has(playerKey) ? "away" : "neutral";
+
+            const normalizedDescription = normalize(scorer);
+            const duplicate = events.some((event) =>
+              event.type === "goal" &&
+              event.minuteText === minuteText &&
+              normalize(event.playerName || event.description) === normalizedDescription
+            );
+            if (duplicate) return;
+
+            events.push({
+              id: `event-${minuteText}-goal-${scorer}-${events.length + 1}`,
+              minute: base,
+              minuteText,
+              type: "goal",
+              team,
+              playerName: scorer,
+              secondaryPlayerName: "",
+              description: scorer,
+              rawText: `${minuteText}' Tor – ${scorer}`,
+              sourceOrder: 1000 + order,
+              _sortValue: base * 100 + added,
+            });
+          };
+
+          goalLines.forEach(addGoalSummary);
+
+          // Falls Minute und Torschütze in zwei direkt aufeinanderfolgenden
+          // Zeilen stehen, ebenfalls zusammensetzen.
+          for (let index = 0; index < goalLines.length - 1; index += 1) {
+            if (!/^(?:\d{1,3})(?:\s*\+\s*\d{1,2})?\s*[.'’:]?$/.test(goalLines[index])) continue;
+            addGoalSummary(`${goalLines[index]} ${goalLines[index + 1]}`, index);
+          }
         }
 
         // 1. Strukturierte DOM-Elemente aus dem aktuell sichtbaren Reiter.
@@ -2107,41 +2242,13 @@ async function extractReport(browser, match) {
           events.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
         }
 
-        // ÖFB liefert in manchen Ansichten einen Ereignisblock mit mehreren bereits
-        // gefallenen Toren. Dadurch konnten mehrere Tore derselben Spielminute
-        // zugeordnet werden. Für den Liveticker wird pro Spielminute genau das
-        // spezifischste Torereignis übernommen. Karten und Wechsel bleiben
-        // davon unberührt.
-        const goalByMinute = new Map();
-        const filteredEvents = [];
-        for (const event of exactTickerRows.length ? [] : events) {
-          if (event.type !== "goal") {
-            filteredEvents.push(event);
-            continue;
-          }
-
-          const minuteKey = event.minuteText || String(event.minute ?? "");
-          const existing = goalByMinute.get(minuteKey);
-          if (!existing) {
-            goalByMinute.set(minuteKey, event);
-            continue;
-          }
-
-          // Kürzere Texte sind auf der ÖFB-Seite fast immer das einzelne
-          // Torereignis; lange Texte enthalten häufig mehrere vorherige Tore.
-          const eventScore = event.description.length;
-          const existingScore = existing.description.length;
-          if (eventScore < existingScore) goalByMinute.set(minuteKey, event);
-        }
-
-        if (!exactTickerRows.length) {
-          filteredEvents.push(...goalByMinute.values());
-          filteredEvents.sort((a, b) => a._sortValue - b._sortValue || a.description.localeCompare(b.description, "de-AT"));
-          events.length = 0;
-          events.push(...filteredEvents);
-        } else {
-          events.sort((a, b) => (a.sourceOrder ?? 9999) - (b.sourceOrder ?? 9999));
-        }
+        // Mehrere Tore können in derselben Minute fallen. Deshalb niemals mehr
+        // pauschal „ein Tor pro Minute“ deduplizieren. Doppelte Ereignisse werden
+        // bereits beim Aufbau über Minute + Torschütze + Ereignistyp entfernt.
+        events.sort((a, b) =>
+          (a._sortValue ?? 999999) - (b._sortValue ?? 999999) ||
+          (a.sourceOrder ?? 9999) - (b.sourceOrder ?? 9999)
+        );
 
         for (const event of events) delete event._sortValue;
 
@@ -2610,7 +2717,7 @@ async function createNewsDraft(
     .slice(0, 6)
     .map(
       (event) =>
-        `${event.minute}. Minute: ${event.description}`,
+        `${event.minuteText || event.minute}. Minute: ${event.description}`,
     )
     .join("\n");
 

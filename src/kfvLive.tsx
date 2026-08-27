@@ -16,23 +16,6 @@ import "./assets/kfvLive.css";
 type KfvLiveTab = "matches" | "table" | "squad";
 type KfvLiveProps = { initialMatchId?: string; initialTab?: KfvLiveTab };
 
-function formatReportMinute(event: { minuteText?: string | null; minute?: number | null }) {
-  const raw = String(event.minuteText ?? event.minute ?? "").trim();
-  if (!raw) return "";
-  const match = raw.match(/^(\d{1,3})(?:\s*\+\s*(\d{1,2}))?/);
-  if (!match) return raw.endsWith("'") ? raw : `${raw}'`;
-  return `${Number(match[1])}${match[2] ? `+${Number(match[2])}` : ""}'`;
-}
-
-function displayEventText(event: { rawText?: string; description?: string; playerName?: string; type?: string; minuteText?: string | null; minute?: number | null }) {
-  if (event.type === "goal" && event.playerName) return event.playerName;
-  const text = String(event.rawText || event.description || event.playerName || "").trim();
-  if (!text) return "";
-  // Minute steht links bereits separat. Eine führende Minute im ÖFB-Rohtext
-  // entfernen, damit z. B. nicht "32' 32' Tor ..." angezeigt wird.
-  return text.replace(/^\s*\d{1,3}(?:\s*\+\s*\d{1,2})?\s*[.'’:]\s*/, "").trim();
-}
-
 function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) {
   const [matches, setMatches] = useState<KfvMatch[]>([]);
   const [standings, setStandings] = useState<KfvStandingRow[]>([]);
@@ -47,7 +30,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   const [matchReport, setMatchReport] = useState<KfvMatchReport | null>(null);
   const [loadingMatchReport, setLoadingMatchReport] = useState(false);
   const [matchReportError, setMatchReportError] = useState("");
-  const [matchDetailTab, setMatchDetailTab] = useState<"overview" | "live" | "lineups" | "stats">("overview");
+  const [matchDetailTab, setMatchDetailTab] = useState<"overview" | "lineups">("overview");
 
 
   useEffect(() => {
@@ -260,18 +243,6 @@ function formatDate(date: Date) {
       .sort((a, b) => a.position - b.position)
       .slice(0, 5);
 
-    const wins = finishedTeamMatches.filter((match) => getResultForTsuAinet(match) === "W").length;
-    const draws = finishedTeamMatches.filter((match) => getResultForTsuAinet(match) === "D").length;
-    const losses = finishedTeamMatches.filter((match) => getResultForTsuAinet(match) === "L").length;
-    const goalsFor = finishedTeamMatches.reduce((sum, match) => {
-      if (match.homeScore === null || match.awayScore === null) return sum;
-      return sum + (isTsuAinet(match.homeTeam) ? match.homeScore : match.awayScore);
-    }, 0);
-    const goalsAgainst = finishedTeamMatches.reduce((sum, match) => {
-      if (match.homeScore === null || match.awayScore === null) return sum;
-      return sum + (isTsuAinet(match.homeTeam) ? match.awayScore : match.homeScore);
-    }, 0);
-
     const now = Date.now();
     const kickoffTime = selectedMatch.kickoffAt.getTime();
     const liveWindow =
@@ -292,31 +263,14 @@ function formatDate(date: Date) {
             : "Geplant";
 
 
-    const reportEvents = matchReport?.events ?? [];
-    // Die exakt über die ÖFB-Spiel-ID zugeordnete Berichtseite ist für
-    // Spielort/Schiedsrichter die höchste Priorität. So zeigt das Spielcenter
-    // keine älteren Match-Felder, wenn bereits offizielle Berichtsdaten vorliegen.
+    // Offizielle Berichtsdaten haben Vorrang für Spielort, Schiedsrichter
+    // und die Veröffentlichung der Aufstellungen. Die Ereignis-/Toransicht
+    // wird bewusst nicht mehr innerhalb der App gerendert.
     const authoritativeVenue = matchReport?.venue || displayVenue(selectedMatch);
     const authoritativeReferee = matchReport ? matchReport.referee : selectedMatch.referee;
     const lineupPublished = Boolean(
       matchReport && matchReport.homeLineup.length >= 10 && matchReport.awayLineup.length >= 10
     );
-    const eventLabel = (type: string) => ({
-      goal: "Tor", yellow: "Gelbe Karte", yellowRed: "Gelb-Rote Karte", red: "Rote Karte",
-      substitution: "Wechsel", halfTime: "Halbzeit", fullTime: "Spielende", other: "Ereignis",
-    }[type] || "Ereignis");
-
-    const EventSymbol = ({ type }: { type: string }) => {
-      const svgProps = { viewBox: "0 0 24 24", width: 19, height: 19, fill: "none", stroke: "currentColor", strokeWidth: 1.9, strokeLinecap: "round" as const, strokeLinejoin: "round" as const, "aria-hidden": true };
-      if (type === "goal") return <span className="event-symbol event-symbol-goal" aria-label="Tor"><svg {...svgProps}><circle cx="12" cy="12" r="9"/><path d="m12 7 3.2 2.3-1.2 3.8h-4l-1.2-3.8L12 7Z"/><path d="m8.8 9.3-3.6-.2M15.2 9.3l3.6-.2M10 13.1l-2.1 3M14 13.1l2.1 3M7.9 16.1l.8 3.1M16.1 16.1l-.8 3.1"/></svg></span>;
-      if (type === "yellow") return <span className="event-symbol event-symbol-card event-symbol-yellow" aria-label="Gelbe Karte"><i /></span>;
-      if (type === "red") return <span className="event-symbol event-symbol-card event-symbol-red" aria-label="Rote Karte"><i /></span>;
-      if (type === "yellowRed") return <span className="event-symbol event-symbol-double-card" aria-label="Gelb-Rote Karte"><i /><b /></span>;
-      if (type === "substitution") return <span className="event-symbol event-symbol-substitution" aria-label="Wechsel"><svg {...svgProps}><path d="M7 7h10"/><path d="m14 4 3 3-3 3"/><path d="M17 17H7"/><path d="m10 20-3-3 3-3"/></svg></span>;
-      if (type === "halfTime") return <span className="event-symbol event-symbol-time" aria-label="Halbzeit"><svg {...svgProps}><circle cx="12" cy="12" r="9"/><path d="M9 8v8M15 8v8"/></svg></span>;
-      if (type === "fullTime") return <span className="event-symbol event-symbol-time" aria-label="Spielende"><svg {...svgProps}><circle cx="12" cy="12" r="9"/><path d="m8.5 12 2.2 2.2 4.8-5"/></svg></span>;
-      return <span className="event-symbol event-symbol-other" aria-label="Ereignis"><svg {...svgProps}><circle cx="12" cy="12" r="2"/><circle cx="12" cy="12" r="8"/></svg></span>;
-    };
 
     const normalizePlayerName = (value: string) => value
       .toLocaleLowerCase("de-AT")
@@ -355,9 +309,7 @@ function formatDate(date: Date) {
 
     const tabItems = [
       { id: "overview" as const, label: "Übersicht", icon: "ball" as const },
-      { id: "live" as const, label: "Spielbericht", icon: "live" as const },
       { id: "lineups" as const, label: "Aufstellungen", icon: "users" as const },
-      { id: "stats" as const, label: "Statistik", icon: "target" as const },
     ];
 
     return (
@@ -415,9 +367,14 @@ function formatDate(date: Date) {
                 <Icon name="location" /> Route starten
               </button>
             )}
-            {(selectedMatch.liveUrl || selectedMatch.reportUrl) && (
-              <a href={selectedMatch.liveUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer" className="primary">
-                <Icon name="live" /> {"Spielbericht öffnen"}
+            {(selectedMatch.reportUrl || selectedMatch.liveUrl || matchReport?.reportUrl) && (
+              <a
+                className="secondary"
+                href={matchReport?.reportUrl || selectedMatch.reportUrl || selectedMatch.liveUrl || undefined}
+                target="_blank"
+                rel="noreferrer"
+              >
+                <Icon name="live" /> Spielbericht öffnen
               </a>
             )}
           </div>
@@ -435,7 +392,6 @@ function formatDate(date: Date) {
             >
               <Icon name={tab.icon} />
               <span>{tab.label}</span>
-              {tab.id === "live" && liveWindow && <b>LIVE</b>}
             </button>
           ))}
         </nav>
@@ -495,38 +451,6 @@ function formatDate(date: Date) {
             </>
           )}
 
-          {matchDetailTab === "live" && (
-            <section className="premium-match-section premium-tab-feature">
-              <header>
-                <div>
-<h3>Spielbericht</h3></div>
-                {liveWindow && <span className="premium-live-pill">LIVE</span>}
-              </header>
-              {loadingMatchReport ? (
-                <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>Spielbericht wird geladen …</strong></div>
-              ) : matchReportError ? (
-                <div className="premium-empty-state premium-empty-state-large"><Icon name="sync" /><strong>{matchReportError}</strong></div>
-              ) : reportEvents.length ? (
-                <div className="official-event-timeline">
-                  {reportEvents.map((event) => (
-                    <article key={event.id} className={`event-${event.type} event-${event.team}`}>
-                      <time>{formatReportMinute(event)}</time>
-                      <span className="event-marker"><EventSymbol type={event.type} /></span>
-                      <div><small>{eventLabel(event.type)}</small><strong className={event.rawText ? "official-event-raw" : undefined}>{displayEventText(event) || eventLabel(event.type)}</strong>{event.secondaryPlayerName && <p>{event.secondaryPlayerName}</p>}</div>
-                    </article>
-                  ))}
-                </div>
-              ) : (
-                <div className="premium-empty-state premium-empty-state-large">
-                  <Icon name="live" />
-                  <strong>Noch keine offiziellen Ereignisse veröffentlicht</strong>
-                  <p>Sobald Tore, Karten oder Wechsel im ÖFB-Spielbericht veröffentlicht sind, erscheinen sie nach dem nächsten Sync hier.</p>
-                  {(matchReport?.reportUrl || selectedMatch.liveUrl || selectedMatch.reportUrl) && <a href={matchReport?.reportUrl || selectedMatch.liveUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offizielle Spielseite öffnen</a>}
-                </div>
-              )}
-            </section>
-          )}
-
           {matchDetailTab === "lineups" && (
             <section className="premium-match-section premium-tab-feature">
               <header>
@@ -543,7 +467,6 @@ function formatDate(date: Date) {
                   <Icon name="users" />
                   <strong>Aufstellungen noch nicht veröffentlicht</strong>
                   <p>Sobald die offiziellen Startaufstellungen im ÖFB-Spielbericht veröffentlicht sind, werden sie hier automatisch angezeigt.</p>
-                  {(matchReport?.reportUrl || selectedMatch.reportUrl) && <a className="official-report-link" href={matchReport?.reportUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offiziellen ÖFB-Spielbericht öffnen</a>}
                 </div>
               ) : (
                 <>
@@ -553,68 +476,16 @@ function formatDate(date: Date) {
                     <LineupList title={`${selectedMatch.homeTeam} – Ersatzbank`} players={matchReport?.homeBench ?? []} />
                     <LineupList title={`${selectedMatch.awayTeam} – Ersatzbank`} players={matchReport?.awayBench ?? []} />
                   </div>
-                  {(matchReport?.reportUrl || selectedMatch.reportUrl) && <a className="official-report-link" href={matchReport?.reportUrl || selectedMatch.reportUrl} target="_blank" rel="noreferrer">Offiziellen ÖFB-Spielbericht öffnen</a>}
                 </>
               )}
             </section>
           )}
 
-          {matchDetailTab === "stats" && (
-            <>
-              <section className="premium-match-section premium-tab-feature">
-                <header><div>
-<h3>{selectedMatch.teamName}</h3></div></header>
-                <div className="premium-stat-grid">
-                  <article><small>Spiele</small><strong>{finishedTeamMatches.length}</strong></article>
-                  <article><small>Siege</small><strong>{wins}</strong></article>
-                  <article><small>Remis</small><strong>{draws}</strong></article>
-                  <article><small>Niederlagen</small><strong>{losses}</strong></article>
-                  <article><small>Tore</small><strong>{goalsFor}</strong></article>
-                  <article><small>Gegentore</small><strong>{goalsAgainst}</strong></article>
-                </div>
-              </section>
-
-              <div className="premium-match-columns">
-                <section className="premium-match-section">
-                  <header><div>
-<h3>Letzte fünf Spiele</h3></div></header>
-                  {recentForm.length > 0 ? (
-                    <div className="match-detail-form premium-form-row">
-                      {recentForm.map((result, index) => (
-                        <span key={`${result}-${index}`} className={`form-${result}`}>
-                          {result === "W" ? "S" : result === "D" ? "U" : "N"}
-                        </span>
-                      ))}
-                    </div>
-                  ) : <p className="premium-muted">Noch keine Formdaten verfügbar.</p>}
-                </section>
-
-                <section className="premium-match-section">
-                  <header><div>
-<h3>Top 5</h3></div></header>
-                  {teamTable.length > 0 ? (
-                    <div className="premium-mini-table">
-                      {teamTable.map((row) => (
-                        <div key={row.id} className={isTsuAinet(row.clubName) ? "is-tsu" : ""}>
-                          <span>{row.position}.</span>
-                          <TeamLogo url={row.teamLogoUrl} name={row.clubName} clubId={row.clubId} size="small" />
-                          <strong>{row.clubName}</strong>
-                          <b>{row.points}</b>
-                        </div>
-                      ))}
-                    </div>
-                  ) : <p className="premium-muted">Noch keine Tabelle verfügbar.</p>}
-                </section>
-              </div>
-            </>
-          )}
         </div>
 
         <nav className="premium-match-shortcuts" aria-label="Spielcenter Schnellzugriffe">
           <button type="button" onClick={() => setMatchDetailTab("overview")} className={matchDetailTab === "overview" ? "active" : ""}><Icon name="ball" /><span>Übersicht</span></button>
-          <button type="button" onClick={() => setMatchDetailTab("live")} className={matchDetailTab === "live" ? "active" : ""}><Icon name="live" /><span>Spielbericht</span></button>
-          <button type="button" onClick={() => setMatchDetailTab("lineups")} className={matchDetailTab === "lineups" ? "active" : ""}><Icon name="users" /><span>Aufstellung</span></button>
-          <button type="button" onClick={() => setMatchDetailTab("stats")} className={matchDetailTab === "stats" ? "active" : ""}><Icon name="target" /><span>Statistik</span></button>
+          <button type="button" onClick={() => setMatchDetailTab("lineups")} className={matchDetailTab === "lineups" ? "active" : ""}><Icon name="users" /><span>Aufstellungen</span></button>
         </nav>
       </section>
     );
@@ -749,15 +620,6 @@ function formatDate(date: Date) {
                         <span className={`kfv-result kfv-result-${result}`}>
                           {result === "W" ? "Sieg" : result === "D" ? "Remis" : "Niederlage"}
                         </span>
-                      )}
-                      {match.reportUrl && (
-                        <a
-                          href={match.reportUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          Spielbericht
-                        </a>
                       )}
                     </div>
                   </button>

@@ -1,14 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  getKfvClubLogo,
   getResultForTsuAinet,
   isTsuAinet,
+  subscribeKfvClubs,
   subscribeKfvMatches,
   subscribeKfvStandings,
   subscribeKfvSquad,
   subscribeKfvMatchReport,
   normalizeKfvTeamId,
 } from "./kfvFirestore";
-import type { KfvMatch, KfvMatchReport, KfvStandingRow, KfvSquadPlayer } from "./kfvTypes";
+import type { KfvClub, KfvMatch, KfvMatchReport, KfvStandingRow, KfvSquadPlayer } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
 import { Icon } from "./Icons";
 import "./assets/kfvLive.css";
@@ -16,8 +18,27 @@ import "./assets/kfvLive.css";
 type KfvLiveTab = "matches" | "table" | "squad";
 type KfvLiveProps = { initialMatchId?: string; initialTab?: KfvLiveTab };
 
+function calendarCompatibleLogo(clubs: KfvClub[], teamName: string, matchLogoUrl = "", clubId = "") {
+  if (isTsuAinet(teamName)) return "/tsu-ainet-logo.png";
+  const normalized = teamName
+    .toLocaleLowerCase("de-AT")
+    .replace(/[^a-z0-9äöüß]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\b(tsu|spg|fc|sv|usc|union|sektion)\b/g, " ")
+    .replace(/ö/g, "oe")
+    .replace(/ä/g, "ae")
+    .replace(/ü/g, "ue")
+    .replace(/ß/g, "ss")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized === "doelsach") return "/logos/clubs/doelsach.png";
+  return getKfvClubLogo(clubs, teamName, matchLogoUrl, clubId);
+}
+
 function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) {
   const [matches, setMatches] = useState<KfvMatch[]>([]);
+  const [clubs, setClubs] = useState<KfvClub[]>([]);
   const [standings, setStandings] = useState<KfvStandingRow[]>([]);
   const [squad, setSquad] = useState<KfvSquadPlayer[]>([]);
   const [selectedTeamId, setSelectedTeamId] = useState("all");
@@ -30,8 +51,10 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   const [matchReport, setMatchReport] = useState<KfvMatchReport | null>(null);
   const [loadingMatchReport, setLoadingMatchReport] = useState(false);
   const [matchReportError, setMatchReportError] = useState("");
-  const [matchDetailTab, setMatchDetailTab] = useState<"overview" | "lineups">("overview");
+  const [matchDetailTab, setMatchDetailTab] = useState<"overview" | "lineups">("lineups");
 
+
+  useEffect(() => subscribeKfvClubs(setClubs), []);
 
   useEffect(() => {
     const unsubscribeMatches = subscribeKfvMatches(
@@ -88,7 +111,7 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   }, [initialMatchId, matches]);
 
   useEffect(() => {
-    if (selectedMatch) setMatchDetailTab("overview");
+    if (selectedMatch) setMatchDetailTab("lineups");
   }, [selectedMatch]);
 
 
@@ -272,6 +295,7 @@ function formatDate(date: Date) {
       matchReport && matchReport.homeLineup.length >= 10 && matchReport.awayLineup.length >= 10
     );
 
+
     const normalizePlayerName = (value: string) => value
       .toLocaleLowerCase("de-AT")
       .normalize("NFD")
@@ -308,8 +332,8 @@ function formatDate(date: Date) {
     );
 
     const tabItems = [
-      { id: "overview" as const, label: "Übersicht", icon: "ball" as const },
       { id: "lineups" as const, label: "Aufstellungen", icon: "users" as const },
+      { id: "overview" as const, label: "Übersicht", icon: "ball" as const },
     ];
 
     return (
@@ -333,7 +357,7 @@ function formatDate(date: Date) {
 
           <div className="match-detail-teams premium-match-teams">
             <div className="match-detail-team">
-              <TeamLogo url={selectedMatch.homeLogoUrl} name={selectedMatch.homeTeam} clubId={selectedMatch.homeClubId} size="large" />
+              <TeamLogo url={calendarCompatibleLogo(clubs, selectedMatch.homeTeam, selectedMatch.homeLogoUrl, selectedMatch.homeClubId)} name={selectedMatch.homeTeam} clubId={selectedMatch.homeClubId} size="large" />
               <span className="match-detail-badge">H</span>
               <h2 className={isTsuAinet(selectedMatch.homeTeam) ? "tsu" : ""}>
                 {selectedMatch.homeTeam}
@@ -347,7 +371,7 @@ function formatDate(date: Date) {
             </div>
 
             <div className="match-detail-team">
-              <TeamLogo url={selectedMatch.awayLogoUrl} name={selectedMatch.awayTeam} clubId={selectedMatch.awayClubId} size="large" />
+              <TeamLogo url={calendarCompatibleLogo(clubs, selectedMatch.awayTeam, selectedMatch.awayLogoUrl, selectedMatch.awayClubId)} name={selectedMatch.awayTeam} clubId={selectedMatch.awayClubId} size="large" />
               <span className="match-detail-badge match-detail-badge-away">A</span>
               <h2 className={isTsuAinet(selectedMatch.awayTeam) ? "tsu" : ""}>
                 {selectedMatch.awayTeam}
@@ -602,7 +626,7 @@ function formatDate(date: Date) {
 
                     <div className="kfv-match-main">
                       <div className={`kfv-team-side ${isTsuAinet(match.homeTeam) ? "tsu" : ""}`}>
-                        <TeamLogo url={match.homeLogoUrl} name={match.homeTeam} clubId={match.homeClubId} />
+                        <TeamLogo url={calendarCompatibleLogo(clubs, match.homeTeam, match.homeLogoUrl, match.homeClubId)} name={match.homeTeam} clubId={match.homeClubId} />
                         <strong>{match.homeTeam}</strong>
                       </div>
 
@@ -615,7 +639,7 @@ function formatDate(date: Date) {
                       </div>
 
                       <div className={`kfv-team-side ${isTsuAinet(match.awayTeam) ? "tsu" : ""}`}>
-                        <TeamLogo url={match.awayLogoUrl} name={match.awayTeam} clubId={match.awayClubId} />
+                        <TeamLogo url={calendarCompatibleLogo(clubs, match.awayTeam, match.awayLogoUrl, match.awayClubId)} name={match.awayTeam} clubId={match.awayClubId} />
                         <strong>{match.awayTeam}</strong>
                       </div>
                     </div>

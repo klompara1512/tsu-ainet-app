@@ -630,3 +630,106 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
     text-align: right;
   }
 }
+
+
+/* =========================================================
+   TSU Ainet v1.0.24
+   Trainingsplaner – Desktop: beide Plätze nebeneinander
+   Mobile/Tablet bleibt unverändert.
+   ========================================================= */
+
+@media (min-width: 1000px) {
+  .training-planner {
+    max-width: 1480px;
+  }
+
+  /* Hauptfeld + Trainingsplatz als gleichwertige 2-Spalten-Ansicht */
+  .training-field-stack {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: 22px !important;
+    align-items: start !important;
+  }
+
+  .training-field-stack > .pitch-card {
+    min-width: 0 !important;
+    width: 100% !important;
+    margin: 0 !important;
+  }
+
+  /* Kopf kompakt halten, damit beide Karten optisch gleich beginnen */
+  .pitch-card-header {
+    min-height: 54px;
+    align-items: center !important;
+  }
+
+  .pitch-card-header h2 {
+    font-size: 1.25rem !important;
+  }
+
+  /* Echtes Fußballfeld-Verhältnis statt extrem breitem Balken */
+  .pitch-graphic {
+    width: 100% !important;
+    min-height: 0 !important;
+    aspect-ratio: 105 / 68 !important;
+  }
+
+  .pitch-half {
+    min-height: 0 !important;
+    height: 100% !important;
+    padding: 52px 12px 14px !important;
+  }
+
+  .pitch-lines {
+    inset: 12px !important;
+  }
+
+  .center-circle {
+    width: clamp(58px, 7vw, 76px) !important;
+    height: clamp(58px, 7vw, 76px) !important;
+  }
+
+  .half-label {
+    top: 14px !important;
+    left: 14px !important;
+  }
+
+  .half-add {
+    top: 15px !important;
+    right: 14px !important;
+  }
+
+  .pitch-bookings {
+    margin-top: 10px !important;
+    gap: 6px !important;
+  }
+
+  .pitch-booking {
+    padding: 8px 9px !important;
+  }
+
+  .pitch-footer {
+    min-height: 38px;
+  }
+}
+
+/* Auf kleineren Laptops bei Bedarf etwas kompakter,
+   aber weiterhin zwei Plätze nebeneinander. */
+@media (min-width: 1000px) and (max-width: 1180px) {
+  .training-field-stack {
+    gap: 14px !important;
+  }
+
+  .pitch-card {
+    padding: 11px !important;
+  }
+
+  .pitch-card-header h2 {
+    font-size: 1.1rem !important;
+  }
+
+  .pitch-half {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+}

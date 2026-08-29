@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import {
   collection,
   onSnapshot,
@@ -17,6 +17,7 @@ import {
 } from "./kfvFirestore";
 import type { KfvClub, KfvMatch, KfvStandingRow } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
+import AutoFitLogo from "./AutoFitLogo";
 import { Icon } from "./Icons";
 import "./LiveDashboard.css";
 
@@ -27,6 +28,14 @@ type ClubEvent = {
   teamName: string;
   location: string;
   startAt: Date;
+  active: boolean;
+};
+
+
+type HeroImage = {
+  id: string;
+  imageUrl: string;
+  order: number;
   active: boolean;
 };
 
@@ -46,6 +55,7 @@ type Props = {
   onOpenMore: () => void;
   onOpenKfvLive: () => void;
   onOpenStandings: () => void;
+  onOpenClubInfo: () => void;
   onOpenMatch: (matchId: string) => void;
 };
 
@@ -98,6 +108,19 @@ function calendarCompatibleLogo(clubs: KfvClub[], teamName: string, matchLogoUrl
   return getKfvClubLogo(clubs, teamName, matchLogoUrl, clubId);
 }
 
+
+function matchdayTeamLabel(teamName: string) {
+  return teamName === "Kampfmannschaft" ? "KM" : teamName;
+}
+
+function localMatchDayKey(date: Date) {
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, "0"),
+    String(date.getDate()).padStart(2, "0"),
+  ].join("-");
+}
+
 function preferDashboardMatch(current: KfvMatch, candidate: KfvMatch) {
   const score = (match: KfvMatch) =>
     (match.status === "finished" ? 20 : 0) +
@@ -109,13 +132,13 @@ function preferDashboardMatch(current: KfvMatch, candidate: KfvMatch) {
 }
 
 function LiveDashboard({
-  displayName,
   onOpenCalendar,
   onOpenTeams,
   onOpenNews,
   onOpenMore,
   onOpenKfvLive,
   onOpenStandings,
+  onOpenClubInfo,
   onOpenMatch,
 }: Props) {
   const [events, setEvents] = useState<ClubEvent[]>([]);
@@ -123,6 +146,8 @@ function LiveDashboard({
   const [clubs, setClubs] = useState<KfvClub[]>([]);
   const [standings, setStandings] = useState<KfvStandingRow[]>([]);
   const [sponsors, setSponsors] = useState<Sponsor[]>([]);
+  const [heroImages, setHeroImages] = useState<HeroImage[]>([]);
+  const [heroIndex, setHeroIndex] = useState(0);
   const [loadingEvents, setLoadingEvents] = useState(true);
   const [loadingKfv, setLoadingKfv] = useState(true);
   const [clock, setClock] = useState(() => new Date());
@@ -175,6 +200,26 @@ function LiveDashboard({
       () => setLoadingEvents(false),
     );
 
+    const unsubscribeHeroImages = onSnapshot(
+      query(collection(db, "visualAssets"), orderBy("order", "asc")),
+      (snapshot) => {
+        setHeroImages(
+          snapshot.docs
+            .map((document, index) => {
+              const data = document.data();
+              return {
+                id: document.id,
+                imageUrl: typeof data.imageUrl === "string" ? data.imageUrl : "",
+                order: typeof data.order === "number" ? data.order : index,
+                active: data.active !== false,
+              } satisfies HeroImage;
+            })
+            .filter((item) => item.active && item.imageUrl),
+        );
+      },
+      () => setHeroImages([]),
+    );
+
     const unsubscribeSponsors = onSnapshot(
       collection(db, "sponsors"),
       (snapshot) => {
@@ -221,11 +266,25 @@ function LiveDashboard({
     return () => {
       window.clearInterval(timer);
       unsubscribeEvents();
+      unsubscribeHeroImages();
       unsubscribeSponsors();
       unsubscribeMatches();
       unsubscribeStandings();
     };
   }, []);
+
+  useEffect(() => {
+    if (heroImages.length <= 1) {
+      setHeroIndex(0);
+      return;
+    }
+
+    const timer = window.setInterval(() => {
+      setHeroIndex((currentIndex) => (currentIndex + 1) % heroImages.length);
+    }, 9_000);
+
+    return () => window.clearInterval(timer);
+  }, [heroImages.length]);
 
   const uniqueMatches = useMemo(() => {
     const map = new Map<string, KfvMatch>();
@@ -257,6 +316,26 @@ function LiveDashboard({
   }, [uniqueMatches, clock]);
 
   const nextMatch = dashboardMatch;
+
+  const matchdayMatches = useMemo(() => {
+    if (!nextMatch) return [];
+
+    const dayKey = localMatchDayKey(nextMatch.kickoffAt);
+
+    return uniqueMatches
+      .filter(
+        (match) =>
+          localMatchDayKey(match.kickoffAt) === dayKey &&
+          match.status !== "cancelled" &&
+          match.status !== "postponed",
+      )
+      .slice()
+      .sort(
+        (a, b) =>
+          a.kickoffAt.getTime() - b.kickoffAt.getTime() ||
+          a.teamName.localeCompare(b.teamName, "de-AT"),
+      );
+  }, [nextMatch, uniqueMatches]);
 
   const recentMatches = useMemo(
     () =>
@@ -326,11 +405,6 @@ function LiveDashboard({
     [events, clock],
   );
 
-  const dateText = new Intl.DateTimeFormat("de-AT", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-  }).format(clock);
 
   const formatDate = (date: Date) =>
     new Intl.DateTimeFormat("de-AT", {
@@ -351,12 +425,6 @@ function LiveDashboard({
   const days = Math.floor(countdown / 86_400_000);
   const hours = Math.floor((countdown % 86_400_000) / 3_600_000);
 
-  const firstName = displayName.trim().split(/\s+/)[0] || "TSU-Fan";
-  const greeting = clock.getHours() < 11
-    ? "Guten Morgen"
-    : clock.getHours() < 17
-      ? "Guten Nachmittag"
-      : "Guten Abend";
   const isToday = nextMatch
     ? nextMatch.kickoffAt.toDateString() === clock.toDateString()
     : false;
@@ -364,33 +432,45 @@ function LiveDashboard({
     ? nextMatch.status === "scheduled" && clock.getTime() >= nextMatch.kickoffAt.getTime() - 15 * 60_000 && clock.getTime() <= nextMatch.kickoffAt.getTime() + 150 * 60_000
     : false;
   const isFinishedToday = Boolean(nextMatch && isToday && nextMatch.status === "finished");
-  const matchStatusLabel = nextMatch
-    ? isLive
-      ? "Das Spiel läuft – direkt zum Liveticker"
-      : isFinishedToday
-        ? "Endstand ist verfügbar"
-        : isToday
-          ? "Heute ist Spieltag"
-          : `Noch ${days} ${days === 1 ? "Tag" : "Tage"} bis zum nächsten Spiel`
-    : "Aktuell kein kommendes Spiel";
   const scheduledCount = uniqueMatches.filter((match) => match.status === "scheduled" && match.kickoffAt >= clock).length;
 
   return (
     <section className="v101-home">
-      <header className="v101-intro">
-        <div>
-          <span className="v101-overline">TSU Ainet · Saison 2026/27</span>
-          <h1>{greeting}, {firstName}</h1>
-          <p>{dateText} · {matchStatusLabel}</p>
+      <header
+        className={`v101-intro v1825-welcome-hero ${isToday ? "is-matchday" : ""}`}
+        style={heroImages[heroIndex]?.imageUrl ? ({ "--hero-image": `url("${heroImages[heroIndex].imageUrl}")` } as CSSProperties) : undefined}
+      >
+        {heroImages[heroIndex]?.imageUrl && (
+          <div className="v183-hero-photo" aria-hidden="true">
+            <img src={heroImages[heroIndex].imageUrl} alt="" />
+          </div>
+        )}
+        <div className="v1825-welcome-overlay" />
+        {isToday && (
+          <div className="v183-matchday-title" aria-label="Matchday TSU Ainet">
+            <span>MATCHDAY</span>
+            <small>TSU Ainet</small>
+          </div>
+        )}
+        <div className="v1825-welcome-copy">
+          <h1>Willkommen bei der TSU Ainet</h1>
+          <p className="v1825-since">Since 1966</p>
+          <strong className="v1825-slogan">Unsere Farben. Unser Stolz.</strong>
         </div>
-        <img src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
+        <img className="v183-hero-club-logo" src="/tsu-ainet-logo.png" alt="TSU Ainet Vereinslogo" />
       </header>
 
       <section className="v101-match-hero">
         <div className="v101-match-head">
           <div>
-            <span className="v101-overline">Nächstes Spiel</span>
-            <h2>{nextMatch?.teamName || "TSU Ainet"}</h2>
+            <span className="v101-overline">
+              {matchdayMatches.length > 1 ? "Matchday · Alle Spiele" : "Nächstes Spiel"}
+            </span>
+            <h2>
+              {matchdayMatches.length > 1
+                ? `${formatDate(nextMatch!.kickoffAt)} · ${matchdayMatches.length} Spiele`
+                : nextMatch?.teamName || "TSU Ainet"}
+            </h2>
             {nextMatch && <span className={`v104-status ${isLive ? "is-live" : isToday ? "is-today" : ""}`}>{isLive ? "LIVE" : isFinishedToday ? "Beendet" : isToday ? "Heute" : "Geplant"}</span>}
           </div>
           {nextMatch && !isLive && !isFinishedToday && (
@@ -405,42 +485,127 @@ function LiveDashboard({
           <div className="v101-empty">ÖFB-Daten werden geladen …</div>
         ) : nextMatch ? (
           <>
-            <div className="v101-fixture">
-              <div className="v101-team">
-                <TeamLogo
-                  url={calendarCompatibleLogo(clubs, nextMatch.homeTeam, nextMatch.homeLogoUrl, nextMatch.homeClubId)}
-                  name={nextMatch.homeTeam}
-                  size="hero"
-                />
-                <strong>{nextMatch.homeTeam}</strong>
+            {matchdayMatches.length > 1 ? (
+              <div className="v186-matchday-list">
+                {matchdayMatches.map((match, index) => {
+                  const matchIsToday = localMatchDayKey(match.kickoffAt) === localMatchDayKey(clock);
+                  const matchIsLive =
+                    match.status === "scheduled" &&
+                    clock.getTime() >= match.kickoffAt.getTime() - 15 * 60_000 &&
+                    clock.getTime() <= match.kickoffAt.getTime() + 150 * 60_000;
+                  const matchFinished =
+                    match.status === "finished" ||
+                    (match.homeScore !== null && match.awayScore !== null);
+
+                  return (
+                    <button
+                      type="button"
+                      className={`v186-matchday-item ${matchIsLive ? "is-live" : ""}`}
+                      key={match.id}
+                      onClick={() => onOpenMatch(match.id)}
+                      aria-label={`${match.teamName}: ${match.homeTeam} gegen ${match.awayTeam} öffnen`}
+                    >
+                      <div className="v186-matchday-time">
+                        <small>{index === 0 ? "Erstes Spiel" : "Anstoß"}</small>
+                        <strong>{formatTime(match.kickoffAt)}</strong>
+                        <span>{matchdayTeamLabel(match.teamName)}</span>
+                      </div>
+
+                      <div className="v186-matchday-team">
+                        <TeamLogo
+                          url={calendarCompatibleLogo(clubs, match.homeTeam, match.homeLogoUrl, match.homeClubId)}
+                          name={match.homeTeam}
+                          clubId={match.homeClubId}
+                          size="small"
+                        />
+                        <strong>{match.homeTeam}</strong>
+                      </div>
+
+                      <div className="v186-matchday-score">
+                        {match.homeScore !== null && match.awayScore !== null ? (
+                          <b>{match.homeScore}:{match.awayScore}</b>
+                        ) : (
+                          <b>VS</b>
+                        )}
+                        <small>
+                          {matchIsLive
+                            ? "LIVE"
+                            : matchFinished
+                              ? "Beendet"
+                              : matchIsToday
+                                ? "Heute"
+                                : "Geplant"}
+                        </small>
+                      </div>
+
+                      <div className="v186-matchday-team is-away">
+                        <TeamLogo
+                          url={calendarCompatibleLogo(clubs, match.awayTeam, match.awayLogoUrl, match.awayClubId)}
+                          name={match.awayTeam}
+                          clubId={match.awayClubId}
+                          size="small"
+                        />
+                        <strong>{match.awayTeam}</strong>
+                      </div>
+
+                      <span className="v186-matchday-open" aria-hidden="true">›</span>
+                    </button>
+                  );
+                })}
+
+                <div className="v186-matchday-footer">
+                  <span>
+                    <Icon name="calendar" />
+                    {formatDate(nextMatch.kickoffAt)}
+                  </span>
+                  <small>Nach Anstoßzeit sortiert · jedes Spiel direkt antippbar</small>
+                </div>
               </div>
+            ) : (
+              <>
+                <div className="v101-fixture">
+                  <div className="v101-team">
+                    <TeamLogo
+                      url={calendarCompatibleLogo(clubs, nextMatch.homeTeam, nextMatch.homeLogoUrl, nextMatch.homeClubId)}
+                      name={nextMatch.homeTeam}
+                      size="hero"
+                    />
+                    <strong>{nextMatch.homeTeam}</strong>
+                  </div>
 
-              <div className="v101-kickoff">
-                <small>{isFinishedToday ? "Endstand" : isLive ? "LIVE" : formatDate(nextMatch.kickoffAt)}</small>
-                <b>{nextMatch.homeScore !== null && nextMatch.awayScore !== null ? `${nextMatch.homeScore}:${nextMatch.awayScore}` : formatTime(nextMatch.kickoffAt)}</b>
-                <span>{isLive ? "● LIVE" : isFinishedToday ? "Beendet" : "VS"}</span>
-              </div>
+                  <div className="v101-kickoff">
+                    <small>{isFinishedToday ? "Endstand" : isLive ? "LIVE" : formatDate(nextMatch.kickoffAt)}</small>
+                    <b>{nextMatch.homeScore !== null && nextMatch.awayScore !== null ? `${nextMatch.homeScore}:${nextMatch.awayScore}` : formatTime(nextMatch.kickoffAt)}</b>
+                    <span>{isLive ? "● LIVE" : isFinishedToday ? "Beendet" : "VS"}</span>
+                  </div>
 
-              <div className="v101-team">
-                <TeamLogo
-                  url={calendarCompatibleLogo(clubs, nextMatch.awayTeam, nextMatch.awayLogoUrl, nextMatch.awayClubId)}
-                  name={nextMatch.awayTeam}
-                  size="hero"
-                />
-                <strong>{nextMatch.awayTeam}</strong>
-              </div>
-            </div>
+                  <div className="v101-team">
+                    <TeamLogo
+                      url={calendarCompatibleLogo(clubs, nextMatch.awayTeam, nextMatch.awayLogoUrl, nextMatch.awayClubId)}
+                      name={nextMatch.awayTeam}
+                      size="hero"
+                    />
+                    <strong>{nextMatch.awayTeam}</strong>
+                  </div>
+                </div>
 
-            <div className="v101-match-meta">
-              <span><Icon name="calendar" />{formatDate(nextMatch.kickoffAt)} · {formatTime(nextMatch.kickoffAt)} Uhr</span>
-              <span><Icon name="map" />{nextMatch.venue || "Spielort wird vom KFV ergänzt"}</span>
-              <span><Icon name="ball" />{isTsuAinet(nextMatch.homeTeam) ? "Heimspiel" : "Auswärtsspiel"}</span>
-            </div>
+                <div className="v101-match-meta">
+                  <span><Icon name="calendar" />{formatDate(nextMatch.kickoffAt)} · {formatTime(nextMatch.kickoffAt)} Uhr</span>
+                  <span><Icon name="map" />{nextMatch.venue || "Spielort wird vom KFV ergänzt"}</span>
+                  <span><Icon name="ball" />{isTsuAinet(nextMatch.homeTeam) ? "Heimspiel" : "Auswärtsspiel"}</span>
+                </div>
 
-            <button type="button" className="v101-primary" onClick={() => onOpenMatch(nextMatch.id)}>
-              {isLive && nextMatch.liveUrl ? "Jetzt zum Liveticker" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
-            </button>
-            <small className="v104-data-freshness">{nextMatch.sourceUpdatedAt ? `KFV zuletzt aktualisiert: ${formatDate(nextMatch.sourceUpdatedAt)} · ${formatTime(nextMatch.sourceUpdatedAt)}` : "KFV-Aktualisierung ausständig"}</small>
+                <button type="button" className="v101-primary" onClick={() => onOpenMatch(nextMatch.id)}>
+                  {isLive && nextMatch.liveUrl ? "Jetzt zum Liveticker" : isFinishedToday ? "Endstand & Bericht" : "Zum Spielcenter"} <span>›</span>
+                </button>
+              </>
+            )}
+
+            <small className="v104-data-freshness">
+              {nextMatch.sourceUpdatedAt
+                ? `KFV zuletzt aktualisiert: ${formatDate(nextMatch.sourceUpdatedAt)} · ${formatTime(nextMatch.sourceUpdatedAt)}`
+                : "KFV-Aktualisierung ausständig"}
+            </small>
           </>
         ) : (
           <div className="v101-empty">
@@ -448,6 +613,65 @@ function LiveDashboard({
             <span>Neue Spiele erscheinen nach der Synchronisierung automatisch.</span>
           </div>
         )}
+      </section>
+
+      {sponsors.length > 0 && (
+        <section className="v101-sponsors v181-sponsors-prominent" aria-labelledby="dashboard-sponsors-title">
+          <div className="v101-card-head">
+            <div>
+              <span className="v101-overline">Partner</span>
+              <h2 id="dashboard-sponsors-title">Unsere Sponsoren</h2>
+            </div>
+          </div>
+          <div className="v181-sponsor-marquee">
+            <div className="v101-sponsor-track">
+              {[...sponsors, ...sponsors].map((sponsor, index) => (
+                <button
+                  type="button"
+                  key={`${sponsor.id}-${index}`}
+                  className={!sponsor.website ? "is-static" : ""}
+                  onClick={() => sponsor.website && window.open(sponsor.website, "_blank", "noopener,noreferrer")}
+                  aria-label={sponsor.website ? `${sponsor.name} – Website öffnen` : sponsor.name}
+                  title={sponsor.website ? `${sponsor.name} – Website öffnen` : sponsor.name}
+                >
+                  {sponsor.logoUrl ? (
+                    <span className="v101-sponsor-logo-frame" aria-hidden="true">
+                      <AutoFitLogo src={sponsor.logoUrl} alt="" className="v101-sponsor-logo" />
+                    </span>
+                  ) : (
+                    <strong>{sponsor.name}</strong>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      <section className="v182-shop-card v183-shop-showcase" aria-labelledby="dashboard-shop-title">
+        <div className="v183-shop-brand" aria-hidden="true">
+          <div className="v183-shop-brand-glow" />
+          <img
+            src="https://www.11teamsports.com/media/3f/b8/52/1639126281/logo.svg"
+            alt=""
+            referrerPolicy="no-referrer"
+          />
+        </div>
+
+        <div className="v182-shop-copy v183-shop-copy">
+          <h2 id="dashboard-shop-title">Offizieller Clubshop</h2>
+          <p>TSU Ainet – trag, was uns verbindet</p>
+        </div>
+
+        <a
+          className="v182-shop-button v183-shop-button"
+          href="https://www.11teamsports.com/at-de/clubshop/tsu-ainet/"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="TSU Ainet Vereinsshop bei 11teamsports öffnen"
+        >
+          Zum Shop <span aria-hidden="true">↗</span>
+        </a>
       </section>
 
       <nav className="v101-shortcuts" aria-label="Schnellzugriffe">
@@ -575,7 +799,7 @@ function LiveDashboard({
         </div>
       </section>
 
-      <button type="button" className="v101-notice" onClick={onOpenCalendar}>
+      <button type="button" className="v101-notice" onClick={onOpenClubInfo}>
         <span><Icon name="shield" /></span>
         <div>
           <small>Vereinsinfo</small>

@@ -91,7 +91,6 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const canManageSponsors = hasPermission(role, "manageSponsors");
   const canManageKits = role === "admin" || role === "section";
   const canUseTrainingPlanner = Boolean(user) && ["admin", "section", "trainer"].includes(role);
-  const hasInternalAccess = Boolean(user) && ["admin", "section", "trainer", "board"].includes(role);
   const canOpenAdministration = Boolean(user) && ["admin", "section", "board"].includes(role);
 
   useEffect(() => {
@@ -202,13 +201,11 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
             <span className="club-menu-card-copy"><strong>Termine</strong><small>Vereinstermine & Events</small></span>
             <span className="club-menu-chevron">›</span>
           </button>
-          {hasInternalAccess && (
-            <button type="button" className="club-menu-card card-blue" onClick={() => setActivePage("public-club")}>
-              <span className="quick-icon"><Icon name="location" /></span>
-              <span className="club-menu-card-copy"><strong>Vereinsinfo</strong><small>Infos & Organisation</small></span>
-              <span className="club-menu-chevron">›</span>
-            </button>
-          )}
+          <button type="button" className="club-menu-card card-blue" onClick={() => setActivePage("public-club")}>
+            <span className="quick-icon"><Icon name="location" /></span>
+            <span className="club-menu-card-copy"><strong>Vereinsinfo</strong><small>Infos & Organisation</small></span>
+            <span className="club-menu-chevron">›</span>
+          </button>
           {canManageKits && (
             <button type="button" className="club-menu-card card-red mobile-kit-entry" onClick={() => setActivePage("kit-manager")}>
               <span className="quick-icon"><Icon name="shirt" /></span>
@@ -301,7 +298,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
     if (activePage === "public-events") return <PublicEvents onBack={() => setActivePage("mehr")} />;
     if (activePage === "public-board") return <PublicPeople kind="board" onBack={() => setActivePage("mehr")} />;
     if (activePage === "public-trainers") return <PublicPeople kind="trainer" onBack={() => setActivePage("mehr")} />;
-    if (activePage === "public-club") return hasInternalAccess ? <PublicClubInfo onBack={() => setActivePage("mehr")} /> : renderMorePage();
+    if (activePage === "public-club") return <PublicClubInfo onBack={() => setActivePage("mehr")} />;
     if (activePage === "administration") return renderAdministrationPage();
 
     if (activePage === "kfv-live") {
@@ -421,6 +418,9 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
             setSelectedMatchId("");
             setKfvInitialTab("table");
             setActivePage("kfv-live");
+          }}
+          onOpenClubInfo={() => {
+            setActivePage("public-club");
           }}
           onOpenMatch={(matchId) => {
             setSelectedMatchId(matchId);

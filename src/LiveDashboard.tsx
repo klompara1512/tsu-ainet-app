@@ -49,37 +49,26 @@ type Props = {
   onOpenMatch: (matchId: string) => void;
 };
 
-type DashboardStandingTeamKey = "km" | "challenge" | "u17" | "u12" | "u10" | "u8";
+type DashboardStandingTeamKey = "km" | "challenge" | "u17";
 
-const DASHBOARD_STANDING_TEAM_ORDER: DashboardStandingTeamKey[] = [
-  "km",
-  "challenge",
-  "u17",
-  "u12",
-  "u10",
-  "u8",
-];
+const DASHBOARD_STANDING_TEAM_ORDER: DashboardStandingTeamKey[] = ["km", "challenge", "u17"];
 
-function getStandingTeamKey(row: KfvStandingRow): DashboardStandingTeamKey {
+function getStandingTeamKey(row: KfvStandingRow): DashboardStandingTeamKey | null {
   const text = `${row.teamId} ${row.teamName} ${row.competitionName}`
     .toLocaleLowerCase("de-AT")
     .replace(/[^a-z0-9äöüß]+/g, " ")
     .trim();
 
+  // Für U8, U10 und U12 gibt es bewusst keine Tabellenfunktion.
+  if (text.includes("u12") || text.includes("u10") || text.includes("u8") || text.includes("u08")) return null;
   if (text.includes("challenge") || text.includes("reserve") || text.includes(" res ") || text.includes("1b")) return "challenge";
   if (text.includes("u17")) return "u17";
-  if (text.includes("u12")) return "u12";
-  if (text.includes("u10")) return "u10";
-  if (text.includes("u8") || text.includes("u08")) return "u8";
   return "km";
 }
 
 function getStandingTeamLabel(key: DashboardStandingTeamKey) {
   if (key === "challenge") return "Challenge";
   if (key === "u17") return "U17";
-  if (key === "u12") return "U12";
-  if (key === "u10") return "U10";
-  if (key === "u8") return "U8";
   return "Kampfmannschaft";
 }
 
@@ -285,7 +274,7 @@ function LiveDashboard({
 
   const availableStandingTeams = useMemo(() => {
     const keys = new Set<DashboardStandingTeamKey>();
-    standings.forEach((row) => keys.add(getStandingTeamKey(row)));
+    standings.forEach((row) => { const key = getStandingTeamKey(row); if (key) keys.add(key); });
     return DASHBOARD_STANDING_TEAM_ORDER.filter((key) => keys.has(key));
   }, [standings]);
 

@@ -22,6 +22,13 @@ import "./assets/kfvLive.css";
 type KfvLiveTab = "matches" | "table" | "squad";
 type KfvLiveProps = { initialMatchId?: string; initialTab?: KfvLiveTab };
 
+const TABLE_TEAM_IDS = new Set(["kampfmannschaft", "km", "challenge", "u17"]);
+
+function teamHasOfficialTable(teamId: string) {
+  if (teamId === "all") return true;
+  return TABLE_TEAM_IDS.has(normalizeKfvTeamId(teamId));
+}
+
 function calendarCompatibleLogo(clubs: KfvClub[], teamName: string, matchLogoUrl = "", clubId = "") {
   if (isTsuAinet(teamName)) return "/tsu-ainet-logo.png";
   const normalized = teamName
@@ -217,15 +224,23 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
     return Array.from(map.values()).sort((a, b) => a.order - b.order || a.name.localeCompare(b.name, "de-AT"));
   }, [matches, standings]);
 
+  const selectedTeamHasTable = teamHasOfficialTable(selectedTeamId);
+  const tableTeams = useMemo(
+    () => teams.filter((team) => teamHasOfficialTable(team.id)),
+    [teams],
+  );
+
   useEffect(() => {
     setActiveTab(initialTab);
   }, [initialTab]);
 
   useEffect(() => {
-    if ((activeTab === "squad" || activeTab === "table") && selectedTeamId === "all" && teams.length > 0) {
+    if (activeTab === "table" && selectedTeamId === "all" && tableTeams.length > 0) {
+      setSelectedTeamId(tableTeams[0].id);
+    } else if (activeTab === "squad" && selectedTeamId === "all" && teams.length > 0) {
       setSelectedTeamId(teams[0].id);
     }
-  }, [activeTab, selectedTeamId, teams]);
+  }, [activeTab, selectedTeamId, teams, tableTeams]);
 
   const visibleMatches = useMemo(() => {
     const wantedTeamId = selectedTeamId === "all" ? "all" : normalizeKfvTeamId(selectedTeamId);
@@ -291,10 +306,52 @@ function formatDate(date: Date) {
     window.open(`https://www.google.com/maps/search/?api=1&query=${destination}`, "_blank", "noopener,noreferrer");
   }
 
-  function estimatedMatchEnd(match: KfvMatch) {
+  function resultEntryRule(match: KfvMatch) {
     const teamId = normalizeKfvTeamId(match.teamId || match.teamName);
-    const minutes = teamId === "u8" || teamId === "u10" ? 70 : teamId === "u12" ? 90 : 110;
-    return match.kickoffAt.getTime() + minutes * 60_000;
+
+    if (teamId === "u17") {
+      return {
+        format: "2 × 45 Min. + Nachspielzeit",
+        unlockMinutesAfterKickoff: 115,
+      };
+    }
+
+    if (teamId === "u12") {
+      return {
+        format: "3 × 20 Min.",
+        unlockMinutesAfterKickoff: 70,
+      };
+    }
+
+    if (teamId === "u10") {
+      return {
+        format: "4 × 12 Min.",
+        unlockMinutesAfterKickoff: 60,
+      };
+    }
+
+    if (teamId === "u8") {
+      return {
+        format: "Nach Spielende",
+        unlockMinutesAfterKickoff: 70,
+      };
+    }
+
+    return {
+      format: "2 × 45 Min. + Nachspielzeit",
+      unlockMinutesAfterKickoff: 115,
+    };
+  }
+
+  function estimatedMatchEnd(match: KfvMatch) {
+    return match.kickoffAt.getTime() + resultEntryRule(match).unlockMinutesAfterKickoff * 60_000;
+  }
+
+  function formatResultUnlockTime(match: KfvMatch) {
+    return new Intl.DateTimeFormat("de-AT", {
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(new Date(estimatedMatchEnd(match)));
   }
 
   function canEditResultForMatch(match: KfvMatch) {
@@ -346,6 +403,7 @@ function formatDate(date: Date) {
             : "Geplant";
 
     const canEditResult = canEditResultForMatch(selectedMatch);
+    const resultRule = resultEntryRule(selectedMatch);
     const resultEntryAvailable =
       canEditResult &&
       selectedMatch.status !== "cancelled" &&
@@ -492,33 +550,106 @@ function formatDate(date: Date) {
             )}
           </div>
 
-          {resultEntryAvailable && (
-            <div className="trainer-result-entry" style={{ marginTop: "16px" }}>
-              <button
-                type="button"
-                className="secondary"
-                onClick={() => {
-                  setManualHomeScore(selectedMatch.homeScore !== null ? String(selectedMatch.homeScore) : "");
-                  setManualAwayScore(selectedMatch.awayScore !== null ? String(selectedMatch.awayScore) : "");
-                  setResultMessage("");
-                  setResultEditorOpen((open) => !open);
-                }}
-              >
-                <Icon name="ball" /> {scoreAvailable ? "Ergebnis korrigieren" : "Ergebnis eintragen"}
-              </button>
+          {canEditResult && (
+            <section
+              className="trainer-result-entry"
+              aria-label="Spielergebnis eintragen"
+              style={{
+                marginTop: "18px",
+                padding: "16px",
+                borderRadius: "16px",
+                border: resultEntryAvailable
+                  ? "1px solid rgba(255, 214, 74, .55)"
+                  : "1px solid rgba(255,255,255,.12)",
+                background: resultEntryAvailable
+                  ? "rgba(255, 204, 45, .08)"
+                  : "rgba(255,255,255,.035)",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", gap: "14px", alignItems: "center", flexWrap: "wrap" }}>
+                <div>
+                  <small style={{ display: "block", opacity: .68, marginBottom: "4px", textTransform: "uppercase", letterSpacing: ".08em" }}>
+                    Trainer-Funktion
+                  </small>
+                  <strong style={{ display: "block", fontSize: "1.05rem" }}>Spielergebnis eintragen</strong>
+                  <small style={{ display: "block", opacity: .72, marginTop: "5px" }}>
+                    Spielzeit: {resultRule.format}
+                  </small>
+                </div>
 
-              {resultEditorOpen && (
-                <form onSubmit={submitManualResult} style={{ marginTop: "12px", padding: "14px", borderRadius: "14px", background: "rgba(255,255,255,.04)" }}>
+                <button
+                  type="button"
+                  disabled={!resultEntryAvailable || savingResult}
+                  aria-disabled={!resultEntryAvailable}
+                  title={
+                    resultEntryAvailable
+                      ? "Endstand jetzt eintragen"
+                      : `Wird nach dem Spiel freigeschaltet – ungefähr ab ${formatResultUnlockTime(selectedMatch)} Uhr`
+                  }
+                  onClick={() => {
+                    if (!resultEntryAvailable) return;
+                    setManualHomeScore(selectedMatch.homeScore !== null ? String(selectedMatch.homeScore) : "");
+                    setManualAwayScore(selectedMatch.awayScore !== null ? String(selectedMatch.awayScore) : "");
+                    setResultMessage("");
+                    setResultEditorOpen((open) => !open);
+                  }}
+                  style={{
+                    minHeight: "48px",
+                    padding: "0 18px",
+                    borderRadius: "12px",
+                    fontWeight: 800,
+                    cursor: resultEntryAvailable ? "pointer" : "not-allowed",
+                    opacity: resultEntryAvailable ? 1 : .58,
+                  }}
+                >
+                  <Icon name="ball" />{" "}
+                  {resultEntryAvailable
+                    ? scoreAvailable
+                      ? "Ergebnis korrigieren"
+                      : "Ergebnis eintragen"
+                    : "Nach Spielende verfügbar"}
+                </button>
+              </div>
+
+              {!resultEntryAvailable && selectedMatch.status === "scheduled" && (
+                <div style={{ marginTop: "12px", padding: "10px 12px", borderRadius: "10px", background: "rgba(255,255,255,.04)" }}>
+                  <small style={{ opacity: .78 }}>
+                    Gesperrt bis zum voraussichtlichen Spielende. Freigabe ungefähr ab{" "}
+                    <strong>{formatResultUnlockTime(selectedMatch)} Uhr</strong>.
+                  </small>
+                </div>
+              )}
+
+              {resultEditorOpen && resultEntryAvailable && (
+                <form onSubmit={submitManualResult} style={{ marginTop: "14px", padding: "14px", borderRadius: "14px", background: "rgba(255,255,255,.05)" }}>
                   <strong style={{ display: "block", marginBottom: "10px" }}>Endstand eintragen</strong>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "10px", alignItems: "end" }}>
                     <label>
                       <small>{selectedMatch.homeTeam}</small>
-                      <input type="number" min="0" step="1" inputMode="numeric" value={manualHomeScore} onChange={(event) => setManualHomeScore(event.target.value)} required style={{ width: "100%", minHeight: "46px", marginTop: "6px" }} />
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="numeric"
+                        value={manualHomeScore}
+                        onChange={(event) => setManualHomeScore(event.target.value)}
+                        required
+                        style={{ width: "100%", minHeight: "46px", marginTop: "6px" }}
+                      />
                     </label>
                     <strong style={{ paddingBottom: "12px" }}>:</strong>
                     <label>
                       <small>{selectedMatch.awayTeam}</small>
-                      <input type="number" min="0" step="1" inputMode="numeric" value={manualAwayScore} onChange={(event) => setManualAwayScore(event.target.value)} required style={{ width: "100%", minHeight: "46px", marginTop: "6px" }} />
+                      <input
+                        type="number"
+                        min="0"
+                        step="1"
+                        inputMode="numeric"
+                        value={manualAwayScore}
+                        onChange={(event) => setManualAwayScore(event.target.value)}
+                        required
+                        style={{ width: "100%", minHeight: "46px", marginTop: "6px" }}
+                      />
                     </label>
                   </div>
                   <button type="submit" disabled={savingResult} style={{ width: "100%", minHeight: "46px", marginTop: "12px" }}>
@@ -526,12 +657,9 @@ function formatDate(date: Date) {
                   </button>
                 </form>
               )}
-              {resultMessage && <p style={{ marginTop: "10px" }}>{resultMessage}</p>}
-            </div>
-          )}
 
-          {currentRole === "trainer" && canEditResult && !resultEntryAvailable && selectedMatch.status === "scheduled" && (
-            <small style={{ display: "block", marginTop: "12px", opacity: .72 }}>Ergebnis-Eingabe wird nach dem voraussichtlichen Spielende freigeschaltet.</small>
+              {resultMessage && <p style={{ marginTop: "10px" }}>{resultMessage}</p>}
+            </section>
           )}
         </article>
 
@@ -666,7 +794,7 @@ function formatDate(date: Date) {
     <section className="kfv-page">
       <header className="kfv-header">
         <div>
-          <h2>Spiel- & Tabellenzentrum</h2>
+          <h2>{selectedTeamHasTable ? "Spiel- & Tabellenzentrum" : "Spielzentrum"}</h2>
         </div>
 
       </header>
@@ -683,15 +811,17 @@ function formatDate(date: Date) {
           >
             Spiele & Ergebnisse
           </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={activeTab === "table"}
-            className={activeTab === "table" ? "active" : ""}
-            onClick={() => setActiveTab("table")}
-          >
-            Tabellen
-          </button>
+          {selectedTeamHasTable && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "table"}
+              className={activeTab === "table" ? "active" : ""}
+              onClick={() => setActiveTab("table")}
+            >
+              Tabellen
+            </button>
+          )}
           <button
             type="button"
             role="tab"
@@ -707,10 +837,14 @@ function formatDate(date: Date) {
           <span>Mannschaft</span>
           <select
             value={selectedTeamId}
-            onChange={(event) => setSelectedTeamId(event.target.value)}
+            onChange={(event) => {
+              const nextTeamId = event.target.value;
+              setSelectedTeamId(nextTeamId);
+              if (activeTab === "table" && !teamHasOfficialTable(nextTeamId)) setActiveTab("matches");
+            }}
           >
             {activeTab === "matches" && <option value="all">Alle Mannschaften</option>}
-            {teams.map((team) => (
+            {(activeTab === "table" ? tableTeams : teams).map((team) => (
               <option key={team.id} value={team.id}>
                 {team.name}
               </option>
@@ -801,7 +935,7 @@ function formatDate(date: Date) {
         </>
       )}
 
-      {activeTab === "table" && (
+      {activeTab === "table" && selectedTeamHasTable && (
         <>
           {loadingStandings ? (
             <div className="kfv-empty">Tabellen werden geladen …</div>

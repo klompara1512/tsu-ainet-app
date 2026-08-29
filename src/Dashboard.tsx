@@ -68,6 +68,8 @@ type DashboardProps = { user: User | null; profile: UserProfile; onLogin?: () =>
 
 function Dashboard({ user, profile, onLogin }: DashboardProps) {
   const role = profile.role;
+  const canEnterMatchResults =
+    Boolean(user) && ["admin", "section", "trainer"].includes(role);
   const [activePage, setActivePage] =
     useState<Page>("start");
   const [profileOpen, setProfileOpen] = useState(false);
@@ -218,6 +220,24 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
             <button type="button" className="club-menu-card card-gold" onClick={() => setActivePage("training-planner")}>
               <span className="quick-icon"><Icon name="calendar" /></span>
               <span className="club-menu-card-copy"><strong>Trainingsplaner</strong><small>Plätze & Trainingszeiten</small></span>
+              <span className="club-menu-chevron">›</span>
+            </button>
+          )}
+          {canEnterMatchResults && (
+            <button
+              type="button"
+              className="club-menu-card card-blue result-entry-menu-card"
+              onClick={() => {
+                setSelectedMatchId("");
+                setKfvInitialTab("matches");
+                setActivePage("kfv-live");
+              }}
+            >
+              <span className="quick-icon"><Icon name="ball" /></span>
+              <span className="club-menu-card-copy">
+                <strong>Spielergebnis eintragen</strong>
+                <small>Nach Spielende für dein Team</small>
+              </span>
               <span className="club-menu-chevron">›</span>
             </button>
           )}

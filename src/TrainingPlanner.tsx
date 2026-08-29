@@ -107,6 +107,18 @@ function assignedToTeam(team: Team, assigned: string[]) {
   return aliases.has(teamAlias(team.id)) || aliases.has(teamAlias(team.name));
 }
 
+function bookingTeamClass(booking: Pick<TrainingBooking, "teamId" | "teamName" | "kind">) {
+  if (booking.kind === "block") return "team-block";
+
+  const alias = teamAlias(booking.teamId || booking.teamName);
+  if (alias === "km") return "team-km";
+  if (alias === "u17") return "team-u17";
+  if (alias === "u12") return "team-u12";
+  if (alias === "u10") return "team-u10";
+  if (alias === "u8") return "team-u8";
+  return "team-default";
+}
+
 
 function slotKeys(date: string, startTime: string, endTime: string, field: Field, area: Area) {
   const start = minutes(startTime);
@@ -426,6 +438,14 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         ))}
       </div>
 
+      <div className="training-team-color-key" aria-label="Mannschaftsfarben">
+        <span className="team-km">KM</span>
+        <span className="team-u17">U17</span>
+        <span className="team-u12">U12</span>
+        <span className="team-u10">U10</span>
+        <span className="team-u8">U8</span>
+      </div>
+
       <div className="training-field-stack">
         {(["main", "training"] as Field[]).map((field) => {
           const fieldBookings = visibleBookings.filter((booking) => booking.date === selectedDay && booking.field === field);
@@ -466,7 +486,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                         {halfBookings.map((booking) => (
                           <span
                             key={booking.id}
-                            className={`pitch-booking ${booking.kind}`}
+                            className={`pitch-booking ${booking.kind} ${bookingTeamClass(booking)}`}
                             role="button"
                             tabIndex={0}
                             onClick={(event) => { event.stopPropagation(); if (canEdit(booking)) openEdit(booking); }}
@@ -486,7 +506,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                   <button
                     key={booking.id}
                     type="button"
-                    className={`pitch-full-booking ${booking.kind}`}
+                    className={`pitch-full-booking ${booking.kind} ${bookingTeamClass(booking)}`}
                     onClick={() => canEdit(booking) && openEdit(booking)}
                   >
                     <strong>{booking.startTime}–{booking.endTime}</strong>
@@ -530,7 +550,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                     <button
                       key={booking.id}
                       type="button"
-                      className={`week-summary-booking ${booking.kind}`}
+                      className={`week-summary-booking ${booking.kind} ${bookingTeamClass(booking)}`}
                       onClick={() => canEdit(booking) && openEdit(booking)}
                       title={canEdit(booking) ? "Termin bearbeiten" : booking.teamName}
                     >

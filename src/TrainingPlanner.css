@@ -733,3 +733,155 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
     padding-right: 8px !important;
   }
 }
+
+
+/* =========================================================
+   TSU Ainet v1.0.25
+   Trainingsplaner – feste Mannschaftsfarben
+   KM Blau · U17 Violett · U12 Gelb · U10 Rot · U8 Orange
+   ========================================================= */
+
+.training-team-color-key{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  flex-wrap:wrap;
+  margin:10px 0 12px;
+}
+.training-team-color-key::before{
+  content:"Mannschaftsfarben";
+  margin-right:2px;
+  color:#738095;
+  font-size:.72rem;
+  font-weight:850;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.training-team-color-key>span{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:48px;
+  min-height:30px;
+  padding:5px 10px;
+  border-radius:999px;
+  font-size:.74rem;
+  font-weight:950;
+  border:1px solid rgba(255,255,255,.28);
+  box-shadow:0 3px 10px rgba(15,23,42,.12);
+}
+
+/* KM – Blau */
+.training-team-color-key .team-km,
+.pitch-booking.team-km,
+.pitch-full-booking.team-km,
+.week-summary-booking.team-km{
+  background:#1769d2!important;
+  border-left-color:#8fc5ff!important;
+  color:#fff!important;
+}
+
+/* U17 – Violett */
+.training-team-color-key .team-u17,
+.pitch-booking.team-u17,
+.pitch-full-booking.team-u17,
+.week-summary-booking.team-u17{
+  background:#7139b8!important;
+  border-left-color:#c7a4ff!important;
+  color:#fff!important;
+}
+
+/* U12 – Gelb, bewusst mit dunkler Schrift */
+.training-team-color-key .team-u12,
+.pitch-booking.team-u12,
+.pitch-full-booking.team-u12,
+.week-summary-booking.team-u12{
+  background:#f2c62e!important;
+  border-left-color:#8c6b00!important;
+  color:#182235!important;
+}
+
+/* U10 – Rot */
+.training-team-color-key .team-u10,
+.pitch-booking.team-u10,
+.pitch-full-booking.team-u10,
+.week-summary-booking.team-u10{
+  background:#c51e2a!important;
+  border-left-color:#ff9ba3!important;
+  color:#fff!important;
+}
+
+/* U8 – Orange */
+.training-team-color-key .team-u8,
+.pitch-booking.team-u8,
+.pitch-full-booking.team-u8,
+.week-summary-booking.team-u8{
+  background:#e87516!important;
+  border-left-color:#ffd0a8!important;
+  color:#fff!important;
+}
+
+/* Nicht zugeordnete Teams behalten einen neutralen Farbton. */
+.pitch-booking.team-default,
+.pitch-full-booking.team-default,
+.week-summary-booking.team-default{
+  background:#44536a!important;
+  border-left-color:#c9d4e3!important;
+  color:#fff!important;
+}
+
+/* Platzsperren bleiben unabhängig von Mannschaftsfarben grau. */
+.pitch-booking.block,
+.pitch-full-booking.block,
+.week-summary-booking.block,
+.pitch-booking.team-block,
+.pitch-full-booking.team-block,
+.week-summary-booking.team-block{
+  background:#465366!important;
+  border-left-color:#d3dce9!important;
+  color:#fff!important;
+}
+
+/* Textfarben in den farbigen Einträgen sauber erzwingen. */
+.pitch-booking.team-km strong,.pitch-booking.team-km b,.pitch-booking.team-km small,
+.pitch-booking.team-u17 strong,.pitch-booking.team-u17 b,.pitch-booking.team-u17 small,
+.pitch-booking.team-u10 strong,.pitch-booking.team-u10 b,.pitch-booking.team-u10 small,
+.pitch-booking.team-u8 strong,.pitch-booking.team-u8 b,.pitch-booking.team-u8 small,
+.pitch-full-booking.team-km strong,.pitch-full-booking.team-km span,.pitch-full-booking.team-km small,
+.pitch-full-booking.team-u17 strong,.pitch-full-booking.team-u17 span,.pitch-full-booking.team-u17 small,
+.pitch-full-booking.team-u10 strong,.pitch-full-booking.team-u10 span,.pitch-full-booking.team-u10 small,
+.pitch-full-booking.team-u8 strong,.pitch-full-booking.team-u8 span,.pitch-full-booking.team-u8 small,
+.week-summary-booking.team-km strong,.week-summary-booking.team-km small,.week-summary-booking.team-km .summary-time,
+.week-summary-booking.team-u17 strong,.week-summary-booking.team-u17 small,.week-summary-booking.team-u17 .summary-time,
+.week-summary-booking.team-u10 strong,.week-summary-booking.team-u10 small,.week-summary-booking.team-u10 .summary-time,
+.week-summary-booking.team-u8 strong,.week-summary-booking.team-u8 small,.week-summary-booking.team-u8 .summary-time{
+  color:#fff!important;
+  -webkit-text-fill-color:#fff!important;
+  opacity:1!important;
+}
+
+/* U12: überall dunkle Schrift für maximalen Kontrast. */
+.pitch-booking.team-u12 strong,.pitch-booking.team-u12 b,.pitch-booking.team-u12 small,
+.pitch-full-booking.team-u12 strong,.pitch-full-booking.team-u12 span,.pitch-full-booking.team-u12 small,
+.week-summary-booking.team-u12 strong,.week-summary-booking.team-u12 small,.week-summary-booking.team-u12 .summary-time{
+  color:#182235!important;
+  -webkit-text-fill-color:#182235!important;
+  opacity:1!important;
+}
+
+@media(max-width:600px){
+  .training-team-color-key{
+    gap:6px;
+    margin:7px 0 8px;
+  }
+  .training-team-color-key::before{
+    flex-basis:100%;
+    margin-bottom:1px;
+  }
+  .training-team-color-key>span{
+    min-width:42px;
+    min-height:27px;
+    padding:4px 8px;
+    font-size:.68rem;
+  }
+}

@@ -1,0 +1,112 @@
+/* v1.0.23 – Vereinsbereich als gut lesbare Liste */
+
+.club-menu-modern .club-menu-grid {
+  display: flex !important;
+  flex-direction: column !important;
+  grid-template-columns: none !important;
+  gap: 10px !important;
+  width: 100%;
+  max-width: 900px;
+}
+
+.club-menu-modern .club-menu-card,
+.club-menu-modern .club-admin-entry {
+  display: grid !important;
+  grid-template-columns: 54px minmax(0, 1fr) 28px !important;
+  align-items: center !important;
+  gap: 15px !important;
+  width: 100% !important;
+  min-height: 76px !important;
+  padding: 11px 14px !important;
+  text-align: left !important;
+  border-radius: 16px !important;
+}
+
+.club-menu-modern .club-menu-card .quick-icon,
+.club-menu-modern .club-admin-entry .quick-icon {
+  width: 48px !important;
+  height: 48px !important;
+  min-width: 48px !important;
+  margin: 0 !important;
+  display: grid !important;
+  place-items: center !important;
+}
+
+.club-menu-modern .club-menu-card-copy {
+  display: flex !important;
+  min-width: 0;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: center !important;
+  gap: 3px !important;
+  overflow: visible !important;
+}
+
+.club-menu-modern .club-menu-card-copy strong {
+  width: 100%;
+  overflow: visible !important;
+  color: #fff;
+  font-size: 16px !important;
+  font-weight: 800 !important;
+  line-height: 1.25 !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+.club-menu-modern .club-menu-card-copy small {
+  display: block !important;
+  width: 100%;
+  overflow: visible !important;
+  color: rgba(255, 255, 255, 0.58) !important;
+  font-size: 13px !important;
+  line-height: 1.35 !important;
+  text-overflow: clip !important;
+  white-space: normal !important;
+}
+
+.club-menu-modern .club-menu-chevron {
+  justify-self: end;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.club-menu-modern .club-admin-entry {
+  max-width: 900px;
+  margin-top: 12px !important;
+}
+
+/* Spielergebnis soll als Trainer-Funktion besonders schnell auffindbar sein. */
+.club-menu-modern .result-entry-menu-card {
+  min-height: 82px !important;
+}
+
+@media (max-width: 700px) {
+  .club-menu-modern .club-menu-grid,
+  .club-menu-modern .club-admin-entry {
+    max-width: none;
+  }
+
+  .club-menu-modern .club-menu-card,
+  .club-menu-modern .club-admin-entry {
+    grid-template-columns: 48px minmax(0, 1fr) 22px !important;
+    gap: 12px !important;
+    min-height: 70px !important;
+    padding: 10px 12px !important;
+  }
+
+  .club-menu-modern .club-menu-card .quick-icon,
+  .club-menu-modern .club-admin-entry .quick-icon {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+  }
+
+  .club-menu-modern .club-menu-card-copy strong {
+    font-size: 15px !important;
+  }
+
+  .club-menu-modern .club-menu-card-copy small {
+    font-size: 12px !important;
+  }
+}

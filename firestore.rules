@@ -34,8 +34,30 @@ service cloud.firestore { match /databases/{database}/documents {
   allow delete: if active() && trainingTeam(resource.data.teamId);
  }
  match /services/{id}{allow read:if active();allow write:if football()||board();}
- match /kfvMatches/{d=**}{allow read:if true;allow write:if football();}
-match /oefbV12Matches/{d=**}{allow read:if true;allow write:if football();}
+ match /kfvMatches/{d=**}{
+  allow read: if true;
+  allow write: if leaders();
+ }
+ match /oefbV12Matches/{matchId}{
+  allow read: if true;
+  allow create, delete: if leaders();
+  allow update: if leaders() || (
+    trainer()
+    && profile().data.teamIds is list
+    && resource.data.teamId in profile().data.teamIds
+    && request.resource.data.teamId == resource.data.teamId
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+      'homeScore', 'awayScore', 'resultText', 'status',
+      'manualResultOverride', 'manualResultUpdatedAt', 'updatedAt'
+    ])
+    && request.resource.data.homeScore is int
+    && request.resource.data.homeScore >= 0
+    && request.resource.data.awayScore is int
+    && request.resource.data.awayScore >= 0
+    && request.resource.data.status == 'finished'
+    && request.resource.data.manualResultOverride == true
+  );
+ }
  match /kfvMatchReports/{d=**}{allow read:if true;allow write:if false;}
  match /kfvStandings/{d=**}{allow read:if true;allow write:if football();}
 match /oefbV12Standings/{d=**}{allow read:if true;allow write:if football();}

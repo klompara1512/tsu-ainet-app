@@ -2209,6 +2209,10 @@ async function writeCollection(name, items, runId) {
       const existing = existingSnapshot.exists ? existingSnapshot.data() : null;
       const incomingHasScore = Number.isInteger(item.homeScore) && Number.isInteger(item.awayScore);
       const existingHasScore = Number.isInteger(existing?.homeScore) && Number.isInteger(existing?.awayScore);
+      const manualResultOverride =
+        existing?.manualResultOverride === true &&
+        Number.isInteger(existing?.homeScore) &&
+        Number.isInteger(existing?.awayScore);
 
       // Kurzzeitig fehlende Bild- oder Detailfelder dürfen vorhandene Daten nicht
       // löschen. Das verhindert zeitweise verschwundene Vereinslogos.
@@ -2227,7 +2231,16 @@ async function writeCollection(name, items, runId) {
       const kickoffMs = item.kickoffAt?.toMillis?.() ?? null;
       const isFutureOfficialMatch = Number.isFinite(kickoffMs) && kickoffMs > Date.now();
 
-      if (item.status === "cancelled" || item.status === "postponed") {
+      if (manualResultOverride) {
+        // Ein in der App bewusst gesetzter Endstand ist die höchste Priorität.
+        // ÖFB-Synchronisationen dürfen ihn nicht überschreiben oder zurücksetzen.
+        payload.homeScore = existing.homeScore;
+        payload.awayScore = existing.awayScore;
+        payload.resultText = existing.resultText || `${existing.homeScore}:${existing.awayScore}`;
+        payload.status = "finished";
+        payload.manualResultOverride = true;
+        payload.manualResultUpdatedAt = existing.manualResultUpdatedAt || admin.firestore.FieldValue.serverTimestamp();
+      } else if (item.status === "cancelled" || item.status === "postponed") {
         payload.homeScore = null;
         payload.awayScore = null;
         payload.resultText = "";

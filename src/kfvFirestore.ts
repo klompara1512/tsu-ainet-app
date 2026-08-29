@@ -7,6 +7,8 @@ import {
   where,
   limit,
   Timestamp,
+  updateDoc,
+  serverTimestamp,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import { subscribeClubLogos } from "./clubLogoFirestore";
@@ -332,6 +334,7 @@ function deduplicateMatches(matches: KfvMatch[]) {
     .map((group) => {
       const ranked = [...group].sort((a, b) => {
         const quality = (match: KfvMatch) =>
+          (match.manualResultOverride ? 1000 : 0) +
           (match.status === "finished" ? 50 : 0) +
           (match.homeScore !== null && match.awayScore !== null ? 50 : 0) +
           (match.reportUrl ? 10 : 0) +
@@ -453,6 +456,8 @@ function mapMatchRecord(id: string, data: Record<string, unknown>): KfvMatch {
     oefbMatchId: typeof data.oefbMatchId === "string" ? data.oefbMatchId : (typeof data.gameId === "string" ? data.gameId : ""),
     sourceUpdatedAt: readNullableDate(data.sourceUpdatedAt),
     active: typeof data.active === "boolean" ? data.active : true,
+    manualResultOverride: data.manualResultOverride === true,
+    manualResultUpdatedAt: readNullableDate(data.manualResultUpdatedAt),
   } satisfies KfvMatch;
 }
 
@@ -479,11 +484,73 @@ function mapStandingRecord(id: string, data: Record<string, unknown>): KfvStandi
   } satisfies KfvStandingRow;
 }
 
+
+export async function saveManualMatchResult(match: KfvMatch, homeScore: number, awayScore: number) {
+  if (!Number.isInteger(homeScore) || homeScore < 0 || !Number.isInteger(awayScore) || awayScore < 0) {
+    throw new Error("Ungültiges Ergebnis");
+  }
+
+  await updateDoc(doc(db, "oefbV12Matches", match.id), {
+    homeScore,
+    awayScore,
+    resultText: `${homeScore}:${awayScore}`,
+    status: "finished",
+    manualResultOverride: true,
+    manualResultUpdatedAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+}
+
 export function subscribeKfvMatches(
   onData: (matches: KfvMatch[]) => void,
   onError: (message: string) => void,
 ) {
   let fallbackUnsubscribe: (() => void) | null = null;
+  let manualUnsubscribe: (() => void) | null = null;
+  let sourceMatches: KfvMatch[] = [];
+  let manualOverrides = new Map<string, KfvMatch>();
+
+  const emit = () => {
+    const merged = sourceMatches.map((match) => {
+      const override = manualOverrides.get(match.id);
+      if (!override?.manualResultOverride) return match;
+      if (
+        typeof override.homeScore !== "number" ||
+        typeof override.awayScore !== "number"
+      ) return match;
+      return {
+        ...match,
+        homeScore: override.homeScore,
+        awayScore: override.awayScore,
+        status: "finished" as const,
+        manualResultOverride: true,
+        manualResultUpdatedAt: override.manualResultUpdatedAt ?? null,
+      };
+    });
+    onData(deduplicateMatches(merged));
+  };
+
+  // Manuelle Endstände liegen absichtlich im gleichen Match-Dokument.
+  // Der zusätzliche Listener liest die aktiven Spieldatensätze und legt
+  // manuelle Ergebnisse über den öffentlichen Snapshot. Dadurch erscheinen
+  // Änderungen sofort in Kalender, Startseite, Spielcenter und Statistiken.
+  const manualQuery = query(collection(db, "oefbV12Matches"), orderBy("kickoffAt", "asc"));
+  manualUnsubscribe = onSnapshot(
+    manualQuery,
+    (snapshot) => {
+      manualOverrides = new Map(
+        snapshot.docs
+          .map((document) => mapMatchRecord(document.id, document.data()))
+          .filter((match) => match.manualResultOverride)
+          .map((match) => [match.id, match]),
+      );
+      emit();
+    },
+    (error) => {
+      console.error("Manuelle Spielergebnisse konnten nicht geladen werden:", error);
+      // Die App bleibt mit den offiziellen Daten funktionsfähig.
+    },
+  );
 
   const startFallback = () => {
     if (fallbackUnsubscribe) return;
@@ -491,10 +558,10 @@ export function subscribeKfvMatches(
     fallbackUnsubscribe = onSnapshot(
       matchesQuery,
       (snapshot) => {
-        const matches = snapshot.docs
+        sourceMatches = snapshot.docs
           .map((document) => mapMatchRecord(document.id, document.data()))
           .filter((match) => match.active && match.kickoffAt.getTime() > 0 && match.homeTeam && match.awayTeam);
-        onData(deduplicateMatches(matches));
+        emit();
       },
       (error) => {
         console.error("Fehler beim Laden der KFV-Spiele:", error);
@@ -507,15 +574,19 @@ export function subscribeKfvMatches(
     (payload) => {
       if (!payload) { startFallback(); return; }
       if (fallbackUnsubscribe) { fallbackUnsubscribe(); fallbackUnsubscribe = null; }
-      const matches = payload.matches
+      sourceMatches = payload.matches
         .map((data) => mapMatchRecord(typeof data.id === "string" ? data.id : "", data))
         .filter((match) => match.id && match.active && match.kickoffAt.getTime() > 0 && match.homeTeam && match.awayTeam);
-      onData(deduplicateMatches(matches));
+      emit();
     },
     () => startFallback(),
   );
 
-  return () => { unsubscribeSnapshot(); fallbackUnsubscribe?.(); };
+  return () => {
+    unsubscribeSnapshot();
+    fallbackUnsubscribe?.();
+    manualUnsubscribe?.();
+  };
 }
 
 export function subscribeKfvStandings(

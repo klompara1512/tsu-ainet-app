@@ -5,7 +5,7 @@ const ROLE_LABELS:Record<AppRole,string>={admin:"Administrator",section:"Sektion
 const PERMISSIONS:Record<AppRole,readonly Permission[]>={
  admin:["manageUsers","managePeople","manageMatches","manageStandings","manageEvents","manageNews","manageDocuments","manageSponsors","manageTeams","manageTasks"],
  section:["manageUsers","managePeople","manageMatches","manageStandings","manageEvents","manageNews","manageDocuments","manageSponsors","manageTeams","manageTasks"],
- trainer:["managePeople","manageMatches","manageStandings","manageEvents","manageTeams","manageTasks"],
+ trainer:["managePeople","manageStandings","manageEvents","manageTeams","manageTasks"],
  board:["manageEvents","manageNews","manageDocuments","manageSponsors","manageTasks"],
  player:[],member:[],fan:[],pending:[]};
 export function normalizeRole(v:unknown):AppRole{return typeof v==="string"&&v in ROLE_LABELS?v as AppRole:"pending"}

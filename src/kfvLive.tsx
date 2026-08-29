@@ -1,4 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
+import { doc, onSnapshot } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth, db } from "./firebase";
 import {
   getKfvClubLogo,
   getResultForTsuAinet,
@@ -9,6 +12,7 @@ import {
   subscribeKfvSquad,
   subscribeKfvMatchReport,
   normalizeKfvTeamId,
+  saveManualMatchResult,
 } from "./kfvFirestore";
 import type { KfvClub, KfvMatch, KfvMatchReport, KfvStandingRow, KfvSquadPlayer } from "./kfvTypes";
 import TeamLogo from "./TeamLogo";
@@ -52,6 +56,42 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   const [loadingMatchReport, setLoadingMatchReport] = useState(false);
   const [matchReportError, setMatchReportError] = useState("");
   const [matchDetailTab, setMatchDetailTab] = useState<"overview" | "lineups">("lineups");
+  const [currentRole, setCurrentRole] = useState("");
+  const [assignedTeamIds, setAssignedTeamIds] = useState<string[]>([]);
+  const [clockNow, setClockNow] = useState(() => Date.now());
+  const [resultEditorOpen, setResultEditorOpen] = useState(false);
+  const [manualHomeScore, setManualHomeScore] = useState("");
+  const [manualAwayScore, setManualAwayScore] = useState("");
+  const [savingResult, setSavingResult] = useState(false);
+  const [resultMessage, setResultMessage] = useState("");
+
+
+  useEffect(() => {
+    let unsubscribeProfile: (() => void) | null = null;
+    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+      unsubscribeProfile?.();
+      unsubscribeProfile = null;
+      if (!user) {
+        setCurrentRole("");
+        setAssignedTeamIds([]);
+        return;
+      }
+      unsubscribeProfile = onSnapshot(doc(db, "users", user.uid), (snapshot) => {
+        const data = snapshot.data();
+        setCurrentRole(typeof data?.role === "string" ? data.role : "");
+        setAssignedTeamIds(Array.isArray(data?.teamIds) ? data.teamIds.filter((value): value is string => typeof value === "string") : []);
+      });
+    });
+    return () => {
+      unsubscribeProfile?.();
+      unsubscribeAuth();
+    };
+  }, []);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
 
   useEffect(() => subscribeKfvClubs(setClubs), []);
@@ -111,7 +151,13 @@ function KfvLive({ initialMatchId = "", initialTab = "matches" }: KfvLiveProps) 
   }, [initialMatchId, matches]);
 
   useEffect(() => {
-    if (selectedMatch) setMatchDetailTab("lineups");
+    if (selectedMatch) {
+      setMatchDetailTab("lineups");
+      setResultEditorOpen(false);
+      setResultMessage("");
+      setManualHomeScore(selectedMatch.homeScore !== null ? String(selectedMatch.homeScore) : "");
+      setManualAwayScore(selectedMatch.awayScore !== null ? String(selectedMatch.awayScore) : "");
+    }
   }, [selectedMatch]);
 
 
@@ -245,6 +291,20 @@ function formatDate(date: Date) {
     window.open(`https://www.google.com/maps/search/?api=1&query=${destination}`, "_blank", "noopener,noreferrer");
   }
 
+  function estimatedMatchEnd(match: KfvMatch) {
+    const teamId = normalizeKfvTeamId(match.teamId || match.teamName);
+    const minutes = teamId === "u8" || teamId === "u10" ? 70 : teamId === "u12" ? 90 : 110;
+    return match.kickoffAt.getTime() + minutes * 60_000;
+  }
+
+  function canEditResultForMatch(match: KfvMatch) {
+    if (currentRole === "admin" || currentRole === "section") return true;
+    if (currentRole !== "trainer") return false;
+    const matchTeamId = normalizeKfvTeamId(match.teamId || match.teamName);
+    return assignedTeamIds.some((teamId) => normalizeKfvTeamId(teamId) === matchTeamId);
+  }
+
+
   if (selectedMatch) {
     const tsuRow = standings.find((row) =>
       row.teamId === selectedMatch.teamId && isTsuAinet(row.clubName),
@@ -266,7 +326,7 @@ function formatDate(date: Date) {
       .sort((a, b) => a.position - b.position)
       .slice(0, 5);
 
-    const now = Date.now();
+    const now = clockNow;
     const kickoffTime = selectedMatch.kickoffAt.getTime();
     const liveWindow =
       selectedMatch.status === "scheduled" &&
@@ -284,6 +344,35 @@ function formatDate(date: Date) {
           : liveWindow
             ? "LIVE"
             : "Geplant";
+
+    const canEditResult = canEditResultForMatch(selectedMatch);
+    const resultEntryAvailable =
+      canEditResult &&
+      selectedMatch.status !== "cancelled" &&
+      selectedMatch.status !== "postponed" &&
+      (selectedMatch.status === "finished" || now >= estimatedMatchEnd(selectedMatch));
+
+    async function submitManualResult(event: React.FormEvent<HTMLFormElement>) {
+      event.preventDefault();
+      const homeScore = Number(manualHomeScore);
+      const awayScore = Number(manualAwayScore);
+      if (!Number.isInteger(homeScore) || homeScore < 0 || !Number.isInteger(awayScore) || awayScore < 0) {
+        setResultMessage("Bitte für beide Mannschaften eine gültige Torzahl eintragen.");
+        return;
+      }
+      setSavingResult(true);
+      setResultMessage("");
+      try {
+        await saveManualMatchResult(selectedMatch!, homeScore, awayScore);
+        setResultMessage("Ergebnis gespeichert. Statistik und Form werden automatisch aktualisiert.");
+        setResultEditorOpen(false);
+      } catch (error) {
+        console.error("Ergebnis konnte nicht gespeichert werden:", error);
+        setResultMessage("Speichern nicht möglich. Du kannst nur Ergebnisse deiner eigenen Mannschaft eintragen.");
+      } finally {
+        setSavingResult(false);
+      }
+    }
 
 
     // Offizielle Berichtsdaten haben Vorrang für Spielort, Schiedsrichter
@@ -402,6 +491,48 @@ function formatDate(date: Date) {
               </a>
             )}
           </div>
+
+          {resultEntryAvailable && (
+            <div className="trainer-result-entry" style={{ marginTop: "16px" }}>
+              <button
+                type="button"
+                className="secondary"
+                onClick={() => {
+                  setManualHomeScore(selectedMatch.homeScore !== null ? String(selectedMatch.homeScore) : "");
+                  setManualAwayScore(selectedMatch.awayScore !== null ? String(selectedMatch.awayScore) : "");
+                  setResultMessage("");
+                  setResultEditorOpen((open) => !open);
+                }}
+              >
+                <Icon name="ball" /> {scoreAvailable ? "Ergebnis korrigieren" : "Ergebnis eintragen"}
+              </button>
+
+              {resultEditorOpen && (
+                <form onSubmit={submitManualResult} style={{ marginTop: "12px", padding: "14px", borderRadius: "14px", background: "rgba(255,255,255,.04)" }}>
+                  <strong style={{ display: "block", marginBottom: "10px" }}>Endstand eintragen</strong>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: "10px", alignItems: "end" }}>
+                    <label>
+                      <small>{selectedMatch.homeTeam}</small>
+                      <input type="number" min="0" step="1" inputMode="numeric" value={manualHomeScore} onChange={(event) => setManualHomeScore(event.target.value)} required style={{ width: "100%", minHeight: "46px", marginTop: "6px" }} />
+                    </label>
+                    <strong style={{ paddingBottom: "12px" }}>:</strong>
+                    <label>
+                      <small>{selectedMatch.awayTeam}</small>
+                      <input type="number" min="0" step="1" inputMode="numeric" value={manualAwayScore} onChange={(event) => setManualAwayScore(event.target.value)} required style={{ width: "100%", minHeight: "46px", marginTop: "6px" }} />
+                    </label>
+                  </div>
+                  <button type="submit" disabled={savingResult} style={{ width: "100%", minHeight: "46px", marginTop: "12px" }}>
+                    {savingResult ? "Wird gespeichert …" : "Endstand speichern"}
+                  </button>
+                </form>
+              )}
+              {resultMessage && <p style={{ marginTop: "10px" }}>{resultMessage}</p>}
+            </div>
+          )}
+
+          {currentRole === "trainer" && canEditResult && !resultEntryAvailable && selectedMatch.status === "scheduled" && (
+            <small style={{ display: "block", marginTop: "12px", opacity: .72 }}>Ergebnis-Eingabe wird nach dem voraussichtlichen Spielende freigeschaltet.</small>
+          )}
         </article>
 
         <nav

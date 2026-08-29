@@ -29,6 +29,7 @@ type Match = {
   awayScore: number | null;
   active: boolean;
   source: string;
+  manualResultOverride: boolean;
 };
 type Props = { onBack: () => void };
 
@@ -87,6 +88,7 @@ function deduplicate(matches: Match[]) {
       const ranked = [...group].sort((a, b) => {
         const quality = (match: Match) =>
           (match.active ? 100 : 0) +
+          (match.manualResultOverride ? 1000 : 0) +
           (match.source === "manual" ? 20 : 0) +
           (match.status === "finished" ? 30 : 0) +
           (match.homeScore !== null && match.awayScore !== null ? 30 : 0);
@@ -165,6 +167,7 @@ export default function MatchAdmin({ onBack }: Props) {
                   typeof data.awayScore === "number" ? data.awayScore : null,
                 active: data.active !== false,
                 source: String(data.source ?? "manual"),
+                manualResultOverride: data.manualResultOverride === true,
               };
             }),
           ),
@@ -220,11 +223,28 @@ export default function MatchAdmin({ onBack }: Props) {
       return;
     }
 
+    const hasHomeScore = form.homeScore !== "";
+    const hasAwayScore = form.awayScore !== "";
+    if (hasHomeScore !== hasAwayScore) {
+      setMessage("Bitte immer Heim- und Auswärtstore gemeinsam eintragen.");
+      return;
+    }
+    const homeScore = hasHomeScore ? Number(form.homeScore) : null;
+    const awayScore = hasAwayScore ? Number(form.awayScore) : null;
+    if (
+      (homeScore !== null && (!Number.isInteger(homeScore) || homeScore < 0)) ||
+      (awayScore !== null && (!Number.isInteger(awayScore) || awayScore < 0))
+    ) {
+      setMessage("Bitte nur ganze, positive Torzahlen eintragen.");
+      return;
+    }
+
     setSaving(true);
     const kickoffAt = Timestamp.fromDate(
       new Date(`${form.date}T${form.time}:00`),
     );
     const teamId = form.teamName.toLowerCase().replaceAll(" ", "-");
+    const hasManualResult = homeScore !== null && awayScore !== null;
     const payload = {
       teamId,
       teamName: form.teamName,
@@ -233,25 +253,34 @@ export default function MatchAdmin({ onBack }: Props) {
       awayTeam: form.awayTeam.trim(),
       kickoffAt,
       venue: form.venue.trim(),
-      status: form.status,
-      homeScore: form.homeScore === "" ? null : Number(form.homeScore),
-      awayScore: form.awayScore === "" ? null : Number(form.awayScore),
+      status: hasManualResult ? "finished" as MatchStatus : form.status,
+      homeScore,
+      awayScore,
+      resultText: hasManualResult ? `${homeScore}:${awayScore}` : "",
       active: form.active,
-      source: "manual",
-      sourceUpdatedAt: serverTimestamp(),
+      manualResultOverride: hasManualResult,
+      manualResultUpdatedAt: hasManualResult ? serverTimestamp() : null,
       updatedAt: serverTimestamp(),
     };
 
     try {
       if (editing) {
+        // Die ursprüngliche ÖFB-Quelle bleibt erhalten; nur das Ergebnis wird
+        // bewusst manuell überschrieben.
         await updateDoc(doc(db, "oefbV12Matches", editing), payload);
       } else {
         await addDoc(collection(db, "oefbV12Matches"), {
           ...payload,
+          source: "manual",
+          sourceUpdatedAt: serverTimestamp(),
           createdAt: serverTimestamp(),
         });
       }
-      setMessage("Spiel gespeichert.");
+      setMessage(
+        hasManualResult
+          ? "Ergebnis gespeichert. Kalender, Spielcenter und Statistik aktualisieren sich automatisch."
+          : "Spiel gespeichert.",
+      );
       reset();
     } catch {
       setMessage("Speichern fehlgeschlagen. Prüfe die Firestore-Regeln.");
@@ -414,6 +443,11 @@ export default function MatchAdmin({ onBack }: Props) {
             }
           />
         </label>
+        <p className="admin-form-hint">
+          Sobald beide Torzahlen eingetragen sind, wird das Spiel automatisch als
+          <strong> beendet</strong> gespeichert. Dieses manuelle Ergebnis hat Vorrang
+          vor dem ÖFB-Sync und wird sofort für Ergebnisse und Statistiken verwendet.
+        </p>
         <div className="form-actions">
           <button disabled={saving}>
             {saving
@@ -439,6 +473,7 @@ export default function MatchAdmin({ onBack }: Props) {
               <small>
                 {match.teamName} · {match.competitionName} ·{" "}
                 {match.source === "manual" ? "Manuell" : "ÖFB"}
+                {match.manualResultOverride ? " · Ergebnis manuell" : ""}
                 {!match.active ? " · Inaktiv" : ""}
               </small>
               <strong>

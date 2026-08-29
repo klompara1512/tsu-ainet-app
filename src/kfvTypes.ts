@@ -26,6 +26,8 @@ export type KfvMatch = {
   oefbMatchId: string;
   sourceUpdatedAt: Date | null;
   active: boolean;
+  manualResultOverride?: boolean;
+  manualResultUpdatedAt?: Date | null;
 };
 
 export type KfvStandingRow = {

@@ -108,6 +108,20 @@ function assignedToTeam(team: Team, assigned: string[]) {
   return aliases.has(teamAlias(team.id)) || aliases.has(teamAlias(team.name));
 }
 
+function assignedProfileTeamId(team: Team, assigned: string[]) {
+  const idAlias = teamAlias(team.id);
+  const nameAlias = teamAlias(team.name);
+  return assigned.find((value) => {
+    const alias = teamAlias(value);
+    return alias === idAlias || alias === nameAlias;
+  }) ?? team.id;
+}
+
+function bookingMatchesTeam(booking: Pick<TrainingBooking, "teamId" | "teamName">, team: Team) {
+  const bookingAliases = new Set([teamAlias(booking.teamId), teamAlias(booking.teamName)]);
+  return bookingAliases.has(teamAlias(team.id)) || bookingAliases.has(teamAlias(team.name));
+}
+
 function bookingTeamClass(booking: Pick<TrainingBooking, "teamId" | "teamName" | "kind">) {
   if (booking.kind === "block") return "team-block";
 
@@ -234,7 +248,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
   );
 
   function canEdit(booking: TrainingBooking) {
-    return isLeader || allowedTeamIds.has(booking.teamId);
+    return isLeader || allowedTeams.some((team) => bookingMatchesTeam(booking, team));
   }
 
   function openCreate(date = todayIso(), preset?: { field?: Field; area?: Area }) {
@@ -247,11 +261,12 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
 
   function openEdit(booking: TrainingBooking) {
     if (!canEdit(booking)) return;
+    const matchingTeam = allowedTeams.find((team) => bookingMatchesTeam(booking, team));
     setEditing(booking);
     setError("");
     setMessage("");
     setForm({
-      teamId: booking.teamId,
+      teamId: matchingTeam?.id ?? booking.teamId,
       date: booking.date,
       startTime: booking.startTime,
       endTime: booking.endTime,
@@ -279,6 +294,12 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
 
   async function saveOne(date: string, bookingId?: string, oldBooking?: TrainingBooking) {
     const selectedTeam = teams.find((team) => team.id === form.teamId);
+    if (!selectedTeam && form.kind === "training") throw new Error("TEAM_NOT_FOUND");
+
+    // Firestore prüft bei Trainern teamId exakt gegen users/{uid}.teamIds.
+    const permissionTeamId = selectedTeam
+      ? (isLeader ? selectedTeam.id : assignedProfileTeamId(selectedTeam, profile.teamIds))
+      : form.teamId;
 
     const conflict = bookings.find((booking) =>
       booking.id !== bookingId &&
@@ -297,7 +318,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
       : doc(collection(db, "trainingBookings"));
 
     const payload = {
-      teamId: form.teamId,
+      teamId: permissionTeamId,
       teamName: form.kind === "block"
         ? (form.note.trim() || "Platzsperre")
         : (selectedTeam?.name ?? "Mannschaft"),
@@ -349,6 +370,8 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
       if (text.startsWith("CONFLICT|")) {
         const [, team, start, end] = text.split("|");
         setError(`Platz bereits belegt – ${team}${start ? `, ${start}–${end}` : ""}. Bitte eine andere Hälfte oder Zeit wählen.`);
+      } else if (text === "TEAM_NOT_FOUND") {
+        setError("Die ausgewählte Mannschaft konnte nicht eindeutig zugeordnet werden. Bitte neu auswählen.");
       } else {
         console.error(caught);
         const code = typeof caught === "object" && caught !== null && "code" in caught

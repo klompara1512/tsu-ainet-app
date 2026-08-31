@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import type { User } from "firebase/auth";
 import {
   collection,
+  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
   query,
-  runTransaction,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { UserProfile } from "./permissions";
@@ -120,17 +121,13 @@ function bookingTeamClass(booking: Pick<TrainingBooking, "teamId" | "teamName" |
 }
 
 
-function slotKeys(date: string, startTime: string, endTime: string, field: Field, area: Area) {
-  const start = minutes(startTime);
-  const end = minutes(endTime);
-  const halves = area === "full" ? ["A", "B"] : [area];
-  const keys: string[] = [];
-  for (let cursor = start; cursor < end; cursor += 15) {
-    const h = String(Math.floor(cursor / 60)).padStart(2, "0");
-    const m = String(cursor % 60).padStart(2, "0");
-    for (const half of halves) keys.push(`${date}_${field}_${half}_${h}${m}`);
-  }
-  return keys;
+
+function areasOverlap(left: Area, right: Area) {
+  return left === "full" || right === "full" || left === right;
+}
+
+function timesOverlap(startA: string, endA: string, startB: string, endB: string) {
+  return minutes(startA) < minutes(endB) && minutes(endA) > minutes(startB);
 }
 
 function emptyForm(teamId = ""): FormState {
@@ -282,58 +279,45 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
 
   async function saveOne(date: string, bookingId?: string, oldBooking?: TrainingBooking) {
     const selectedTeam = teams.find((team) => team.id === form.teamId);
-    const bookingRef = bookingId ? doc(db, "trainingBookings", bookingId) : doc(collection(db, "trainingBookings"));
-    const newKeys = slotKeys(date, form.startTime, form.endTime, form.field, form.area);
-    const oldKeys = oldBooking ? slotKeys(oldBooking.date, oldBooking.startTime, oldBooking.endTime, oldBooking.field, oldBooking.area) : [];
-    const newSlotRefs = newKeys.map((key) => doc(db, "trainingSlots", key));
-    const oldSlotRefs = oldKeys.map((key) => doc(db, "trainingSlots", key));
 
-    await runTransaction(db, async (transaction) => {
-      for (const slotRef of newSlotRefs) {
-        const snap = await transaction.get(slotRef);
-        if (snap.exists() && snap.data().bookingId !== bookingRef.id) {
-          const data = snap.data();
-          throw new Error(`CONFLICT|${data.teamName ?? "Andere Mannschaft"}|${data.startTime ?? ""}|${data.endTime ?? ""}`);
-        }
-      }
+    const conflict = bookings.find((booking) =>
+      booking.id !== bookingId &&
+      booking.date === date &&
+      booking.field === form.field &&
+      areasOverlap(booking.area, form.area) &&
+      timesOverlap(form.startTime, form.endTime, booking.startTime, booking.endTime)
+    );
 
-      const payload = {
-        teamId: form.teamId,
-        teamName: form.kind === "block" ? (form.note.trim() || "Platzsperre") : (selectedTeam?.name ?? "Mannschaft"),
-        date,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        field: form.field,
-        area: form.area,
-        floodlight: form.field === "training" && form.floodlight,
-        note: form.note.trim(),
-        kind: form.kind,
-        createdBy: oldBooking?.createdBy || user.uid,
-        createdByName: oldBooking?.createdByName || profile.name,
-        updatedBy: user.uid,
-        updatedByName: profile.name,
-        updatedAt: serverTimestamp(),
-        ...(oldBooking ? {} : { createdAt: serverTimestamp() }),
-      };
-      transaction.set(bookingRef, payload, { merge: true });
+    if (conflict) {
+      throw new Error(`CONFLICT|${conflict.teamName}|${conflict.startTime}|${conflict.endTime}`);
+    }
 
-      const newKeySet = new Set(newKeys);
-      oldSlotRefs.forEach((slotRef) => {
-        if (!newKeySet.has(slotRef.id)) transaction.delete(slotRef);
-      });
-      newSlotRefs.forEach((slotRef) => transaction.set(slotRef, {
-        bookingId: bookingRef.id,
-        teamId: form.teamId,
-        teamName: payload.teamName,
-        date,
-        startTime: form.startTime,
-        endTime: form.endTime,
-        field: form.field,
-        area: form.area,
-        createdBy: user.uid,
-        updatedAt: serverTimestamp(),
-      }));
-    });
+    const bookingRef = bookingId
+      ? doc(db, "trainingBookings", bookingId)
+      : doc(collection(db, "trainingBookings"));
+
+    const payload = {
+      teamId: form.teamId,
+      teamName: form.kind === "block"
+        ? (form.note.trim() || "Platzsperre")
+        : (selectedTeam?.name ?? "Mannschaft"),
+      date,
+      startTime: form.startTime,
+      endTime: form.endTime,
+      field: form.field,
+      area: form.area,
+      floodlight: form.field === "training" && form.floodlight,
+      note: form.note.trim(),
+      kind: form.kind,
+      createdBy: oldBooking?.createdBy || user.uid,
+      createdByName: oldBooking?.createdByName || profile.name,
+      updatedBy: user.uid,
+      updatedByName: profile.name,
+      updatedAt: serverTimestamp(),
+      ...(oldBooking ? {} : { createdAt: serverTimestamp() }),
+    };
+
+    await setDoc(bookingRef, payload, { merge: true });
   }
 
   async function handleSave() {
@@ -367,7 +351,16 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         setError(`Platz bereits belegt – ${team}${start ? `, ${start}–${end}` : ""}. Bitte eine andere Hälfte oder Zeit wählen.`);
       } else {
         console.error(caught);
-        setError("Die Buchung konnte nicht gespeichert werden. Bitte erneut versuchen.");
+        const code = typeof caught === "object" && caught !== null && "code" in caught
+          ? String((caught as { code?: unknown }).code ?? "")
+          : "";
+        if (code.includes("permission-denied")) {
+          setError("Keine Berechtigung für diese Mannschaft. Bitte die Trainer-Mannschaftszuordnung prüfen.");
+        } else if (code.includes("unavailable") || code.includes("network")) {
+          setError("Keine Verbindung zu Firestore. Bitte Internetverbindung prüfen und erneut versuchen.");
+        } else {
+          setError(`Die Buchung konnte nicht gespeichert werden${code ? ` (${code})` : ""}. Bitte erneut versuchen.`);
+        }
       }
     } finally {
       setSaving(false);
@@ -378,26 +371,16 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
     if (!canEdit(booking) || !window.confirm(`${booking.teamName} am ${formatDay(booking.date)} wirklich löschen?`)) return;
     setError("");
     try {
-      await runTransaction(db, async (transaction) => {
-        const bookingRef = doc(db, "trainingBookings", booking.id);
-        const slotRefs = slotKeys(booking.date, booking.startTime, booking.endTime, booking.field, booking.area)
-          .map((key) => doc(db, "trainingSlots", key));
-
-        // Firestore-Transaktionen verlangen: zuerst ALLE Reads, danach erst Writes/Deletes.
-        const slotSnapshots = await Promise.all(
-          slotRefs.map((slotRef) => transaction.get(slotRef)),
-        );
-
-        slotRefs.forEach((slotRef, index) => {
-          const snap = slotSnapshots[index];
-          if (snap.exists() && snap.data().bookingId === booking.id) transaction.delete(slotRef);
-        });
-        transaction.delete(bookingRef);
-      });
+      await deleteDoc(doc(db, "trainingBookings", booking.id));
       setMessage("Termin wurde gelöscht. Die Änderung ist sofort überall sichtbar.");
     } catch (caught) {
       console.error(caught);
-      setError("Termin konnte nicht gelöscht werden.");
+      const code = typeof caught === "object" && caught !== null && "code" in caught
+        ? String((caught as { code?: unknown }).code ?? "")
+        : "";
+      setError(code.includes("permission-denied")
+        ? "Keine Berechtigung zum Löschen dieses Trainings. Bitte Mannschaftszuordnung prüfen."
+        : "Termin konnte nicht gelöscht werden.");
     }
   }
 

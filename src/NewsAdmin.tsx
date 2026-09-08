@@ -2,6 +2,7 @@ import {
   useEffect,
   useMemo,
   useState,
+  type ChangeEvent,
   type FormEvent,
 } from "react";
 import {
@@ -42,7 +43,6 @@ type NewsArticle = {
 type NewsForm = {
   title: string;
   summary: string;
-  content: string;
   category: NewsCategory;
   imageUrl: string;
   authorName: string;
@@ -66,7 +66,6 @@ function createDateTimeValue(date = new Date()) {
 const emptyForm: NewsForm = {
   title: "",
   summary: "",
-  content: "",
   category: "verein",
   imageUrl: "",
   authorName: "TSU Ainet Fußball",
@@ -107,6 +106,47 @@ function getCategoryLabel(category: NewsCategory) {
   return "Verein";
 }
 
+async function localNewsImageToDataUrl(file: File) {
+  if (!file.type.startsWith("image/")) {
+    throw new Error("Bitte eine Bilddatei auswählen.");
+  }
+
+  if (file.size > 12 * 1024 * 1024) {
+    throw new Error("Das Bild ist zu groß. Bitte ein Bild unter 12 MB auswählen.");
+  }
+
+  const sourceUrl = URL.createObjectURL(file);
+  try {
+    const image = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const element = new Image();
+      element.onload = () => resolve(element);
+      element.onerror = () => reject(new Error("Das Bild konnte nicht gelesen werden."));
+      element.src = sourceUrl;
+    });
+
+    const maxWidth = 1400;
+    const maxHeight = 1000;
+    const scale = Math.min(1, maxWidth / image.naturalWidth, maxHeight / image.naturalHeight);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Bildverarbeitung wird von diesem Gerät nicht unterstützt.");
+    context.drawImage(image, 0, 0, width, height);
+
+    // Firestore-Dokumente sind auf 1 MiB begrenzt. Wir bleiben deutlich darunter.
+    for (const quality of [0.82, 0.72, 0.62, 0.52, 0.44]) {
+      const dataUrl = canvas.toDataURL("image/jpeg", quality);
+      if (dataUrl.length < 650_000) return dataUrl;
+    }
+    throw new Error("Das Bild konnte nicht ausreichend verkleinert werden. Bitte ein kleineres Bild auswählen.");
+  } finally {
+    URL.revokeObjectURL(sourceUrl);
+  }
+}
+
 function NewsAdmin({ onBack }: NewsAdminProps) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [formData, setFormData] =
@@ -116,6 +156,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [isProcessingImage, setIsProcessingImage] = useState(false);
 
   const [errorMessage, setErrorMessage] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
@@ -138,7 +179,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               title:
                 typeof data.title === "string"
                   ? data.title
-                  : "Ankündigung",
+                  : "News",
               summary:
                 typeof data.summary === "string"
                   ? data.summary
@@ -178,10 +219,10 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
         setErrorMessage("");
       },
       (error) => {
-        console.error("Fehler beim Laden der Ankündigungen:", error);
+        console.error("Fehler beim Laden der News:", error);
 
         setErrorMessage(
-          "Die Ankündigungen konnten nicht geladen werden.",
+          "Die News konnten nicht geladen werden.",
         );
         setIsLoading(false);
       },
@@ -230,7 +271,6 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
     setFormData({
       title: article.title,
       summary: article.summary,
-      content: article.content,
       category: article.category,
       imageUrl: article.imageUrl,
       authorName: article.authorName,
@@ -257,7 +297,6 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
 
     const title = formData.title.trim();
     const summary = formData.summary.trim();
-    const content = formData.content.trim();
     const authorName = formData.authorName.trim();
     const publicationDate = new Date(
       formData.publishedAt,
@@ -275,12 +314,6 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
       return;
     }
 
-    if (!content) {
-      setErrorMessage(
-        "Bitte gib den vollständigen Beitrag ein.",
-      );
-      return;
-    }
 
     if (!authorName) {
       setErrorMessage("Bitte gib einen Autor ein.");
@@ -299,7 +332,8 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
     const articleData = {
       title,
       summary,
-      content,
+      // Für ältere App-Versionen bleibt content als Spiegel des News-Texts erhalten.
+      content: summary,
       category: formData.category,
       imageUrl: formData.imageUrl.trim(),
       authorName,
@@ -334,7 +368,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
         );
 
         setSuccessMessage(
-          "Die Ankündigung wurde aktualisiert.",
+          "Die News wurde aktualisiert.",
         );
       } else {
         await addDoc(collection(db, "news"), {
@@ -343,19 +377,19 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
         });
 
         setSuccessMessage(
-          "Die Ankündigung wurde erstellt.",
+          "Die News wurde erstellt.",
         );
       }
 
       resetForm();
     } catch (error) {
       console.error(
-        "Fehler beim Speichern der Ankündigung:",
+        "Fehler beim Speichern der News:",
         error,
       );
 
       setErrorMessage(
-        "Die Ankündigung konnte nicht gespeichert werden. Prüfe bitte die Firestore-Regeln.",
+        "Die News konnte nicht gespeichert werden. Prüfe bitte die Firestore-Regeln.",
       );
     } finally {
       setIsSaving(false);
@@ -373,8 +407,8 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
 
       setSuccessMessage(
         article.published
-          ? "Der Beitrag wurde ausgeblendet."
-          : "Der Beitrag wurde veröffentlicht.",
+          ? "Die News wurde ausgeblendet."
+          : "Die News wurde veröffentlicht.",
       );
     } catch (error) {
       console.error(
@@ -410,7 +444,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
       setSuccessMessage(
         article.featured
           ? "Die Topmeldung wurde entfernt."
-          : "Der Beitrag ist jetzt die Topmeldung.",
+          : "Die News ist jetzt die Topmeldung.",
       );
     } catch (error) {
       console.error(
@@ -443,16 +477,16 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
       }
 
       setSuccessMessage(
-        "Die Ankündigung wurde gelöscht.",
+        "Die News wurde gelöscht.",
       );
     } catch (error) {
       console.error(
-        "Fehler beim Löschen der Ankündigung:",
+        "Fehler beim Löschen der News:",
         error,
       );
 
       setErrorMessage(
-        "Die Ankündigung konnte nicht gelöscht werden.",
+        "Die News konnte nicht gelöscht werden.",
       );
     }
   }
@@ -474,10 +508,10 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
             TSU Ainet Fußball
           </p>
 
-          <h2>Ankündigungen verwalten</h2>
+          <h2>News verwalten</h2>
 
           <p>
-            Ankündigungen erstellen, bearbeiten und
+            News erstellen, bearbeiten und
             veröffentlichen.
           </p>
         </div>
@@ -503,7 +537,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
 
       <div className="news-admin-summary">
         <article>
-          <span>Beiträge gesamt</span>
+          <span>News gesamt</span>
           <strong>{articles.length}</strong>
         </article>
 
@@ -531,11 +565,11 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
             <div>
               <p className="news-admin-eyebrow">
                 {editingArticleId
-                  ? "Beitrag bearbeiten"
-                  : "Neuer Beitrag"}
+                  ? "News bearbeiten"
+                  : "Neue News"}
               </p>
 
-              <h3>Ankündigung</h3>
+              <h3>News</h3>
             </div>
 
             {editingArticleId && (
@@ -556,7 +590,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <input
                 type="text"
                 value={formData.title}
-                placeholder="Titel der Ankündigung"
+                placeholder="Titel der News"
                 onChange={(event) =>
                   setFormData((current) => ({
                     ...current,
@@ -611,12 +645,12 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
             </label>
 
             <label className="news-admin-field news-admin-wide">
-              <span>Zusammenfassung</span>
+              <span>Text</span>
 
               <textarea
-                className="news-admin-summary-input"
+                className="news-admin-summary-input news-admin-news-text-input"
                 value={formData.summary}
-                placeholder="Kurze Vorschau für die Ankündigungsübersicht"
+                placeholder="Text der News"
                 onChange={(event) =>
                   setFormData((current) => ({
                     ...current,
@@ -626,21 +660,6 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               />
             </label>
 
-            <label className="news-admin-field news-admin-wide">
-              <span>Beitrag</span>
-
-              <textarea
-                className="news-admin-content-input"
-                value={formData.content}
-                placeholder="Vollständiger Text der Ankündigung"
-                onChange={(event) =>
-                  setFormData((current) => ({
-                    ...current,
-                    content: event.target.value,
-                  }))
-                }
-              />
-            </label>
 
             <label className="news-admin-field">
               <span>Autor</span>
@@ -658,28 +677,47 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               />
             </label>
 
-            <label className="news-admin-field">
-              <span>Bild-URL</span>
-
-              <input
-                type="url"
-                value={formData.imageUrl}
-                placeholder="https://..."
-                onChange={(event) =>
-                  setFormData((current) => ({
-                    ...current,
-                    imageUrl: event.target.value,
-                  }))
-                }
-              />
-            </label>
+            <div className="news-admin-field news-admin-wide">
+              <span>Bild</span>
+              <label className={`news-admin-local-image ${isProcessingImage ? "processing" : ""}`}>
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+                  disabled={isProcessingImage || isSaving}
+                  onChange={async (event: ChangeEvent<HTMLInputElement>) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (!file) return;
+                    clearMessages();
+                    setIsProcessingImage(true);
+                    try {
+                      const imageUrl = await localNewsImageToDataUrl(file);
+                      setFormData((current) => ({ ...current, imageUrl }));
+                    } catch (imageError) {
+                      setErrorMessage(imageError instanceof Error ? imageError.message : "Das Bild konnte nicht verarbeitet werden.");
+                    } finally {
+                      setIsProcessingImage(false);
+                    }
+                  }}
+                />
+                <span className="news-admin-image-icon">▧</span>
+                <span>
+                  <strong>{isProcessingImage ? "Bild wird vorbereitet …" : formData.imageUrl ? "Anderes Bild auswählen" : "Bild auswählen"}</strong>
+                  <small>Direkt von Handy oder PC · JPG, PNG, WebP</small>
+                </span>
+              </label>
+            </div>
 
             {formData.imageUrl && (
               <div className="news-admin-image-preview news-admin-wide">
-                <img
-                  src={formData.imageUrl}
-                  alt="Vorschau"
-                />
+                <img src={formData.imageUrl} alt="Vorschau" />
+                <button
+                  type="button"
+                  className="news-admin-remove-image"
+                  onClick={() => setFormData((current) => ({ ...current, imageUrl: "" }))}
+                >
+                  Bild entfernen
+                </button>
               </div>
             )}
 
@@ -698,7 +736,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <span>
                 <strong>Veröffentlicht</strong>
                 <small>
-                  Beitrag öffentlich anzeigen
+                  News öffentlich anzeigen
                 </small>
               </span>
             </label>
@@ -718,7 +756,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
               <span>
                 <strong>Topmeldung</strong>
                 <small>
-                  Bei den Ankündigungen hervorheben
+                  Bei den News hervorheben
                 </small>
               </span>
             </label>
@@ -727,13 +765,13 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
           <button
             type="submit"
             className="news-admin-save"
-            disabled={isSaving}
+            disabled={isSaving || isProcessingImage}
           >
             {isSaving
               ? "Wird gespeichert …"
               : editingArticleId
                 ? "Änderungen speichern"
-                : "Ankündigung erstellen"}
+                : "News erstellen"}
           </button>
         </form>
 
@@ -744,7 +782,7 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
                 Firebase
               </p>
 
-              <h3>Alle Beiträge</h3>
+              <h3>Alle News</h3>
             </div>
 
             <span className="news-admin-count">
@@ -754,17 +792,17 @@ function NewsAdmin({ onBack }: NewsAdminProps) {
 
           {isLoading && (
             <div className="news-admin-empty">
-              <p>Beiträge werden geladen …</p>
+              <p>News werden geladen …</p>
             </div>
           )}
 
           {!isLoading && articles.length === 0 && (
             <div className="news-admin-empty">
-              <strong>Noch keine Ankündigungen</strong>
+              <strong>Noch keine News</strong>
 
               <p>
                 Erstelle über das Formular den ersten
-                Ankündigung.
+                News.
               </p>
             </div>
           )}

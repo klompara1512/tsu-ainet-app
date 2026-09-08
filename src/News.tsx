@@ -57,7 +57,7 @@ function News() {
               title:
                 typeof data.title === "string"
                   ? data.title
-                  : "Ankündigung",
+                  : "News",
 
               summary:
                 typeof data.summary === "string"
@@ -111,12 +111,12 @@ function News() {
       },
       (error) => {
         console.error(
-          "Fehler beim Laden der Ankündigungen:",
+          "Fehler beim Laden der News:",
           error,
         );
 
         setErrorMessage(
-          "Die Ankündigungen konnten nicht geladen werden.",
+          "Die News konnten nicht geladen werden.",
         );
 
         setIsLoading(false);
@@ -196,7 +196,7 @@ function News() {
           onClick={() => setSelectedArticle(null)}
         >
           <span aria-hidden="true">‹</span>
-          Zurück zu den Ankündigungen
+          Zurück zu News
         </button>
 
         <article className="news-detail">
@@ -230,14 +230,9 @@ function News() {
 
             <h1>{selectedArticle.title}</h1>
 
-            {selectedArticle.summary && (
-              <p className="news-detail-summary">
-                {selectedArticle.summary}
-              </p>
-            )}
 
             <div className="news-detail-body">
-              {selectedArticle.content
+              {(selectedArticle.summary || selectedArticle.content)
                 .split("\n")
                 .map((paragraph, index) => {
                   const trimmedParagraph =
@@ -271,7 +266,7 @@ function News() {
     <section className="news-page">
       <header className="news-header">
         <div>
-          <h1>Ankündigungen</h1>
+          <h1>News</h1>
 
         </div>
 
@@ -279,7 +274,7 @@ function News() {
 
       <nav
         className="news-filter"
-        aria-label="Ankündigungs-Kategorien"
+        aria-label="News-Kategorien"
       >
         <button
           type="button"
@@ -375,7 +370,7 @@ function News() {
         <div className="news-loading">
           <span className="news-spinner" />
 
-          <strong>Ankündigungen werden geladen</strong>
+          <strong>News werden geladen</strong>
 
           <p>
             Die neuesten Vereinsmeldungen werden
@@ -388,11 +383,11 @@ function News() {
 
           <div>
             <strong>
-              Noch keine Ankündigungen veröffentlicht
+              Noch keine News veröffentlicht
             </strong>
 
             <p>
-              Sobald ein Beitrag veröffentlicht wird,
+              Sobald eine News veröffentlicht wird,
               erscheint er automatisch auf dieser Seite.
             </p>
           </div>
@@ -450,7 +445,7 @@ function News() {
                   </p>
 
                   <span className="news-read-more">
-                    Beitrag lesen
+                    News lesen
                     <span aria-hidden="true">›</span>
                   </span>
                 </div>

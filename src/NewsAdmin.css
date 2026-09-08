@@ -505,3 +505,17 @@
     flex-wrap: wrap;
   }
 }
+
+/* TSU Ainet – lokale Bilder für News */
+.news-admin-news-text-input{min-height:180px!important}
+.news-admin-local-image{display:flex;align-items:center;gap:12px;min-height:76px;padding:13px 15px;border:1px dashed rgba(115,169,255,.35);border-radius:14px;background:rgba(52,111,204,.08);cursor:pointer;transition:.18s ease}
+.news-admin-local-image:hover{border-color:rgba(115,169,255,.68);background:rgba(52,111,204,.13)}
+.news-admin-local-image.processing{opacity:.7;cursor:wait}
+.news-admin-local-image input{position:absolute!important;width:1px!important;height:1px!important;opacity:0!important;pointer-events:none}
+.news-admin-image-icon{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:12px;background:rgba(83,145,241,.18);color:#91bdff;font-size:22px;font-weight:900}
+.news-admin-local-image>span:last-child{display:flex;flex-direction:column;gap:4px;min-width:0}
+.news-admin-local-image strong{font-size:12px;color:#fff}
+.news-admin-local-image small{font-size:9px;color:rgba(255,255,255,.45)}
+.news-admin-image-preview{position:relative}
+.news-admin-remove-image{position:absolute;right:10px;bottom:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(5,12,23,.82);color:#fff;font:inherit;font-size:9px;font-weight:800;backdrop-filter:blur(8px)}
+@media(max-width:620px){.news-admin-local-image{min-height:70px;padding:11px}.news-admin-image-icon{width:40px;height:40px;flex-basis:40px}}

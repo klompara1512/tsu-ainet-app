@@ -4,7 +4,6 @@ import { auth } from "./firebase";
 import { hasPermission, type UserProfile } from "./permissions";
 import "./Dashboard.css";
 import "./ClearClub.css";
-import "./ClearClubListFix.css";
 import Admin from "./Admin";
 import BottomNav from "./BottomNav";
 import EventsAdmin from "./EventsAdmin";
@@ -265,7 +264,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           {canManageMatches && <button type="button" className="quick-card" onClick={() => setActivePage("match-admin")}><span className="quick-icon"><Icon name="ball" /></span><span className="quick-content"><strong>Spiele verwalten</strong></span><span className="quick-arrow">›</span></button>}
           {canManageStandings && <button type="button" className="quick-card" onClick={() => setActivePage("standings-admin")}><span className="quick-icon"><Icon name="table" /></span><span className="quick-content"><strong>Tabellen verwalten</strong></span><span className="quick-arrow">›</span></button>}
           {canManageEvents && <button type="button" className="quick-card" onClick={() => setActivePage("events-admin")}><span className="quick-icon"><Icon name="calendar" /></span><span className="quick-content"><strong>Termine verwalten</strong></span><span className="quick-arrow">›</span></button>}
-          {canManageNews && <button type="button" className="quick-card" onClick={() => setActivePage("news-admin")}><span className="quick-icon"><Icon name="news" /></span><span className="quick-content"><strong>Ankündigungen verwalten</strong></span><span className="quick-arrow">›</span></button>}
+          {canManageNews && <button type="button" className="quick-card" onClick={() => setActivePage("news-admin")}><span className="quick-icon"><Icon name="news" /></span><span className="quick-content"><strong>News verwalten</strong></span><span className="quick-arrow">›</span></button>}
           {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("admin")}><span className="quick-icon"><Icon name="users" /></span><span className="quick-content"><strong>Personenverwaltung</strong></span><span className="quick-arrow">›</span></button>}
           {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("board-manager")}><span className="quick-icon"><Icon name="shield" /></span><span className="quick-content"><strong>Vorstand verwalten</strong></span><span className="quick-arrow">›</span></button>}
           {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("trainer-manager")}><span className="quick-icon"><Icon name="users" /></span><span className="quick-content"><strong>Trainer verwalten</strong></span><span className="quick-arrow">›</span></button>}

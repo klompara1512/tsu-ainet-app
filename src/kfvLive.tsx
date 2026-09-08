@@ -433,6 +433,372 @@ function formatDate(date: Date) {
     }
 
 
+    const selectedCanonicalTeamId = normalizeKfvTeamId(selectedMatch.teamId || selectedMatch.teamName);
+    const simpleYouthMatchCenter = selectedCanonicalTeamId === "u12" || selectedCanonicalTeamId === "u10";
+
+    // U10/U12: Ergebnisse und Form ausschließlich aus den in der TSU-Ainet-App
+    // manuell eingetragenen Endständen. Offizielle/KFV-Ergebnisse werden hier bewusst ignoriert.
+    const manualYouthLastFive = simpleYouthMatchCenter
+      ? [...teamMatches]
+          .filter((match) =>
+            match.manualResultOverride === true &&
+            typeof match.homeScore === "number" &&
+            typeof match.awayScore === "number"
+          )
+          .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime())
+          .slice(0, 5)
+      : [];
+
+    if (simpleYouthMatchCenter) {
+      const tsuIsHome = isTsuAinet(selectedMatch.homeTeam);
+      const opponent = tsuIsHome ? selectedMatch.awayTeam : selectedMatch.homeTeam;
+      const opponentLogo = tsuIsHome
+        ? calendarCompatibleLogo(clubs, selectedMatch.awayTeam, selectedMatch.awayLogoUrl, selectedMatch.awayClubId)
+        : calendarCompatibleLogo(clubs, selectedMatch.homeTeam, selectedMatch.homeLogoUrl, selectedMatch.homeClubId);
+      const opponentClubId = tsuIsHome ? selectedMatch.awayClubId : selectedMatch.homeClubId;
+      const homeAwayLabel = tsuIsHome ? "Heimspiel" : "Auswärtsspiel";
+
+      return (
+        <section className="match-detail-page premium-match-center">
+          <button
+            type="button"
+            className="match-detail-back"
+            onClick={() => setSelectedMatch(null)}
+          >
+            ← Zurück zu den Spielen
+          </button>
+
+          <article
+            style={{
+              maxWidth: "760px",
+              margin: "0 auto",
+              padding: "clamp(18px, 4vw, 32px)",
+              borderRadius: "22px",
+              border: "1px solid rgba(148,163,184,.16)",
+              background: "linear-gradient(145deg, rgba(17,31,51,.98), rgba(8,18,32,.98))",
+              boxShadow: "0 18px 48px rgba(0,0,0,.18)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginBottom: "22px",
+              }}
+            >
+              <div>
+                <small
+                  style={{
+                    display: "block",
+                    opacity: .62,
+                    textTransform: "uppercase",
+                    letterSpacing: ".09em",
+                    fontWeight: 800,
+                    marginBottom: "5px",
+                  }}
+                >
+                  {selectedMatch.teamName || selectedCanonicalTeamId.toUpperCase()}
+                </small>
+                <h2 style={{ margin: 0, fontSize: "clamp(1.5rem, 4vw, 2rem)" }}>
+                  {homeAwayLabel}
+                </h2>
+              </div>
+
+              <span
+                style={{
+                  padding: "8px 13px",
+                  borderRadius: "999px",
+                  fontWeight: 850,
+                  background: tsuIsHome ? "rgba(36,105,210,.18)" : "rgba(242,198,46,.15)",
+                  border: tsuIsHome
+                    ? "1px solid rgba(96,165,250,.32)"
+                    : "1px solid rgba(242,198,46,.35)",
+                }}
+              >
+                {tsuIsHome ? "🏠 Heim" : "🚌 Auswärts"}
+              </span>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "90px 1fr",
+                gap: "16px",
+                alignItems: "center",
+                padding: "18px",
+                borderRadius: "17px",
+                background: "rgba(255,255,255,.04)",
+                marginBottom: "16px",
+              }}
+            >
+              <TeamLogo
+                url={opponentLogo}
+                name={opponent}
+                clubId={opponentClubId}
+                size="large"
+              />
+              <div>
+                <small style={{ opacity: .58, display: "block", marginBottom: "4px" }}>Gegner</small>
+                <strong style={{ fontSize: "clamp(1.15rem, 3vw, 1.45rem)" }}>{opponent}</strong>
+              </div>
+            </div>
+
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                gap: "10px",
+                marginBottom: "18px",
+              }}
+            >
+              <div
+                style={{
+                  padding: "14px",
+                  borderRadius: "14px",
+                  background: "rgba(255,255,255,.04)",
+                }}
+              >
+                <small style={{ display: "block", opacity: .58, marginBottom: "5px" }}>Spieltermin</small>
+                <strong>{formatDate(selectedMatch.kickoffAt)}</strong>
+              </div>
+              <div
+                style={{
+                  padding: "14px",
+                  borderRadius: "14px",
+                  background: "rgba(255,255,255,.04)",
+                }}
+              >
+                <small style={{ display: "block", opacity: .58, marginBottom: "5px" }}>Anstoß</small>
+                <strong>{formatTime(selectedMatch.kickoffAt)} Uhr</strong>
+              </div>
+            </div>
+
+            {selectedMatch.manualResultOverride && scoreAvailable && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "14px",
+                  borderRadius: "14px",
+                  background: "rgba(255,255,255,.045)",
+                  marginBottom: "16px",
+                }}
+              >
+                <small style={{ opacity: .58, display: "block", marginBottom: "4px" }}>Ergebnis</small>
+                <strong style={{ fontSize: "2rem" }}>
+                  {selectedMatch.homeScore} : {selectedMatch.awayScore}
+                </strong>
+              </div>
+            )}
+
+            {(matchReport?.reportUrl || selectedMatch.reportUrl) && (
+              <a
+                className="official-report-link"
+                href={matchReport?.reportUrl || selectedMatch.reportUrl}
+                target="_blank"
+                rel="noreferrer"
+                style={{ display: "block", textAlign: "center", marginBottom: "16px" }}
+              >
+                Spielbericht öffnen
+              </a>
+            )}
+
+            {canEditResult && (
+              <section
+                aria-label="Spielergebnis eintragen"
+                style={{
+                  padding: "17px",
+                  borderRadius: "17px",
+                  border: resultEntryAvailable
+                    ? "1px solid rgba(242,198,46,.48)"
+                    : "1px solid rgba(148,163,184,.15)",
+                  background: resultEntryAvailable
+                    ? "rgba(242,198,46,.07)"
+                    : "rgba(255,255,255,.025)",
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "12px",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div>
+                    <strong style={{ display: "block", fontSize: "1.05rem" }}>
+                      Spielergebnis eintragen
+                    </strong>
+                    <small style={{ opacity: .62 }}>
+                      {resultRule.format}
+                    </small>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={!resultEntryAvailable || savingResult}
+                    onClick={() => {
+                      if (!resultEntryAvailable) return;
+                      setManualHomeScore(selectedMatch.manualResultOverride && selectedMatch.homeScore !== null ? String(selectedMatch.homeScore) : "");
+                      setManualAwayScore(selectedMatch.manualResultOverride && selectedMatch.awayScore !== null ? String(selectedMatch.awayScore) : "");
+                      setResultMessage("");
+                      setResultEditorOpen((open) => !open);
+                    }}
+                    style={{
+                      minHeight: "48px",
+                      padding: "0 17px",
+                      borderRadius: "12px",
+                      fontWeight: 850,
+                      cursor: resultEntryAvailable ? "pointer" : "not-allowed",
+                      opacity: resultEntryAvailable ? 1 : .52,
+                    }}
+                  >
+                    {resultEntryAvailable
+                      ? selectedMatch.manualResultOverride && scoreAvailable
+                        ? "Ergebnis ändern"
+                        : "Ergebnis eintragen"
+                      : "Nach Spielende verfügbar"}
+                  </button>
+                </div>
+
+                {!resultEntryAvailable && selectedMatch.status === "scheduled" && (
+                  <small
+                    style={{
+                      display: "block",
+                      marginTop: "11px",
+                      opacity: .68,
+                    }}
+                  >
+                    Freigabe nach Spielende, ungefähr ab{" "}
+                    <strong>{formatResultUnlockTime(selectedMatch)} Uhr</strong>.
+                  </small>
+                )}
+
+                {resultEditorOpen && resultEntryAvailable && (
+                  <form
+                    onSubmit={submitManualResult}
+                    style={{
+                      marginTop: "15px",
+                      paddingTop: "15px",
+                      borderTop: "1px solid rgba(255,255,255,.09)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "1fr auto 1fr",
+                        gap: "10px",
+                        alignItems: "end",
+                      }}
+                    >
+                      <label>
+                        <small style={{ display: "block", marginBottom: "6px" }}>
+                          {selectedMatch.homeTeam}
+                        </small>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          inputMode="numeric"
+                          value={manualHomeScore}
+                          onChange={(event) => setManualHomeScore(event.target.value)}
+                          required
+                          style={{ width: "100%", minHeight: "52px", fontSize: "1.2rem", textAlign: "center" }}
+                        />
+                      </label>
+
+                      <strong style={{ paddingBottom: "14px", fontSize: "1.25rem" }}>:</strong>
+
+                      <label>
+                        <small style={{ display: "block", marginBottom: "6px" }}>
+                          {selectedMatch.awayTeam}
+                        </small>
+                        <input
+                          type="number"
+                          min="0"
+                          step="1"
+                          inputMode="numeric"
+                          value={manualAwayScore}
+                          onChange={(event) => setManualAwayScore(event.target.value)}
+                          required
+                          style={{ width: "100%", minHeight: "52px", fontSize: "1.2rem", textAlign: "center" }}
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="submit"
+                      disabled={savingResult}
+                      style={{
+                        width: "100%",
+                        minHeight: "50px",
+                        marginTop: "12px",
+                        borderRadius: "12px",
+                        fontWeight: 900,
+                      }}
+                    >
+                      {savingResult ? "Wird gespeichert …" : "Endstand speichern"}
+                    </button>
+                  </form>
+                )}
+
+                {resultMessage && (
+                  <p style={{ margin: "11px 0 0" }}>{resultMessage}</p>
+                )}
+              </section>
+            )}
+
+            <section style={{ marginTop: "20px" }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: "10px", marginBottom: "10px" }}>
+                <strong>Letzte Spiele</strong>
+                <small style={{ opacity: .58 }}>Form</small>
+              </div>
+              {manualYouthLastFive.length ? (
+                <div style={{ display: "grid", gap: "8px" }}>
+                  {manualYouthLastFive.map((match) => {
+                    const ownIsHome = isTsuAinet(match.homeTeam);
+                    const opponentName = ownIsHome ? match.awayTeam : match.homeTeam;
+                    const ownScore = ownIsHome ? match.homeScore : match.awayScore;
+                    const opponentScore = ownIsHome ? match.awayScore : match.homeScore;
+                    const result = ownScore !== null && opponentScore !== null
+                      ? ownScore > opponentScore ? "S" : ownScore < opponentScore ? "N" : "U"
+                      : "–";
+                    return (
+                      <div
+                        key={match.id}
+                        style={{
+                          display: "grid",
+                          gridTemplateColumns: "72px 1fr auto auto",
+                          gap: "10px",
+                          alignItems: "center",
+                          padding: "10px 12px",
+                          borderRadius: "12px",
+                          background: "rgba(255,255,255,.035)",
+                        }}
+                      >
+                        <small style={{ opacity: .6 }}>{formatDate(match.kickoffAt)}</small>
+                        <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {opponentName}
+                        </span>
+                        <strong>{ownScore ?? "–"} : {opponentScore ?? "–"}</strong>
+                        <strong style={{ width: "22px", textAlign: "center" }}>{result}</strong>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <small style={{ opacity: .62 }}>Noch keine Ergebnisse vorhanden.</small>
+              )}
+            </section>
+          </article>
+        </section>
+      );
+    }
+
+
     // Offizielle Berichtsdaten haben Vorrang für Spielort, Schiedsrichter
     // und die Veröffentlichung der Aufstellungen. Die Ereignis-/Toransicht
     // wird bewusst nicht mehr innerhalb der App gerendert.

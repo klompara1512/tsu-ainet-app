@@ -325,12 +325,19 @@ function Teams() {
     [teamMatches],
   );
 
-  const finishedMatches = useMemo(
-    () => teamMatches
-      .filter((match) => match.status === "finished" && match.homeScore !== null && match.awayScore !== null)
-      .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime()),
-    [teamMatches],
-  );
+  const finishedMatches = useMemo(() => {
+    const selectedKey = selectedTeam ? teamKeyFromName(selectedTeam.name) : null;
+    const manualResultsOnly = selectedKey === "u10" || selectedKey === "u12";
+
+    return teamMatches
+      .filter((match) =>
+        match.status === "finished" &&
+        match.homeScore !== null &&
+        match.awayScore !== null &&
+        (!manualResultsOnly || match.manualResultOverride === true)
+      )
+      .sort((a, b) => b.kickoffAt.getTime() - a.kickoffAt.getTime());
+  }, [teamMatches, selectedTeam]);
 
   const form = useMemo(
     () => finishedMatches.slice(0, 5).reverse().map((match) => getResultForTsuAinet(match)),

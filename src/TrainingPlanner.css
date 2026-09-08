@@ -885,3 +885,16 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
     font-size:.68rem;
   }
 }
+
+
+/* Automatische Heimspiele im Trainings- & Spielplaner */
+.training-header > div > small{display:block;margin-top:4px;color:#8292aa;font-size:.78rem;font-weight:700}
+.pitch-booking.game,.pitch-full-booking.game,.week-summary-booking.game{
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.34),0 5px 14px rgba(0,0,0,.16)!important;
+  cursor:default!important;
+}
+.pitch-booking.game::before,.pitch-full-booking.game::before{
+  content:"SPIEL";position:absolute;right:7px;bottom:5px;font-size:.54rem;font-weight:950;letter-spacing:.08em;opacity:.72;
+}
+.pitch-booking.game,.pitch-full-booking.game{position:relative}
+.week-summary-booking.game{cursor:default!important}

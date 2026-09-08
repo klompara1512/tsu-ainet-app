@@ -216,7 +216,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           {canUseTrainingPlanner && (
             <button type="button" className="club-menu-card card-gold" onClick={() => setActivePage("training-planner")}>
               <span className="quick-icon"><Icon name="calendar" /></span>
-              <span className="club-menu-card-copy"><strong>Trainingsplaner</strong><small>Plätze & Trainingszeiten</small></span>
+              <span className="club-menu-card-copy"><strong>Trainings- &amp; Spielplaner</strong><small>Trainings &amp; Heimspiele</small></span>
               <span className="club-menu-chevron">›</span>
             </button>
           )}
@@ -270,7 +270,7 @@ function Dashboard({ user, profile, onLogin }: DashboardProps) {
           {canManagePeople && <button type="button" className="quick-card" onClick={() => setActivePage("trainer-manager")}><span className="quick-icon"><Icon name="users" /></span><span className="quick-content"><strong>Trainer verwalten</strong></span><span className="quick-arrow">›</span></button>}
           {canManageSponsors && <button type="button" className="quick-card" onClick={() => setActivePage("sponsor-manager")}><span className="quick-icon"><Icon name="sponsor" /></span><span className="quick-content"><strong>Sponsor Manager</strong></span><span className="quick-arrow">›</span></button>}
           {canManageKits && <button type="button" className="quick-card" onClick={() => setActivePage("kit-manager")}><span className="quick-icon"><Icon name="shirt" /></span><span className="quick-content"><strong>Trikotsätze verwalten</strong></span><span className="quick-arrow">›</span></button>}
-          {canUseTrainingPlanner && <button type="button" className="quick-card" onClick={() => setActivePage("training-planner")}><span className="quick-icon"><Icon name="calendar" /></span><span className="quick-content"><strong>Trainingsplaner</strong></span><span className="quick-arrow">›</span></button>}
+          {canUseTrainingPlanner && <button type="button" className="quick-card" onClick={() => setActivePage("training-planner")}><span className="quick-icon"><Icon name="calendar" /></span><span className="quick-content"><strong>Trainings- &amp; Spielplaner</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && user && <button type="button" className="quick-card" onClick={() => setActivePage("logo-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Logo Manager</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("visual-manager")}><span className="quick-icon"><Icon name="gallery" /></span><span className="quick-content"><strong>Bildverwaltung</strong></span><span className="quick-arrow">›</span></button>}
           {canManageClub && <button type="button" className="quick-card" onClick={() => setActivePage("notifications-admin")}><span className="quick-icon"><Icon name="bell" /></span><span className="quick-content"><strong>Push senden</strong></span><span className="quick-arrow">›</span></button>}

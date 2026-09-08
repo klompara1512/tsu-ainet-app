@@ -12,12 +12,14 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 import type { UserProfile } from "./permissions";
+import { isTsuAinet, subscribeKfvMatches } from "./kfvFirestore";
+import type { KfvMatch } from "./kfvTypes";
 import "./TrainingPlanner.css";
 
 type Team = { id: string; name: string; order: number };
 type Field = "main" | "training";
 type Area = "A" | "B" | "full";
-type BookingKind = "training" | "block";
+type BookingKind = "training" | "block" | "game";
 
 type TrainingBooking = {
   id: string;
@@ -144,6 +146,42 @@ function timesOverlap(startA: string, endA: string, startB: string, endB: string
   return minutes(startA) < minutes(endB) && minutes(endA) > minutes(startB);
 }
 
+function localDateIso(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function timeFromDate(date: Date) {
+  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
+}
+
+function addMinutesToDate(date: Date, amount: number) {
+  return new Date(date.getTime() + amount * 60_000);
+}
+
+function matchPlannerDurationMinutes(teamId: string) {
+  const alias = teamAlias(teamId);
+  if (alias === "u10") return 60;
+  if (alias === "u12") return 70;
+  if (alias === "u8") return 70;
+  return 115;
+}
+
+function matchPlannerArea(teamId: string): Area {
+  const alias = teamAlias(teamId);
+  return alias === "u10" || alias === "u12" ? "A" : "full";
+}
+
+function matchTeamLabel(match: KfvMatch) {
+  const alias = teamAlias(match.teamId || match.teamName);
+  if (alias === "km") return "KM";
+  if (alias === "challenge") return "Challenge";
+  if (alias === "u17") return "U17";
+  if (alias === "u12") return "U12";
+  if (alias === "u10") return "U10";
+  if (alias === "u8") return "U8";
+  return match.teamName || match.teamId || "Heimspiel";
+}
+
 function emptyForm(teamId = ""): FormState {
   const date = todayIso();
   return {
@@ -165,6 +203,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
   const isLeader = profile.role === "admin" || profile.role === "section";
   const [teams, setTeams] = useState<Team[]>([]);
   const [bookings, setBookings] = useState<TrainingBooking[]>([]);
+  const [matches, setMatches] = useState<KfvMatch[]>([]);
   const [weekStart, setWeekStart] = useState(() => startOfWeek(todayIso()));
   const [selectedDay, setSelectedDay] = useState(() => todayIso());
   const [formOpen, setFormOpen] = useState(false);
@@ -225,6 +264,13 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
     });
   }, []);
 
+  useEffect(() => {
+    return subscribeKfvMatches(
+      setMatches,
+      (message) => console.error("Spieltermine für Trainings- & Spielplaner konnten nicht geladen werden:", message),
+    );
+  }, []);
+
   const allowedTeams = useMemo(
     () => isLeader ? teams : teams.filter((team) => assignedToTeam(team, profile.teamIds)),
     [isLeader, profile.teamIds, teams],
@@ -239,15 +285,51 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
     if (!form.teamId && allowedTeams[0]?.id) setForm((current) => ({ ...current, teamId: allowedTeams[0].id }));
   }, [allowedTeams, form.teamId]);
 
+  const gameBookings = useMemo<TrainingBooking[]>(() =>
+    matches
+      .filter((match) =>
+        match.active !== false &&
+        match.status !== "cancelled" &&
+        match.status !== "postponed" &&
+        isTsuAinet(match.homeTeam)
+      )
+      .map((match) => {
+        const teamId = teamAlias(match.teamId || match.teamName);
+        const endAt = addMinutesToDate(match.kickoffAt, matchPlannerDurationMinutes(teamId));
+        return {
+          id: `game-${match.id}`,
+          teamId,
+          teamName: `${matchTeamLabel(match)} · ⚽ Heimspiel`,
+          date: localDateIso(match.kickoffAt),
+          startTime: timeFromDate(match.kickoffAt),
+          endTime: timeFromDate(endAt),
+          field: "main" as const,
+          area: matchPlannerArea(teamId),
+          floodlight: false,
+          note: `gegen ${match.awayTeam}`,
+          kind: "game" as const,
+          createdBy: "auto-match",
+          createdByName: "Spielplan",
+        };
+      }),
+    [matches],
+  );
+
+  const occupiedBookings = useMemo(
+    () => [...bookings, ...gameBookings],
+    [bookings, gameBookings],
+  );
+
   const days = useMemo(() => Array.from({ length: 7 }, (_, index) => addDays(weekStart, index)), [weekStart]);
   const weekEnd = days[6];
   const visibleBookings = useMemo(
-    () => bookings.filter((booking) => booking.date >= weekStart && booking.date <= weekEnd)
+    () => occupiedBookings.filter((booking) => booking.date >= weekStart && booking.date <= weekEnd)
       .sort((a, b) => `${a.date}${a.startTime}`.localeCompare(`${b.date}${b.startTime}`)),
-    [bookings, weekEnd, weekStart],
+    [occupiedBookings, weekEnd, weekStart],
   );
 
   function canEdit(booking: TrainingBooking) {
+    if (booking.kind === "game") return false;
     return isLeader || allowedTeams.some((team) => bookingMatchesTeam(booking, team));
   }
 
@@ -301,7 +383,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
       ? (isLeader ? selectedTeam.id : assignedProfileTeamId(selectedTeam, profile.teamIds))
       : form.teamId;
 
-    const conflict = bookings.find((booking) =>
+    const conflict = occupiedBookings.find((booking) =>
       booking.id !== bookingId &&
       booking.date === date &&
       booking.field === form.field &&
@@ -413,7 +495,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
     <section className="training-planner">
       <header className="training-header">
         <button type="button" className="training-back" onClick={onBack}>‹</button>
-        <div><span>Trainerbereich</span><h1>Trainingsplaner</h1></div>
+        <div><span>Platzbelegung</span><h1>Trainings- &amp; Spielplaner</h1><small>Trainings &amp; Heimspiele</small></div>
         <button type="button" className="training-add" onClick={() => openCreate(today)}><span>+</span> Training</button>
       </header>
 
@@ -429,7 +511,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         <button type="button" className="week-arrow" aria-label="Nächste Woche" title="Nächste Woche" onClick={() => setWeekStart(addDays(weekStart, 7))}>→</button>
       </div>
 
-      <div className="training-day-strip" role="tablist" aria-label="Trainingstag auswählen">
+      <div className="training-day-strip" role="tablist" aria-label="Tag auswählen">
         {days.map((day) => (
           <button
             key={day}
@@ -500,6 +582,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                           >
                             <strong>{booking.startTime}–{booking.endTime}</strong>
                             <b>{booking.teamName}</b>
+                            {booking.kind === "game" && <small>{booking.note}</small>}
                             {booking.floodlight && <small>💡 Flutlicht</small>}
                           </span>
                         ))}
@@ -517,7 +600,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                   >
                     <strong>{booking.startTime}–{booking.endTime}</strong>
                     <span>{booking.teamName}</span>
-                    <small>Ganzer Platz{booking.floodlight ? " · 💡 Flutlicht" : ""}</small>
+                    <small>{booking.kind === "game" ? `${booking.note} · Ganzer Platz` : `Ganzer Platz${booking.floodlight ? " · 💡 Flutlicht" : ""}`}</small>
                   </button>
                 ))}
               </div>
@@ -563,7 +646,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                       <span className="summary-time">{booking.startTime}–{booking.endTime}</span>
                       <strong>{booking.teamName}</strong>
                       <small>
-                        {FIELD_LABELS[booking.field]} · {booking.area === "full" ? "Ganzer Platz" : booking.area === "A" ? "Oben" : "Unten"}
+                        {booking.kind === "game" ? `⚽ ${booking.note} · ` : ""}{FIELD_LABELS[booking.field]} · {booking.area === "full" ? "Ganzer Platz" : booking.area === "A" ? "Oben" : "Unten"}
                         {booking.floodlight ? " · 💡 Flutlicht" : ""}
                       </small>
                     </button>

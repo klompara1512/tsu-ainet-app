@@ -898,3 +898,118 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
 }
 .pitch-booking.game,.pitch-full-booking.game{position:relative}
 .week-summary-booking.game{cursor:default!important}
+
+
+/* =========================================================
+   TSU Ainet v1.0.34
+   Heimspiele: Ganzer Platz + modernes Match-Icon
+   ========================================================= */
+
+.match-ball-icon{
+  display:inline-block;
+  flex:0 0 auto;
+  color:currentColor;
+  vertical-align:middle;
+}
+
+.game-title{
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+}
+
+/* Automatische Heimspiele, die den GANZEN Platz belegen,
+   werden auch optisch über den kompletten Platz dargestellt. */
+.pitch-full-booking.game{
+  inset:10px !important;
+  left:10px !important;
+  right:10px !important;
+  top:10px !important;
+  bottom:10px !important;
+  width:auto !important;
+  height:auto !important;
+  min-width:0 !important;
+  max-width:none !important;
+  transform:none !important;
+  border-radius:14px !important;
+  padding:22px !important;
+  display:flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  text-align:center !important;
+  gap:7px !important;
+  background:color-mix(in srgb, currentColor 4%, rgba(65,39,126,.90)) !important;
+  backdrop-filter:blur(1.5px);
+  -webkit-backdrop-filter:blur(1.5px);
+  box-shadow:inset 0 0 0 2px rgba(255,255,255,.38),0 10px 30px rgba(0,0,0,.20) !important;
+}
+
+/* Teamfarben sollen auch beim Vollfeld-Spiel erhalten bleiben. */
+.pitch-full-booking.game.team-km{background:rgba(23,105,210,.88)!important}
+.pitch-full-booking.game.team-u17{background:rgba(113,57,184,.88)!important}
+.pitch-full-booking.game.team-u12{background:rgba(242,198,46,.90)!important}
+.pitch-full-booking.game.team-u10{background:rgba(197,30,42,.90)!important}
+.pitch-full-booking.game.team-u8{background:rgba(232,117,22,.90)!important}
+
+.pitch-full-booking.game .match-ball-icon{
+  margin-bottom:4px;
+  opacity:.96;
+  filter:drop-shadow(0 3px 8px rgba(0,0,0,.18));
+}
+
+.pitch-full-booking.game strong{
+  font-size:.92rem !important;
+  letter-spacing:.01em;
+}
+
+.pitch-full-booking.game > span{
+  font-size:1.05rem !important;
+  font-weight:950 !important;
+}
+
+.pitch-full-booking.game small{
+  max-width:90%;
+  font-size:.75rem !important;
+  line-height:1.35;
+  opacity:.94 !important;
+}
+
+/* Das alte Wort-Label SPIEL ist nicht mehr nötig – das SVG ist die Kennzeichnung. */
+.pitch-full-booking.game::before,
+.pitch-booking.game::before{
+  content:none !important;
+}
+
+/* U10/U12 bleiben weiterhin nur auf der oberen Hälfte,
+   bekommen dort aber ebenfalls das neue Icon. */
+.pitch-booking.game .match-ball-icon{
+  width:17px;
+  height:17px;
+}
+
+.summary-game-icon{
+  display:inline-flex;
+  align-items:center;
+  margin-right:5px;
+}
+
+@media(max-width:600px){
+  .pitch-full-booking.game{
+    inset:7px !important;
+    left:7px !important;
+    right:7px !important;
+    top:7px !important;
+    bottom:7px !important;
+    padding:14px 10px !important;
+  }
+  .pitch-full-booking.game .match-ball-icon{
+    width:28px;
+    height:28px;
+  }
+  .pitch-full-booking.game > span{
+    font-size:.92rem !important;
+  }
+  .pitch-full-booking.game small{
+    font-size:.68rem !important;
+  }
+}

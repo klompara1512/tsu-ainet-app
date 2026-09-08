@@ -182,6 +182,24 @@ function matchTeamLabel(match: KfvMatch) {
   return match.teamName || match.teamId || "Heimspiel";
 }
 
+function MatchBallIcon({ size = 20 }: { size?: number }) {
+  return (
+    <svg
+      className="match-ball-icon"
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="9.25" stroke="currentColor" strokeWidth="1.7" />
+      <path d="m9.2 9.15 2.8-2.05 2.8 2.05-1.07 3.3h-3.46L9.2 9.15Z" fill="currentColor" />
+      <path d="m12 7.1.02-3.1M14.8 9.15l2.95-.95 2.08 2.25M13.73 12.45l1.82 2.5-.95 3.02M10.27 12.45l-1.82 2.5.95 3.02M9.2 9.15l-2.95-.95-2.08 2.25" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="m6.1 16.4 2.35-1.45M17.9 16.4l-2.35-1.45M4.17 10.45l1.93 2.25M19.83 10.45 17.9 12.7" stroke="currentColor" strokeWidth="1.35" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 function emptyForm(teamId = ""): FormState {
   const date = todayIso();
   return {
@@ -299,7 +317,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
         return {
           id: `game-${match.id}`,
           teamId,
-          teamName: `${matchTeamLabel(match)} · ⚽ Heimspiel`,
+          teamName: `${matchTeamLabel(match)} · Heimspiel`,
           date: localDateIso(match.kickoffAt),
           startTime: timeFromDate(match.kickoffAt),
           endTime: timeFromDate(endAt),
@@ -581,7 +599,10 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                             onKeyDown={(event) => { if ((event.key === "Enter" || event.key === " ") && canEdit(booking)) { event.preventDefault(); event.stopPropagation(); openEdit(booking); } }}
                           >
                             <strong>{booking.startTime}–{booking.endTime}</strong>
-                            <b>{booking.teamName}</b>
+                            <b className={booking.kind === "game" ? "game-title" : ""}>
+                              {booking.kind === "game" && <MatchBallIcon size={17} />}
+                              <span>{booking.teamName}</span>
+                            </b>
                             {booking.kind === "game" && <small>{booking.note}</small>}
                             {booking.floodlight && <small>💡 Flutlicht</small>}
                           </span>
@@ -598,6 +619,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                     className={`pitch-full-booking ${booking.kind} ${bookingTeamClass(booking)}`}
                     onClick={() => canEdit(booking) && openEdit(booking)}
                   >
+                    {booking.kind === "game" && <MatchBallIcon size={34} />}
                     <strong>{booking.startTime}–{booking.endTime}</strong>
                     <span>{booking.teamName}</span>
                     <small>{booking.kind === "game" ? `${booking.note} · Ganzer Platz` : `Ganzer Platz${booking.floodlight ? " · 💡 Flutlicht" : ""}`}</small>
@@ -646,7 +668,8 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                       <span className="summary-time">{booking.startTime}–{booking.endTime}</span>
                       <strong>{booking.teamName}</strong>
                       <small>
-                        {booking.kind === "game" ? `⚽ ${booking.note} · ` : ""}{FIELD_LABELS[booking.field]} · {booking.area === "full" ? "Ganzer Platz" : booking.area === "A" ? "Oben" : "Unten"}
+                        {booking.kind === "game" && <span className="summary-game-icon"><MatchBallIcon size={14} /></span>}
+                        {booking.kind === "game" ? `${booking.note} · ` : ""}{FIELD_LABELS[booking.field]} · {booking.area === "full" ? "Ganzer Platz" : booking.area === "A" ? "Oben" : "Unten"}
                         {booking.floodlight ? " · 💡 Flutlicht" : ""}
                       </small>
                     </button>

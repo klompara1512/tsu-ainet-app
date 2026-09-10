@@ -1,4 +1,4 @@
-name: KFV / ÖFB Spieltermine und Kalender synchronisieren
+name: Automatische Ergebnis-News
 
 on:
   workflow_dispatch:
@@ -7,39 +7,29 @@ permissions:
   contents: read
 
 concurrency:
-  group: kfv-oefb-games-sync
+  group: tsu-auto-result-news
   cancel-in-progress: true
 
 jobs:
-  sync:
-    name: Spieltermine und Kalender aktualisieren
+  publish:
+    name: Ergebnis-News veröffentlichen
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
-      CI: "true"
-      SYNC_MODE: games
-      RUN_DAILY_TASKS: "false"
-      RUN_DUPLICATE_CLEANUP: "false"
-
+      RESULT_NEWS_LOOKBACK_HOURS: "48"
     steps:
       - name: Projekt laden
         uses: actions/checkout@v4
-
       - name: Node.js einrichten
         uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: package-lock.json
-
       - name: Abhängigkeiten installieren
         run: npm ci
-
-      - name: Projekt und Spieltermin-Sync prüfen
-        run: npm run sync:check
-
       - name: Firebase-Zugang prüfen
         shell: bash
         run: |
@@ -47,10 +37,7 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
-          echo "Firebase-Service-Account ist vorhanden."
-
-      - name: Spieltermine und Kalender synchronisieren
-        run: npm run sync:games
-
-      - name: Ergebnis-News veröffentlichen
+      - name: Ergebnis-News-Code prüfen
+        run: node --check scripts/auto-result-news.cjs
+      - name: Neue Ergebnis-News veröffentlichen
         run: npm run news:auto-results

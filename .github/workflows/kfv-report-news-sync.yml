@@ -58,6 +58,9 @@ jobs:
       - name: Spielberichte, Aufstellungen und Liveticker synchronisieren
         run: npm run sync:reports
 
+
+      - name: Ergebnis-News veröffentlichen
+        run: npm run news:auto-results
       # WICHTIG: Die App liest Spiele bevorzugt aus publicSnapshots/football.
       # Nach einer Korrektur von gameId/oefbMatchId/reportUrl muss deshalb der
       # kompakte öffentliche Snapshot sofort neu veröffentlicht werden.

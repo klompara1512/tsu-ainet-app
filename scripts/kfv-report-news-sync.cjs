@@ -2703,6 +2703,15 @@ async function createNewsDraft(
     };
   }
 
+  // Kurze automatisch veröffentlichte Ergebnis-News nicht wieder durch den
+  // ausführlichen ÖFB-Berichtsentwurf überschreiben.
+  if (old.source === "auto-result-news" && old.automaticResultNews === true) {
+    return {
+      written: false,
+      reason: "auto-result-news",
+    };
+  }
+
   const score =
     Number.isFinite(report.homeScore) &&
     Number.isFinite(report.awayScore)

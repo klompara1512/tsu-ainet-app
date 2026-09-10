@@ -1013,3 +1013,93 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
     font-size:.68rem !important;
   }
 }
+
+
+/* =========================================================
+   TSU Ainet v1.0.39
+   Mobile Fix: automatische Spiele korrekt auf dem Spielfeld
+   ========================================================= */
+
+/* v1.0.33 setzte game-Bookings versehentlich auf position:relative.
+   Vollplatz-Spiele müssen als Overlay absolut im Spielfeld liegen. */
+.pitch-graphic {
+  position: relative !important;
+  isolation: isolate;
+}
+
+.pitch-full-booking.game {
+  position: absolute !important;
+  z-index: 6 !important;
+  inset: 8px !important;
+  left: 8px !important;
+  right: 8px !important;
+  top: 8px !important;
+  bottom: 8px !important;
+  width: auto !important;
+  max-width: none !important;
+  min-width: 0 !important;
+  height: auto !important;
+  margin: 0 !important;
+  transform: none !important;
+  box-sizing: border-box !important;
+}
+
+/* Halbplatz-Spiele (U10/U12) bleiben innerhalb ihrer Platzhälfte. */
+.pitch-half {
+  position: relative !important;
+}
+
+.pitch-booking.game {
+  position: relative !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
+}
+
+@media (max-width: 600px) {
+  .pitch-graphic {
+    overflow: hidden !important;
+  }
+
+  .pitch-full-booking.game {
+    position: absolute !important;
+    inset: 5px !important;
+    left: 5px !important;
+    right: 5px !important;
+    top: 5px !important;
+    bottom: 5px !important;
+    width: auto !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    height: auto !important;
+    padding: 12px 9px !important;
+    border-radius: 11px !important;
+    transform: none !important;
+  }
+
+  .pitch-full-booking.game .match-ball-icon {
+    width: 26px !important;
+    height: 26px !important;
+  }
+
+  .pitch-full-booking.game strong {
+    font-size: .72rem !important;
+  }
+
+  .pitch-full-booking.game > span {
+    font-size: .82rem !important;
+    line-height: 1.15 !important;
+  }
+
+  .pitch-full-booking.game small {
+    max-width: 94% !important;
+    font-size: .61rem !important;
+    line-height: 1.25 !important;
+  }
+
+  .pitch-booking.game {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+  }
+}

@@ -4,6 +4,7 @@ import { auth } from "./firebase";
 import { hasPermission, type UserProfile } from "./permissions";
 import "./Dashboard.css";
 import "./ClearClub.css";
+import "./ClearClubListFix.css";
 import Admin from "./Admin";
 import BottomNav from "./BottomNav";
 import EventsAdmin from "./EventsAdmin";

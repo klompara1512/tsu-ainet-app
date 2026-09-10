@@ -554,8 +554,12 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
 
       <div className="training-field-stack">
         {(["main", "training"] as Field[]).map((field) => {
-          const fieldBookings = visibleBookings.filter((booking) => booking.date === selectedDay && booking.field === field);
-          const fullBookings = fieldBookings.filter((booking) => booking.area === "full");
+          const fieldBookings = visibleBookings
+            .filter((booking) => booking.date === selectedDay && booking.field === field)
+            .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
+          const fullBookings = fieldBookings
+            .filter((booking) => booking.area === "full")
+            .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
           return (
             <article key={field} className={`pitch-card ${field === "training" ? "floodlit" : ""}`}>
               <header className="pitch-card-header">
@@ -578,7 +582,9 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                 </div>
 
                 {(["A", "B"] as const).map((half) => {
-                  const halfBookings = fieldBookings.filter((booking) => booking.area === half);
+                  const halfBookings = fieldBookings
+                    .filter((booking) => booking.area === half)
+                    .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
                   return (
                     <button
                       key={half}
@@ -612,19 +618,37 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                   );
                 })}
 
-                {fullBookings.map((booking) => (
-                  <button
-                    key={booking.id}
-                    type="button"
-                    className={`pitch-full-booking ${booking.kind} ${bookingTeamClass(booking)}`}
-                    onClick={() => canEdit(booking) && openEdit(booking)}
-                  >
-                    {booking.kind === "game" && <MatchBallIcon size={34} />}
-                    <strong>{booking.startTime}–{booking.endTime}</strong>
-                    <span>{booking.teamName}</span>
-                    <small>{booking.kind === "game" ? `${booking.note} · Ganzer Platz` : `Ganzer Platz${booking.floodlight ? " · 💡 Flutlicht" : ""}`}</small>
-                  </button>
-                ))}
+                {fullBookings.length <= 1 ? (
+                  fullBookings.map((booking) => (
+                    <button
+                      key={booking.id}
+                      type="button"
+                      className={`pitch-full-booking ${booking.kind} ${bookingTeamClass(booking)}`}
+                      onClick={() => canEdit(booking) && openEdit(booking)}
+                    >
+                      {booking.kind === "game" && <MatchBallIcon size={34} />}
+                      <strong>{booking.startTime}–{booking.endTime}</strong>
+                      <span>{booking.teamName}</span>
+                      <small>{booking.kind === "game" ? `${booking.note} · Ganzer Platz` : `Ganzer Platz${booking.floodlight ? " · 💡 Flutlicht" : ""}`}</small>
+                    </button>
+                  ))
+                ) : (
+                  <div className="pitch-full-booking-list" aria-label="Belegungen nach Uhrzeit">
+                    {fullBookings.map((booking) => (
+                      <button
+                        key={booking.id}
+                        type="button"
+                        className={`pitch-full-booking pitch-full-booking-list-item ${booking.kind} ${bookingTeamClass(booking)}`}
+                        onClick={() => canEdit(booking) && openEdit(booking)}
+                      >
+                        {booking.kind === "game" && <MatchBallIcon size={22} />}
+                        <strong>{booking.startTime}–{booking.endTime}</strong>
+                        <span>{booking.teamName}</span>
+                        <small>{booking.kind === "game" ? `${booking.note} · Ganzer Platz` : `Ganzer Platz${booking.floodlight ? " · 💡 Flutlicht" : ""}`}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <footer className="pitch-footer">

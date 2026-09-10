@@ -1103,3 +1103,96 @@ html.training-modal-open,body.training-modal-open{overflow:hidden!important}
     margin: 0 !important;
   }
 }
+
+/* =========================================================
+   TSU Ainet v1.0.40
+   Mehrere Spiele am selben Tag: chronologisch auflisten
+   ========================================================= */
+.pitch-full-booking-list{
+  position:absolute;
+  z-index:7;
+  inset:8px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  padding:2px;
+  box-sizing:border-box;
+}
+
+.pitch-full-booking-list .pitch-full-booking.pitch-full-booking-list-item{
+  position:relative !important;
+  inset:auto !important;
+  left:auto !important;
+  right:auto !important;
+  top:auto !important;
+  bottom:auto !important;
+  transform:none !important;
+  width:100% !important;
+  min-width:0 !important;
+  max-width:none !important;
+  height:auto !important;
+  min-height:0 !important;
+  flex:1 0 auto;
+  margin:0 !important;
+  padding:10px 12px !important;
+  border-radius:12px !important;
+  display:grid !important;
+  grid-template-columns:auto 1fr !important;
+  grid-template-areas:
+    "icon time"
+    "icon title"
+    "icon note";
+  align-items:center !important;
+  justify-content:stretch !important;
+  column-gap:10px !important;
+  row-gap:1px !important;
+  text-align:left !important;
+}
+
+.pitch-full-booking-list .pitch-full-booking-list-item .match-ball-icon{
+  grid-area:icon;
+  margin:0 !important;
+}
+.pitch-full-booking-list .pitch-full-booking-list-item strong{
+  grid-area:time;
+  font-size:.78rem !important;
+}
+.pitch-full-booking-list .pitch-full-booking-list-item > span{
+  grid-area:title;
+  font-size:.9rem !important;
+  line-height:1.1 !important;
+}
+.pitch-full-booking-list .pitch-full-booking-list-item small{
+  grid-area:note;
+  max-width:100% !important;
+  font-size:.66rem !important;
+  line-height:1.2 !important;
+}
+
+@media(max-width:600px){
+  .pitch-full-booking-list{
+    inset:5px;
+    gap:5px;
+  }
+  .pitch-full-booking-list .pitch-full-booking.pitch-full-booking-list-item{
+    flex:0 0 auto;
+    min-height:72px !important;
+    padding:8px 9px !important;
+    column-gap:8px !important;
+  }
+  .pitch-full-booking-list .pitch-full-booking-list-item .match-ball-icon{
+    width:20px !important;
+    height:20px !important;
+  }
+  .pitch-full-booking-list .pitch-full-booking-list-item strong{
+    font-size:.68rem !important;
+  }
+  .pitch-full-booking-list .pitch-full-booking-list-item > span{
+    font-size:.79rem !important;
+  }
+  .pitch-full-booking-list .pitch-full-booking-list-item small{
+    font-size:.59rem !important;
+  }
+}

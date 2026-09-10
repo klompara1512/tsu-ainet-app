@@ -557,8 +557,12 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
           const fieldBookings = visibleBookings
             .filter((booking) => booking.date === selectedDay && booking.field === field)
             .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
+          const fieldGames = fieldBookings
+            .filter((booking) => booking.kind === "game")
+            .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
+          const showChronologicalGameList = fieldGames.length > 1;
           const fullBookings = fieldBookings
-            .filter((booking) => booking.area === "full")
+            .filter((booking) => booking.area === "full" && (!showChronologicalGameList || booking.kind !== "game"))
             .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
           return (
             <article key={field} className={`pitch-card ${field === "training" ? "floodlit" : ""}`}>
@@ -583,7 +587,7 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
 
                 {(["A", "B"] as const).map((half) => {
                   const halfBookings = fieldBookings
-                    .filter((booking) => booking.area === half)
+                    .filter((booking) => booking.area === half && (!showChronologicalGameList || booking.kind !== "game"))
                     .sort((a, b) => minutes(a.startTime) - minutes(b.startTime) || minutes(a.endTime) - minutes(b.endTime));
                   return (
                     <button
@@ -645,6 +649,27 @@ export default function TrainingPlanner({ user, profile, onBack }: TrainingPlann
                         <strong>{booking.startTime}–{booking.endTime}</strong>
                         <span>{booking.teamName}</span>
                         <small>{booking.kind === "game" ? `${booking.note} · Ganzer Platz` : `Ganzer Platz${booking.floodlight ? " · 💡 Flutlicht" : ""}`}</small>
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {showChronologicalGameList && (
+                  <div
+                    className={`pitch-full-booking-list pitch-game-day-list game-count-${Math.min(fieldGames.length, 4)}`}
+                    aria-label={`${fieldGames.length} Spiele nach Uhrzeit`}
+                  >
+                    {fieldGames.map((booking) => (
+                      <button
+                        key={booking.id}
+                        type="button"
+                        className={`pitch-full-booking pitch-full-booking-list-item game ${bookingTeamClass(booking)}`}
+                        onClick={() => canEdit(booking) && openEdit(booking)}
+                      >
+                        <MatchBallIcon size={22} />
+                        <strong>{booking.startTime}–{booking.endTime}</strong>
+                        <span>{booking.teamName}</span>
+                        <small>{booking.note} · {booking.area === "full" ? "Ganzer Platz" : booking.area === "A" ? "Oben" : "Unten"}</small>
                       </button>
                     ))}
                   </div>

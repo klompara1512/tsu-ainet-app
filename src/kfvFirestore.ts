@@ -498,6 +498,16 @@ function manualResultNewsId(matchId: string) {
   return `auto_result_${String(matchId || "match").replace(/[^A-Za-z0-9_-]/g, "_").slice(0, 120)}`;
 }
 
+function manualResultNewsImage(teamKey: string) {
+  if (teamKey === "KM") return "/news-team/newsKM.png";
+  if (teamKey === "CHALLENGE") return "/news-team/newsRes.png";
+  if (teamKey === "U17") return "/news-team/newsU17.png";
+  if (teamKey === "U12") return "/news-team/newsU12.png";
+  if (teamKey === "U10") return "/news-team/newsU10.png";
+  if (teamKey === "U8") return "/news-team/newsU8.png";
+  return "";
+}
+
 function buildManualResultNews(match: KfvMatch, homeScore: number, awayScore: number) {
   const teamKey = manualResultNewsTeamKey(match);
   if (!teamKey) return null;
@@ -559,7 +569,7 @@ export async function saveManualMatchResult(match: KfvMatch, homeScore: number, 
       summary: automaticNews.summary,
       content: "",
       category: "nachwuchs",
-      imageUrl: "",
+      imageUrl: manualResultNewsImage(automaticNews.teamKey),
       authorName: "TSU Ainet Fußball",
       published: true,
       featured: false,

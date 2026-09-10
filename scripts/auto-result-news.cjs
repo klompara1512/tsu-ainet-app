@@ -63,6 +63,16 @@ function categoryFor(key) {
   return "verein";
 }
 
+function resultNewsImageFor(key) {
+  if (key === "KM") return "/news-team/newsKM.png";
+  if (key === "CHALLENGE") return "/news-team/newsRes.png";
+  if (key === "U17") return "/news-team/newsU17.png";
+  if (key === "U12") return "/news-team/newsU12.png";
+  if (key === "U10") return "/news-team/newsU10.png";
+  if (key === "U8") return "/news-team/newsU8.png";
+  return "";
+}
+
 function resultData(match) {
   if (!Number.isInteger(match.homeScore) || !Number.isInteger(match.awayScore)) return null;
   const ainetHome = isAinet(match.homeTeam);
@@ -141,7 +151,7 @@ async function publishForMatch(doc) {
     summary: copy.summary,
     content: "",
     category: categoryFor(copy.key),
-    imageUrl: existing.imageUrl || "",
+    imageUrl: resultNewsImageFor(copy.key),
     authorName: "TSU Ainet Fußball",
     published: true,
     featured: existing.featured === true,

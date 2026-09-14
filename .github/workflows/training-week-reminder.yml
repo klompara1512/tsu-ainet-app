@@ -20,16 +20,26 @@ jobs:
     env:
       TZ: Europe/Vienna
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIRESTORE_PREFER_REST: "true"
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
     steps:
       - name: Projekt laden
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Node.js einrichten
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
       - name: Abhängigkeiten installieren
         run: npm ci
+      - name: Firebase-Zugang prüfen
+        shell: bash
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "::error::Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
+            exit 1
+          fi
+          node -e 'const x=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT); if(!x.project_id||!x.client_email||!x.private_key) throw new Error("Firebase-Service-Account unvollständig"); console.log("Firebase-Service-Account JSON ist gültig für Projekt:", x.project_id)'
       - name: Trainingsplanung prüfen und Trainer erinnern
         run: node scripts/training-week-reminder.cjs

@@ -1,11 +1,10 @@
 name: KFV / ÖFB Spielberichte, Aufstellungen und Liveticker synchronisieren
 
 on:
+  # Automatisch wird dieser Sync bereits von der Smart-Synchronisierung gestartet.
+  # Dieser Workflow bleibt als manueller Notfall-/Testlauf erhalten und verursacht
+  # dadurch keine zusätzlichen täglichen GitHub-Minuten.
   workflow_dispatch:
-  schedule:
-    # Einmal täglich. So werden Schiedsrichter und Spielort automatisch
-    # übernommen, sobald sie in der Woche vor dem Spiel offiziell erscheinen.
-    - cron: "17 4 * * *"
 
 permissions:
   contents: read
@@ -19,11 +18,12 @@ jobs:
     name: Spielberichte und Aufstellungen synchronisieren
     runs-on: ubuntu-latest
     timeout-minutes: 30
-
     env:
       TZ: Europe/Vienna
       CI: "true"
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      FIRESTORE_PREFER_REST: "true"
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
       REPORT_PRE_KICKOFF_MINUTES: "10080"
@@ -32,14 +32,22 @@ jobs:
 
     steps:
       - name: Projekt laden
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Node.js einrichten
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
+
+      - name: Puppeteer-Browser cachen
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/puppeteer
+          key: puppeteer-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: |
+            puppeteer-${{ runner.os }}-
 
       - name: Abhängigkeiten installieren
         run: npm ci
@@ -51,18 +59,27 @@ jobs:
             echo "::error::Das Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
+          node -e 'const x=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT); if(!x.project_id||!x.client_email||!x.private_key) throw new Error("Firebase-Service-Account unvollständig"); console.log("Firebase-Service-Account JSON ist gültig für Projekt:", x.project_id)'
 
       - name: Spielbericht-Sync-Code prüfen
         run: node --check scripts/kfv-report-news-sync.cjs
 
       - name: Spielberichte, Aufstellungen und Liveticker synchronisieren
-        run: npm run sync:reports
-
+        shell: bash
+        run: |
+          set +e
+          npm run sync:reports
+          status=$?
+          if [ $status -ne 0 ]; then
+            echo "::warning::Erster Spielbericht-Sync fehlgeschlagen. Ein einmaliger Retry folgt in 20 Sekunden."
+            sleep 20
+            npm run sync:reports
+            status=$?
+          fi
+          exit $status
 
       - name: Ergebnis-News veröffentlichen
         run: npm run news:auto-results
-      # WICHTIG: Die App liest Spiele bevorzugt aus publicSnapshots/football.
-      # Nach einer Korrektur von gameId/oefbMatchId/reportUrl muss deshalb der
-      # kompakte öffentliche Snapshot sofort neu veröffentlicht werden.
+
       - name: Öffentlichen Fußball-Datenstand aktualisieren
         run: npm run sync:public-snapshot

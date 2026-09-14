@@ -15,6 +15,21 @@ const manual = process.env.GITHUB_EVENT_NAME === "workflow_dispatch" || /^(1|tru
 const now = new Date();
 const nowMs = now.getTime();
 
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function withRetry(label, fn, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error;
+      console.warn(`${label} fehlgeschlagen (Versuch ${attempt}/${attempts}): ${error?.message || error}`);
+      if (attempt < attempts) await sleep(1500 * attempt);
+    }
+  }
+  throw lastError;
+}
+
 function output(name, value) {
   const text = String(value);
   console.log(`${name}=${text}`);
@@ -84,16 +99,16 @@ async function main() {
     U17: db.doc("settings/u17TableSyncStatus"),
   };
   const refs = Object.values(statusRefs);
-  const snaps = await db.getAll(...refs);
+  const snaps = await withRetry("Firestore Sync-Status laden", () => db.getAll(...refs));
   const byPath = new Map(snaps.map((snap) => [snap.ref.path, snap]));
   const status = Object.fromEntries(Object.entries(statusRefs).map(([key, ref]) => [key, byPath.get(ref.path)]));
 
   const from = admin.firestore.Timestamp.fromDate(new Date(nowMs - 12 * 60 * 60000));
   const until = admin.firestore.Timestamp.fromDate(new Date(nowMs + 7 * 24 * 60 * 60000));
-  const matchSnap = await db.collection("oefbV12Matches")
+  const matchSnap = await withRetry("Firestore Spiele laden", () => db.collection("oefbV12Matches")
     .where("kickoffAt", ">=", from)
     .where("kickoffAt", "<=", until)
-    .get();
+    .get());
 
   const matches = matchSnap.docs
     .map((doc) => ({ id: doc.id, ...doc.data(), kickoffDate: toDate(doc.data().kickoffAt) }))

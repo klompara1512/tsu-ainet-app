@@ -97,7 +97,7 @@ if (!admin.apps.length) {
 }
 
 const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true });
+db.settings({ ignoreUndefinedProperties: true, preferRest: true });
 
 const compact = (value) =>
   String(value || "")

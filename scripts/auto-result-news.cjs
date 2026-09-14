@@ -16,6 +16,7 @@ catch { throw new Error("FIREBASE_SERVICE_ACCOUNT ist kein gültiges JSON."); }
 
 if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(credentials) });
 const db = admin.firestore();
+db.settings({ preferRest: true, ignoreUndefinedProperties: true });
 db.settings({ ignoreUndefinedProperties: true });
 
 const compact = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -61,16 +62,6 @@ function categoryFor(key) {
   if (key === "CHALLENGE") return "challenge";
   if (/^U\d+$/i.test(key)) return "nachwuchs";
   return "verein";
-}
-
-function resultNewsImageFor(key) {
-  if (key === "KM") return "/news-team/newsKM.png";
-  if (key === "CHALLENGE") return "/news-team/newsRes.png";
-  if (key === "U17") return "/news-team/newsU17.png";
-  if (key === "U12") return "/news-team/newsU12.png";
-  if (key === "U10") return "/news-team/newsU10.png";
-  if (key === "U8") return "/news-team/newsU8.png";
-  return "";
 }
 
 function resultData(match) {
@@ -151,7 +142,7 @@ async function publishForMatch(doc) {
     summary: copy.summary,
     content: "",
     category: categoryFor(copy.key),
-    imageUrl: resultNewsImageFor(copy.key),
+    imageUrl: existing.imageUrl || "",
     authorName: "TSU Ainet Fußball",
     published: true,
     featured: existing.featured === true,

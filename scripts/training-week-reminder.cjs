@@ -2,8 +2,26 @@ process.env.TZ = "Europe/Vienna";
 const admin = require("firebase-admin");
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
 if (!raw) throw new Error("FIREBASE_SERVICE_ACCOUNT fehlt.");
-admin.initializeApp({ credential: admin.credential.cert(JSON.parse(raw)) });
+let credentials;
+try { credentials = JSON.parse(raw); } catch { throw new Error("FIREBASE_SERVICE_ACCOUNT ist kein gültiges JSON."); }
+if (credentials.private_key) credentials.private_key = String(credentials.private_key).replace(/\\n/g, "\n");
+if (!admin.apps.length) admin.initializeApp({ credential: admin.credential.cert(credentials) });
 const db = admin.firestore();
+db.settings({ preferRest: true, ignoreUndefinedProperties: true });
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+async function withRetry(label, fn, attempts = 3) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try { return await fn(); }
+    catch (error) {
+      lastError = error;
+      console.warn(`${label} fehlgeschlagen (Versuch ${attempt}/${attempts}): ${error?.message || error}`);
+      if (attempt < attempts) await sleep(1500 * attempt);
+    }
+  }
+  throw lastError;
+}
 
 function isoLocal(date) {
   const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,"0"), d=String(date.getDate()).padStart(2,"0");
@@ -21,10 +39,10 @@ function youthKey(team){const id=teamAlias(team.id),name=teamAlias(team.name);fo
 async function main(){
   const week=weekRange();
   const [teamsSnap, bookingsSnap, trainersSnap, tokensSnap] = await Promise.all([
-    db.collection("teams").get(),
-    db.collection("trainingBookings").where("date",">=",week.start).where("date","<=",week.end).get(),
-    db.collection("users").where("role","==","trainer").get(),
-    db.collection("fcmTokens").where("active","==",true).get(),
+    withRetry("Teams laden", () => db.collection("teams").get()),
+    withRetry("Trainings laden", () => db.collection("trainingBookings").where("date",">=",week.start).where("date","<=",week.end).get()),
+    withRetry("Trainer laden", () => db.collection("users").where("role","==","trainer").get()),
+    withRetry("Push-Tokens laden", () => db.collection("fcmTokens").where("active","==",true).get()),
   ]);
   const teams=new Map(teamsSnap.docs.map(d=>[d.id,{id:d.id,name:String(d.data().name||d.id)}]));
   const planned=new Set(bookingsSnap.docs.filter(d=>String(d.data().kind||"training")!=="block").map(d=>String(d.data().teamId||"")));
@@ -46,11 +64,11 @@ async function main(){
     let success=0;
     for(let i=0;i<entries.length;i+=500){
       const chunk=entries.slice(i,i+500);
-      const res=await admin.messaging().sendEachForMulticast({
+      const res=await withRetry("FCM-Nachricht senden", () => admin.messaging().sendEachForMulticast({
         tokens:chunk.map(x=>x.token), notification:{title:"Training diese Woche eintragen",body},
         data:{link:"https://tsu-ainet-fussball.web.app/",type:"training-week-reminder"},
         webpush:{headers:{Urgency:"normal"},notification:{icon:"/icon-192.png",badge:"/favicon-64.png",tag:`training-${week.key}`,renotify:false},fcmOptions:{link:"https://tsu-ainet-fussball.web.app/"}}
-      });
+      }));
       success+=res.successCount;
     }
     await logRef.set({week:week.key,uid:trainerDoc.id,missingTeams:missing.map(t=>t.id),status:"sent",success,createdAt:admin.firestore.FieldValue.serverTimestamp()});

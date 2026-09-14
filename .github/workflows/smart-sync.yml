@@ -3,12 +3,11 @@ name: TSU Ainet Smart-Synchronisierung
 on:
   workflow_dispatch:
   schedule:
-    # Grundprüfung stündlich von 06:10 bis 23:10 Uhr österreichischer Lokalzeit.
-    - cron: "10 6-23 * * *"
-      timezone: "Europe/Vienna"
-    # Fr–So rund um typische Spieltage zusätzliche Prüfung zur halben Stunde.
-    - cron: "40 8-22 * * 5,6,0"
-      timezone: "Europe/Vienna"
+    # Werktags nur 5 kurze Gate-Prüfungen. Das spart GitHub-Minuten.
+    # Cron läuft bei GitHub immer in UTC; die Skripte selbst rechnen mit Europe/Vienna.
+    - cron: "10 4,8,12,16,20 * * 1-4"
+    # Fr–So stündlich rund um typische Spielzeiten.
+    - cron: "10 6-21 * * 5,6,0"
 
 permissions:
   contents: read
@@ -26,6 +25,10 @@ jobs:
       TZ: Europe/Vienna
       CI: "true"
       FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+      # GitHub-Runner: Firestore über REST statt gRPC. Das verhindert die
+      # sporadischen 30–45-Sekunden-Verbindungsabbrüche auf Hosted Runnern.
+      FIRESTORE_PREFER_REST: "true"
+      NODE_OPTIONS: "--dns-result-order=ipv4first"
       REPORT_SYNC_CONCURRENCY: "2"
       REPORT_NAVIGATION_TIMEOUT: "45000"
       REPORT_PRE_KICKOFF_MINUTES: "10080"
@@ -37,12 +40,12 @@ jobs:
 
     steps:
       - name: Projekt laden
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Node.js einrichten
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v5
         with:
-          node-version: "20"
+          node-version: "24"
           cache: npm
           cache-dependency-path: package-lock.json
 
@@ -56,6 +59,7 @@ jobs:
             echo "::error::Repository-Secret FIREBASE_SERVICE_ACCOUNT fehlt."
             exit 1
           fi
+          node -e 'const x=JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT); if(!x.project_id||!x.client_email||!x.private_key) throw new Error("Firebase-Service-Account unvollständig"); console.log("Firebase-Service-Account JSON ist gültig für Projekt:", x.project_id)'
 
       - name: Sync-Code prüfen
         run: npm run sync:check
